@@ -107,6 +107,9 @@ length(unique(mdata_st3k$IID))
 # use the stanford3k file to map dna ids to sample ids
 dnaid2sampleid = as.character(mdata_st3k$FID)
 names(dnaid2sampleid) = mdata_st3k$IID
+# source for JA samples?
+dnaid2sampleid[grepl("^JA",dnaid2sampleid,perl = T)] # No
+dnaid2sampleid[grepl("^JA",names(dnaid2sampleid),perl = T)] # No
 
 # Same data from Kirstie
 mdata_kirs = read.xlsx2("Stanford_Ashley_MEGAv2_n3484_DNAReport_Kirstie_dw.xlsx",1)
@@ -131,22 +134,22 @@ all_mdata = rbind(mdata_batch1,mdata_batch2)
 all_mdata = rbind(all_mdata,stanford3k_annot)
 write.csv(all_mdata,file="merged_metadata_file_stanford3k_elite_cooper.csv")
 
-# Test data locally
-## try http:// if https:// URLs are not supported
-source("https://bioconductor.org/biocLite.R")
-biocLite("crlmm")
-library(crlmm)
-test_barcode = "200206160028"
-curr_mdata = as.matrix(all_mdata[all_mdata[,2]==test_barcode,])
-curr_mdata = data.frame(curr_mdata,stringsAsFactors = F)
-write.csv(curr_mdata,file='idats/manifest.csv')
-idata = readIdatFiles(curr_mdata,path="idats/")
-class(idata)
-idata[1,1]
-gdata = genotype.Illumina(curr_mdata,path='idats')
-
-library(devtools)
-## allow R to look for pacakges in both CRAN and Bioconductor
-setRepositories(ind = 1:2)
-## install from Github source
-install_github("andrewparkermorgan/argyle")
+# # Test data locally
+# ## try http:// if https:// URLs are not supported
+# source("https://bioconductor.org/biocLite.R")
+# biocLite("crlmm")
+# library(crlmm)
+# test_barcode = "200206160028"
+# curr_mdata = as.matrix(all_mdata[all_mdata[,2]==test_barcode,])
+# curr_mdata = data.frame(curr_mdata,stringsAsFactors = F)
+# write.csv(curr_mdata,file='idats/manifest.csv')
+# idata = readIdatFiles(curr_mdata,path="idats/")
+# class(idata)
+# idata[1,1]
+# gdata = genotype.Illumina(curr_mdata,path='idats')
+# 
+# library(devtools)
+# ## allow R to look for pacakges in both CRAN and Bioconductor
+# setRepositories(ind = 1:2)
+# ## install from Github source
+# install_github("andrewparkermorgan/argyle")

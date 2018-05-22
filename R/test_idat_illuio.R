@@ -21,7 +21,7 @@ for(l in readLines(README_path)){
 }
 
 data_path_idats = list()
-for(p in data_paths[-4]){
+for(p in data_paths[4]){
   cmd = paste("find",p,"|grep \"idat$\" > tmp.txt")
   print(cmd)
   system(cmd)
@@ -73,8 +73,26 @@ for(nn1 in names(data_path_idats)){
 	}
 }
 
+# Compare the may 2018 new batch to the old one from 2017
+library(tools)
+path2017 = '/oak/stanford/groups/euan/projects/mega-cooper-elite-udn/data/raw/EA171116.01.0-02.1-delivered'
+path2018 = '/oak/stanford/groups/euan/projects/mega-cooper-elite-udn/data/raw/idats_may_2018/iData_Euan_Ashley'
+files2017 = sort(list.dirs(path2017,full.names=T,recursive=F))
+names(files2017) = sort(list.dirs(path2017,full.names=F,recursive=F))
+files2018 = sort(list.dirs(path2018,full.names=T,recursive=F))
+names(files2018) = sort(list.dirs(path2018,full.names=F,recursive=F))
+for(nn in intersect(names(files2017),names(files2018))){
+	files1 = list.files(files2017[nn],full.names=T)
+	names(files1) = list.files(files2017[nn],full.names=F)
+	files2 = list.files(files2018[nn],full.names=T)
+	names(files2) = list.files(files2018[nn],full.names=F)
+	print(all(names(files1)==names(files2)))
+	comp = md5sum(files1)==md5sum(files2)
+	print(table(comp))
+}
+
 # Locally: get the metadata and compare to Malene's metadata
-setwd("/Users/David/Desktop/elite/")
+setwd("/Users/David/Desktop/elite/metadata/")
 library(xlsx)
 load('idats_metadata.RData')
 idats_metadata_table = t(sapply(idats_metadata,function(x)x))
@@ -87,6 +105,10 @@ idat_barcodes = unname(sapply(idat_files,function(x){arr=strsplit(x,split='/')[[
 idat_locs = unname(idats_metadata_table[,3])
 mdata_elite = read.xlsx2('Elite_Cooper_metadata.xlsx',1)
 mdata_cooper = read.xlsx2('Elite_Cooper_metadata.xlsx',2)
+try({
+	mdata_elite = read.xlsx2('fitness_genetics_ashleylab_metadata.xlsx',sheetName="ELITE_may18")
+	mdata_cooper = read.xlsx2('fitness_genetics_ashleylab_metadata.xlsx',sheetName = "Cooper_may18")
+})
 idat_paths = unname(sapply(unique(idat_files),function(x){
   arr=strsplit(x,split='/')[[1]];
   n = length(arr)
@@ -101,6 +123,9 @@ length(intersect(mdata_dna_ids,idats_dna_id))
 
 # Look at Stanford3k
 mdata_st3k = read.xlsx2("stanford3k_metadata2.xlsx",1)
+try({
+	mdata_st3k = read.delim("metadata/stanford3k_metadata2.txt",sep=" ")
+})
 length(intersect(mdata_st3k$IID,idats_dna_id))
 length(unique(idats_dna_id))
 length(unique(mdata_st3k$IID))
@@ -113,6 +138,7 @@ dnaid2sampleid[grepl("^JA",names(dnaid2sampleid),perl = T)] # No
 
 # Same data from Kirstie
 mdata_kirs = read.xlsx2("Stanford_Ashley_MEGAv2_n3484_DNAReport_Kirstie_dw.xlsx",1)
+try({mdata_kirs = read.delim("metadata/Stanford_Ashley_MEGAv2_n3484_DNAReport_Kirstie_dw.tsv")})
 # idats internal ids vs the metadata
 length(intersect(mdata_kirs$DNA_ID,idats_dna_id))
 # Cooper?
@@ -120,8 +146,8 @@ cooper_sample_ids = mdata_cooper$Clinical_ID
 length(intersect(mdata_kirs$Notes,cooper_sample_ids))
 
 # Add data from the new batches
-mdata_batch1 = read.csv('metadata/1092_samples_report_1.csv',skip = 15,header = T)[,c(1,4,5)]
-mdata_batch2 = read.csv('metadata/485_samples_report_2.csv',skip = 15,header = T)[,c(1,4,5)]
+mdata_batch1 = read.csv('1092_samples_report_1.csv',skip = 15,header = T)[,c(1,4,5)]
+mdata_batch2 = read.csv('485_samples_report_2.csv',skip = 15,header = T)[,c(1,4,5)]
 new_batches_barcodes = union(mdata_batch1[,2],mdata_batch2[,2])
 table(is.element(idat_barcodes,set=new_batches_barcodes))/2
 table(is.element(idat_barcodes,set=mdata_batch1[,2]))/2
@@ -130,9 +156,18 @@ table(is.element(idat_barcodes,set=mdata_batch1[,2]))/2
 samps_tmp = dnaid2sampleid[idats_dna_id]
 stanford3k_annot = unique(cbind(samps_tmp,idat_barcodes,idat_locs))
 colnames(stanford3k_annot) = colnames(mdata_batch1)
+rownames(stanford3k_annot) = NULL
 all_mdata = rbind(mdata_batch1,mdata_batch2)
 all_mdata = rbind(all_mdata,stanford3k_annot)
+rownames(all_mdata) = NULL
 write.csv(all_mdata,file="merged_metadata_file_stanford3k_elite_cooper.csv")
+
+# alternative: look at the dna ids directly and compare
+sample_ids_from_dna_ids = unlist(sapply(idats_dna_id,function(x){arr=strsplit(x,split='_')[[1]];arr[length(arr)]}))
+table(dnaid2sampleid[names(sample_ids_from_dna_ids)] == sample_ids_from_dna_ids)
+diff_dna_ids = which(dnaid2sampleid[names(sample_ids_from_dna_ids)] != sample_ids_from_dna_ids)
+sample_ids_from_dna_ids[names(diff_dna_ids)[2]]
+dnaid2sampleid[names(diff_dna_ids)[2]]
 
 # # Test data locally
 # ## try http:// if https:// URLs are not supported

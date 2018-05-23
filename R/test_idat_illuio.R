@@ -143,23 +143,6 @@ try({
 mdata_kirs = read.xlsx2("Stanford_Ashley_MEGAv2_n3484_DNAReport_Kirstie_dw.xlsx",1)
 try({mdata_kirs = read.delim("metadata/Stanford_Ashley_MEGAv2_n3484_DNAReport_Kirstie_dw.tsv")})
 
-# # We now extend the batch mdata files, we need it in this format for R packages
-# samps_tmp = dnaid2sampleid[idats_dna_id]
-# stanford3k_annot = unique(cbind(samps_tmp,idat_barcodes,idat_locs))
-# colnames(stanford3k_annot) = colnames(mdata_batch1)
-# rownames(stanford3k_annot) = NULL
-# all_mdata = rbind(mdata_batch1,mdata_batch2)
-# all_mdata = rbind(all_mdata,stanford3k_annot)
-# rownames(all_mdata) = NULL
-# write.csv(all_mdata,file="merged_metadata_file_stanford3k_elite_cooper.csv")
-
-# # alternative: look at the dna ids directly and compare
-# sample_ids_from_dna_ids = unlist(sapply(idats_dna_id,function(x){arr=strsplit(x,split='_')[[1]];arr[length(arr)]}))
-# table(dnaid2sampleid[names(sample_ids_from_dna_ids)] == sample_ids_from_dna_ids)
-# diff_dna_ids = which(dnaid2sampleid[names(sample_ids_from_dna_ids)] != sample_ids_from_dna_ids)
-# sample_ids_from_dna_ids[names(diff_dna_ids)[200]]
-# dnaid2sampleid[names(diff_dna_ids)[200]]
-
 ################# New script mapping sample ids to their idat files ##################
 library(xlsx)
 reverse_names<-function(x,remove_wo_names=T){
@@ -204,6 +187,12 @@ alternate_id2sample_id = reverse_names(sample_id_to_alternate_id)
 # use the stanford3k file to map dna ids to sample ids
 dnaid2sampleid_st3k = as.character(mdata_st3k$FID)
 names(dnaid2sampleid_st3k) = mdata_st3k$IID
+# use Kirsties' metadata file to map dna ids to sample ids
+dnaid2sampleid_kir = as.character(mdata_kirs$id2)
+names(dnaid2sampleid_kir) = mdata_kirs$DNA_ID
+length(dnaid2sampleid_kir)
+length(dnaid2sampleid_st3k)
+length(intersect(dnaid2sampleid_st3k,dnaid2sampleid_st3k)) # roughly the same
 
 # This is the main table we create here. The addition rules below are ordered.
 sample_id2idat_file = c()
@@ -233,7 +222,7 @@ dim(sample_id2idat_file)
 table(is.element(rownames(sample_id2idat_file),set=all_sample_data$Sample_ID))
 table(is.element(rownames(sample_id2idat_file),set=names(alternate_id2sample_id)))
 
-# Rule 3: use stanford 3k DNA IDs in the mainfile to map to the idat files
+# Rule 3: use stanford 3k DNA IDs to map to the idat files
 st3k_shared_dnaids_with_idats = intersect(names(dnaid2sampleid_st3k),names(idat_barcodes))
 curr_dnaid2sample_id = dnaid2sampleid_st3k[st3k_shared_dnaids_with_idats]
 table(is.element(curr_dnaid2sample_id,set=names(alternate_id2sample_id)))
@@ -260,6 +249,7 @@ table(all_sample_data$Cohort[curr_rows])
 table(table(sample_id2idat_file[,1]))
 length(setdiff(unique(idat_barcodes),unique(sample_id2idat_file[,1])))
 length(intersect(unique(idat_barcodes),unique(sample_id2idat_file[,1])))
+table(is.element(rownames(sample_id2idat_file),set=sample_id_to_alternate_id))
 
-
-
+# print the file
+write.csv(sample_id2idat_file,file="merged_metadata_file_stanford3k_elite_cooper.csv")

@@ -275,6 +275,9 @@ missinigness_report = read_plink_table(paste(job_dir,"maf_filter_missing.imiss",
 call_rates_after_filters = 1-as.numeric(missinigness_report[,6])
 quantile(call_rates_after_filters)
 table(call_rates_after_filters<0.97)
+low_cr_samples = missinigness_report[call_rates_after_filters<0.98,2]
+sample_metadata_raw[low_cr_samples,]$Cohort
+intersect(sex_errs,low_cr_samples)
 
 # Exclude samples with low call rate
 

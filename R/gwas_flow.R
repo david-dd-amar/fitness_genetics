@@ -61,6 +61,7 @@ snp_min_clustersep_thr = 0.5
 snp_min_call_rate = 0.95
 snp_min_het_ex = -0.3
 snp_max_het_ex = 0.2
+min_maf = 0.005
 
 # Define input parameters
 job_dir = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl/"
@@ -130,7 +131,24 @@ wait_for_job(jobs_before,5)
 list.files(job_dir)
 
 # Exclude low maf snps
+maf_snps_to_exclude = snp_data$Name[snp_data$Minor.Freq<min_maf]
+write.table(t(t(as.character(snp_data$Name[maf_snps_to_exclude]))),
+            file=paste(job_dir,"maf_snps_to_exclude.txt",sep=''),
+            row.names = F,col.names = F,quote = F)
+err_path = paste(job_dir,"maf_filter.err",sep="")
+log_path = paste(job_dir,"maf_filter.log",sep="")
+curr_cmd = paste("plink --bfile",paste(job_dir,"chr_filter",sep=''),
+                 chr_filter,
+                 "--exclude",paste(job_dir,"maf_snps_to_exclude.txt",sep=''),
+                 "--make-bed --out",paste(job_dir,"maf_filter",sep=''))
+curr_sh_file = "maf_filter.sh"
+print_sh_file(paste(job_dir,curr_sh_file,sep=''),
+              get_sh_default_prefix(err_path,log_path),curr_cmd)
+system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
+wait_for_job(jobs_before,5)
+list.files(job_dir)
 
+# Look at the features of the resulting dataset
 # Exclude samples with low call rate
 
 # Separate chrs 1-22 from other snps

@@ -48,6 +48,22 @@ table(snp_data$Call.Freq<0.95)/nrow(snp_data)
 table(snp_data[snp_data$Call.Freq<0.93,]$Chr)
 table(snp_data$Chr)
 
+# get a final set of excluded snps and compare
+snp_min_clustersep_thr = 0.5
+snp_min_call_rate = 0.95
+snp_min_het_ex = -0.3
+snp_max_het_ex = 0.2
+min_maf = 0.005
+snp_data_autosomal_rows = grepl("^\\d+$",snp_data$Chr)
+snps_to_exclude =  snp_data$Call.Freq < snp_min_call_rate |
+  snp_data$Multi.EthnicGlobal_D1.bpm.Cluster.Sep < snp_min_clustersep_thr |
+  snp_data$Het.Excess < snp_min_het_ex |
+  snp_data$Het.Excess > snp_max_het_ex
+snps_to_exclude = snps_to_exclude & snp_data_autosomal_rows
+our_excluded_snps = snp_data$Name[snps_to_exclude]
+length(intersect(our_excluded_snps,snps_to_remove_external))
+table(snp_data$Minor.Freq < min_maf)
+
 #####
 sample_data = read.delim(sample_report_file,stringsAsFactors = F)
 

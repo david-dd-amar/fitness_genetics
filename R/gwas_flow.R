@@ -71,6 +71,16 @@ correct_dups_in_sample_metadata<-function(x){
   rownames(x) = nns[to_keep]
   return(x)
 }
+read_plink_table<-function(path){
+  y = read.delim(path,stringsAsFactors = F,header=F)
+  y = t(apply(y,1,function(x){
+                          x = gsub(x,pattern="^\\s+",replacement = "")
+                          strsplit(x,split="\\s+")[[1]]
+                        }))
+  colnames(y) = y[1,]
+  rownames(y) = y[,2]
+  return(y[-1,])
+}
 
 ####################################################################################################
 ####################################################################################################
@@ -248,6 +258,24 @@ list.files(job_dir)
 ####################################################################################################
 ####################################################################################################
 # Look at the features of the resulting dataset
+jobs_before = get_my_jobs()
+err_path = paste(job_dir,"maf_filter_missing.err",sep="")
+log_path = paste(job_dir,"maf_filter_missing.log",sep="")
+curr_cmd = paste("plink --bfile",paste(job_dir,"maf_filter",sep=''),
+                 "--missing --out",paste(job_dir,"maf_filter_missing",sep=''))
+curr_sh_file = "maf_filter_missing.sh"
+print_sh_file(paste(job_dir,curr_sh_file,sep=''),
+              get_sh_default_prefix(err_path,log_path),curr_cmd)
+system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
+wait_for_job(jobs_before,5)
+list.files(job_dir)
+
+# look at the results
+missinigness_report = read_plink_table(paste(job_dir,"maf_filter_missing.imiss",sep=''))
+call_rates_after_filters = 1-as.numeric(missinigness_report[,6])
+quantile(call_rates_after_filters)
+table(call_rates_after_filters<0.97)
+
 # Exclude samples with low call rate
 
 # Separate chrs 1-22 from other snps

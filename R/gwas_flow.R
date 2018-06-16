@@ -1,6 +1,9 @@
 # This script handles our entire GWAS analysis flow
 # It creates a directory with all input, sh, log, err, and output files
 
+####################################################################################################
+####################################################################################################
+####################################################################################################
 ######## Some useful functions
 get_sh_default_prefix<-function(err="",log=""){
   return(
@@ -53,7 +56,25 @@ wait_for_job<-function(jobs_before,waittime=30){
   }
 }
 
-############
+correct_dups_in_sample_metadata<-function(x){
+  nns = apply(x[,1:2],1,paste,collapse="_")
+  dups = names(which(table(nns)>1))
+  to_keep = rep(F,length(nns))
+  for(i in 1:length(nns)){
+    if(!is.element(nns[i],set=dups)){to_keep[i]=T;next}
+    curr_inds = which(nns==nns[i])
+    num_nas = apply(is.na(x[curr_inds,]),1,sum)
+    curr_inds = curr_inds[num_nas==min(num_nas)]
+    to_keep[curr_inds[1]]=T
+  }
+  x = x[to_keep,]
+  rownames(x) = nns[to_keep]
+  return(x)
+}
+
+####################################################################################################
+####################################################################################################
+####################################################################################################
 
 # Define analysis parameters
 autosomal_chrs = T
@@ -71,7 +92,17 @@ snp_report_file = "/oak/stanford/groups/euan/projects/fitness_genetics/illu_proc
 sample_report_file = "/oak/stanford/groups/euan/projects/fitness_genetics/illu_processed_plink_data/no_reclustering/reports/no_reclustering_Samples_Table.txt"
 sample_metadata = "/oak/stanford/groups/euan/projects/fitness_genetics/metadata/merged_metadata_file_stanford3k_elite_cooper.txt"
 
+####################################################################################################
+####################################################################################################
+####################################################################################################
+# read reports and metadata
 snp_data = read.delim(snp_report_file)
+sample_data = read.delim(sample_report_file,stringsAsFactors = F)
+rownames(sample_data) = sample_data$Sample.ID
+sample_metadata_raw = read.delim(sample_metadata,stringsAsFactors = F)
+sample_metadata_raw = correct_dups_in_sample_metadata(sample_metadata_raw)
+
+# some preprocessing of metadata
 snp_data_autosomal_rows = grepl("^\\d+$",snp_data$Chr)
 snps_to_exclude =  snp_data$Call.Freq < snp_min_call_rate |
      snp_data$Multi.EthnicGlobal_D1.bpm.Cluster.Sep < snp_min_clustersep_thr |
@@ -88,6 +119,9 @@ write.table(t(t(as.character(snp_data$Name[snps_to_exclude]))),
             file=paste(job_dir,"snps_to_exclude.txt",sep=''),
             row.names = F,col.names = F,quote = F)
 
+####################################################################################################
+####################################################################################################
+####################################################################################################
 # set the job's directory
 system(paste("mkdir",job_dir),wait = T)
 system(paste("cp",ped_file,paste(job_dir,"raw.ped",sep='')),wait = T)
@@ -107,6 +141,65 @@ system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
 wait_for_job(jobs_before,5)
 list.files(job_dir)
 
+####################################################################################################
+####################################################################################################
+####################################################################################################
+# impute sex
+# select snps to exclude
+X_snps = grepl("^X$",snp_data$Chr,ignore.case = T)
+X_snps_to_exclude =  snp_data$Call.Freq < snp_min_call_rate |
+  snp_data$Multi.EthnicGlobal_D1.bpm.Cluster.Sep < snp_min_clustersep_thr |
+  snp_data$Het.Excess < snp_min_het_ex |
+  snp_data$Het.Excess > snp_max_het_ex
+X_snps_to_exclude = X_snps_to_exclude & X_snps
+write.table(t(t(as.character(snp_data$Name[X_snps_to_exclude]))),
+            file=paste(job_dir,"X_snps_to_exclude.txt",sep=''),
+            row.names = F,col.names = F,quote = F)
+# run imputation in plink
+jobs_before = get_my_jobs()
+err_path = paste(job_dir,"impute_sex.err",sep="")
+log_path = paste(job_dir,"impute_sex.log",sep="")
+curr_cmd = paste("plink --bfile",paste(job_dir,"raw",sep=''),
+                 "--exclude X_snps_to_exclude.txt",
+                 "--check-sex --out",paste(job_dir,"impute_sex",sep=''))
+curr_sh_file = "impute_sex.sh"
+print_sh_file(paste(job_dir,curr_sh_file,sep=''),
+              get_sh_default_prefix(err_path,log_path),curr_cmd)
+system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
+wait_for_job(jobs_before,5)
+list.files(job_dir)
+
+# get simple imputation by looking at call rates in Y chromosome
+
+
+
+# compare to known sex from the metadata
+metadata_sex = sample_metadata_raw$Sex_input_data
+names(metadata_sex) = apply(sample_metadata_raw[,1:2],1,paste,collapse="_")
+rownames(sample_metadata_raw) = names(metadata_sex)
+imputed_sex = read.delim(paste(job_dir,"impute_sex.sexcheck",sep=''),
+                         stringsAsFactors = F,header=F)
+imputed_sex = t(apply(imputed_sex,1,
+                      function(x){
+                        x = gsub(x,pattern="^\\s+",replacement = "")
+                        strsplit(x,split="\\s+")[[1]]
+                      }))
+dim(imputed_sex)
+colnames(imputed_sex) = imputed_sex[1,]
+rownames(imputed_sex) = imputed_sex[,2]
+inds = intersect(names(metadata_sex),rownames(imputed_sex))
+x1=imputed_sex[inds,4];x2=metadata_sex[inds]
+sex_errs = inds[((x1=="1"&x2=="F")|(x1=="2"&x2=="M")) & !is.na(x2)]
+sample_metadata_raw[sex_errs,]$Cohort
+sex_errs[1:10]
+sample_metadata_raw[sex_errs[1:6],]
+# look at call rates of the samples with error in sex imputation
+quantile(sample_data[sex_errs,]$Call.Rate)
+quantile(sample_data$Call.Rate)
+
+####################################################################################################
+####################################################################################################
+####################################################################################################
 # keep the desired chrs (default: 0-22)
 # also, exclude low qc score snps 
 # in theory we can use the ped itself for inference and filtering
@@ -130,15 +223,18 @@ system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
 wait_for_job(jobs_before,5)
 list.files(job_dir)
 
+####################################################################################################
+####################################################################################################
+####################################################################################################
 # Exclude low maf snps
 maf_snps_to_exclude = snp_data$Name[snp_data$Minor.Freq<min_maf]
 write.table(t(t(as.character(snp_data$Name[maf_snps_to_exclude]))),
             file=paste(job_dir,"maf_snps_to_exclude.txt",sep=''),
             row.names = F,col.names = F,quote = F)
+jobs_before = get_my_jobs()
 err_path = paste(job_dir,"maf_filter.err",sep="")
 log_path = paste(job_dir,"maf_filter.log",sep="")
 curr_cmd = paste("plink --bfile",paste(job_dir,"chr_filter",sep=''),
-                 chr_filter,
                  "--exclude",paste(job_dir,"maf_snps_to_exclude.txt",sep=''),
                  "--make-bed --out",paste(job_dir,"maf_filter",sep=''))
 curr_sh_file = "maf_filter.sh"
@@ -148,6 +244,9 @@ system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
 wait_for_job(jobs_before,5)
 list.files(job_dir)
 
+####################################################################################################
+####################################################################################################
+####################################################################################################
 # Look at the features of the resulting dataset
 # Exclude samples with low call rate
 

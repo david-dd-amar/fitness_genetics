@@ -94,13 +94,22 @@ snp_min_het_ex = -0.3
 snp_max_het_ex = 0.2
 min_maf = 0.005
 
-# Define input parameters
+# Define Input parameters
 job_dir = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl/"
 ped_file = "/oak/stanford/groups/euan/projects/fitness_genetics/illu_processed_plink_data/no_reclustering/PLINK_050618_0953/recall_may_2018_without_reclustering.ped"
 map_file = "/oak/stanford/groups/euan/projects/fitness_genetics/illu_processed_plink_data/no_reclustering/PLINK_050618_0953/recall_may_2018_without_reclustering.map"
 snp_report_file = "/oak/stanford/groups/euan/projects/fitness_genetics/illu_processed_plink_data/no_reclustering/reports/no_reclustering_SNP_Table.txt"
 sample_report_file = "/oak/stanford/groups/euan/projects/fitness_genetics/illu_processed_plink_data/no_reclustering/reports/no_reclustering_Samples_Table.txt"
 sample_metadata = "/oak/stanford/groups/euan/projects/fitness_genetics/metadata/merged_metadata_file_stanford3k_elite_cooper.txt"
+
+# TODO:
+# 1. (Later, low pref for now) Adapt the code to handle NULL snp and sample reports.
+#    In these cases we do SNP/Sample filtering using PLINK's algorithms
+# 2. Add simple y-based sex inference
+# 3. Before the GWAS: exclude samples with either low quality scores after SNP filters or those
+#    that failed the sex check.
+# 4. Run PCA after SNP filtering
+# 5. Define different GWAS flows and get covariates
 
 ####################################################################################################
 ####################################################################################################
@@ -138,7 +147,7 @@ system(paste("cp",ped_file,paste(job_dir,"raw.ped",sep='')),wait = T)
 system(paste("cp",map_file,paste(job_dir,"raw.map",sep='')),wait = T)
 list.files(job_dir)
 
-# create bed file
+# Create bed file
 jobs_before = get_my_jobs()
 err_path = paste(job_dir,"raw_to_bed.err",sep="")
 log_path = paste(job_dir,"raw_to_bed.log",sep="")
@@ -180,9 +189,24 @@ wait_for_job(jobs_before,5)
 list.files(job_dir)
 
 # get simple imputation by looking at call rates in Y chromosome
-
-
-
+Y_snps = grepl("^Y$",snp_data$Chr,ignore.case = T)
+write.table(t(t(as.character(snp_data$Name[Y_snps]))),
+            file=paste(job_dir,"Y_snps.txt",sep=''),
+            row.names = F,col.names = F,quote = F)
+jobs_before = get_my_jobs()
+err_path = paste(job_dir,"Y_snps_analysis.err",sep="")
+log_path = paste(job_dir,"Y_snps_analysis.log",sep="")
+curr_cmd = paste("plink --bfile",paste(job_dir,"raw",sep=''),
+                 "--extract", paste(job_dir,"Y_snps.txt",sep=""),
+                 "--missing --out",paste(job_dir,"Y_snps_analysis",sep=''))
+curr_sh_file = "Y_snps_analysis.sh"
+print_sh_file(paste(job_dir,curr_sh_file,sep=''),
+              get_sh_default_prefix(err_path,log_path),curr_cmd)
+system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
+wait_for_job(jobs_before,5)
+list.files(job_dir)
+Y_missing_report = read_plink_table(paste(job_dir,"Y_snps_analysis.imiss",sep=''))
+Y_inferred_sex = Y_missing_report[,6] == "nan"
 # compare to known sex from the metadata
 metadata_sex = sample_metadata_raw$Sex_input_data
 names(metadata_sex) = apply(sample_metadata_raw[,1:2],1,paste,collapse="_")
@@ -198,7 +222,7 @@ dim(imputed_sex)
 colnames(imputed_sex) = imputed_sex[1,]
 rownames(imputed_sex) = imputed_sex[,2]
 inds = intersect(names(metadata_sex),rownames(imputed_sex))
-x1=imputed_sex[inds,4];x2=metadata_sex[inds]
+x1=imputed_sex[inds,4];x2=metadata_sex[inds];x3 = Y_inferred_sex[inds]
 sex_errs = inds[((x1=="1"&x2=="F")|(x1=="2"&x2=="M")) & !is.na(x2)]
 sample_metadata_raw[sex_errs,]$Cohort
 sex_errs[1:10]
@@ -270,7 +294,7 @@ system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
 wait_for_job(jobs_before,5)
 list.files(job_dir)
 
-# look at the results
+# look at the results, compare to Illumina's 
 missinigness_report = read_plink_table(paste(job_dir,"maf_filter_missing.imiss",sep=''))
 call_rates_after_filters = 1-as.numeric(missinigness_report[,6])
 quantile(call_rates_after_filters)

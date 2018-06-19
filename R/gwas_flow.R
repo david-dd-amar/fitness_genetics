@@ -71,15 +71,32 @@ correct_dups_in_sample_metadata<-function(x){
   rownames(x) = nns[to_keep]
   return(x)
 }
-read_plink_table<-function(path){
-  y = read.delim(path,stringsAsFactors = F,header=F)
+read_plink_table<-function(path,has_header=T,...){
+  y = read.delim(path,stringsAsFactors = F,header=F,...)
   y = t(apply(y,1,function(x){
                           x = gsub(x,pattern="^\\s+",replacement = "")
                           strsplit(x,split="\\s+")[[1]]
                         }))
-  colnames(y) = y[1,]
   rownames(y) = y[,2]
-  return(y[-1,])
+  if(has_header){
+    colnames(y) = y[1,]
+    return(y[-1,])
+  }
+  return(y)
+}
+
+two_d_plot_visualize_covariate<-function(x1,x2,cov1,cov2=NULL,cuts=5,...){
+  if(is.null(cov2)){cov2=cov1}
+  if(is.numeric(cov1)){cov1=cut(cov1,breaks = cuts)}
+  if(is.numeric(cov2)){cov1=cut(cov2,breaks = cuts)}
+  cov1 = as.factor(cov1)
+  cov2 = as.factor(cov2)
+  cols = rainbow(length(unique(cov1)))
+  names(cols) = unique(cov1)
+  pchs = 1:length(unique(cov2))
+  names(pchs) = unique(cov2)
+  plot(x1,x2,col=cols[cov1],pch=pchs[cov2],...)
+  return(list(cols,pchs))
 }
 
 ####################################################################################################
@@ -105,10 +122,8 @@ sample_metadata = "/oak/stanford/groups/euan/projects/fitness_genetics/metadata/
 # TODO:
 # 1. (Later, low pref for now) Adapt the code to handle NULL snp and sample reports.
 #    In these cases we do SNP/Sample filtering using PLINK's algorithms
-# 2. Add simple y-based sex inference
 # 3. Before the GWAS: exclude samples with either low quality scores after SNP filters or those
 #    that failed the sex check.
-# 4. Run PCA after SNP filtering
 # 5. Define different GWAS flows and get covariates
 
 ####################################################################################################
@@ -187,7 +202,6 @@ print_sh_file(paste(job_dir,curr_sh_file,sep=''),
 system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
 wait_for_job(jobs_before,5)
 list.files(job_dir)
-
 # get simple imputation by looking at call rates in Y chromosome
 Y_snps = grepl("^Y$",snp_data$Chr,ignore.case = T)
 write.table(t(t(as.character(snp_data$Name[Y_snps]))),
@@ -205,31 +219,6 @@ print_sh_file(paste(job_dir,curr_sh_file,sep=''),
 system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
 wait_for_job(jobs_before,5)
 list.files(job_dir)
-Y_missing_report = read_plink_table(paste(job_dir,"Y_snps_analysis.imiss",sep=''))
-Y_inferred_sex = Y_missing_report[,6] == "nan"
-# compare to known sex from the metadata
-metadata_sex = sample_metadata_raw$Sex_input_data
-names(metadata_sex) = apply(sample_metadata_raw[,1:2],1,paste,collapse="_")
-rownames(sample_metadata_raw) = names(metadata_sex)
-imputed_sex = read.delim(paste(job_dir,"impute_sex.sexcheck",sep=''),
-                         stringsAsFactors = F,header=F)
-imputed_sex = t(apply(imputed_sex,1,
-                      function(x){
-                        x = gsub(x,pattern="^\\s+",replacement = "")
-                        strsplit(x,split="\\s+")[[1]]
-                      }))
-dim(imputed_sex)
-colnames(imputed_sex) = imputed_sex[1,]
-rownames(imputed_sex) = imputed_sex[,2]
-inds = intersect(names(metadata_sex),rownames(imputed_sex))
-x1=imputed_sex[inds,4];x2=metadata_sex[inds];x3 = Y_inferred_sex[inds]
-sex_errs = inds[((x1=="1"&x2=="F")|(x1=="2"&x2=="M")) & !is.na(x2)]
-sample_metadata_raw[sex_errs,]$Cohort
-sex_errs[1:10]
-sample_metadata_raw[sex_errs[1:6],]
-# look at call rates of the samples with error in sex imputation
-quantile(sample_data[sex_errs,]$Call.Rate)
-quantile(sample_data$Call.Rate)
 
 ####################################################################################################
 ####################################################################################################
@@ -281,7 +270,7 @@ list.files(job_dir)
 ####################################################################################################
 ####################################################################################################
 ####################################################################################################
-# Look at the features of the resulting dataset
+# Get missigness results
 jobs_before = get_my_jobs()
 err_path = paste(job_dir,"maf_filter_missing.err",sep="")
 log_path = paste(job_dir,"maf_filter_missing.log",sep="")
@@ -294,24 +283,137 @@ system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
 wait_for_job(jobs_before,5)
 list.files(job_dir)
 
+####################################################################################################
+####################################################################################################
+####################################################################################################
+# Run PCA
+jobs_before = get_my_jobs()
+err_path = paste(job_dir,"maf_filter_pca.err",sep="")
+log_path = paste(job_dir,"maf_filter_pca.log",sep="")
+curr_cmd = paste("plink --bfile",paste(job_dir,"maf_filter",sep=''),
+                 "--pca --out",paste(job_dir,"maf_filter",sep=''))
+curr_sh_file = "maf_filter_pca.sh"
+print_sh_file(paste(job_dir,curr_sh_file,sep=''),
+              get_sh_default_prefix(err_path,log_path),curr_cmd)
+system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
+wait_for_job(jobs_before,5)
+list.files(job_dir)
+
+####################################################################################################
+####################################################################################################
+####################################################################################################
+# Here we analyze the results of the jobs above
+# Needed files:
+#   Y-based sex analysis: Y_snps_analysis.imiss
+#   Plink's sex analysis: impute_sex.sexcheck
+# Analyze the sex analysis results
+Y_missing_report = read_plink_table(paste(job_dir,"Y_snps_analysis.imiss",sep=''))
+Y_inferred_sex = Y_missing_report[,6] == "nan"
+# compare to known sex from the metadata
+metadata_sex = sample_metadata_raw$Sex_input_data
+names(metadata_sex) = apply(sample_metadata_raw[,1:2],1,paste,collapse="_")
+rownames(sample_metadata_raw) = names(metadata_sex)
+imputed_sex = read_plink_table(paste(job_dir,"impute_sex.sexcheck",sep=''))
+inds = intersect(names(metadata_sex),rownames(imputed_sex))
+x1=imputed_sex[inds,4];x2=metadata_sex[inds];x3 = Y_inferred_sex[inds]
+sex_errs1 = inds[((x1=="1"&x2=="F")|(x1=="2"&x2=="M")) & !is.na(x2)]
+sex_errs2 = inds[((!x3 & x2=="F")|(x3 & x2=="M")) & !is.na(x2)]
+sex_errs = union(sex_errs1,sex_errs2)
+# Check the ids and compare to the exome data
+# Create a report with the sex errors
+m = sample_metadata_raw[sex_errs,]$Cohort
+# look at call rates of the samples with error in sex imputation
+m = cbind(m,sample_data[sex_errs,]$Call.Rate)
+m = cbind(x2[sex_errs],x1[sex_errs],x3[sex_errs],m)
+m = cbind(sample_metadata_raw[sex_errs,"Sample_ID"],m)
+rownames(m) = sex_errs
+colnames(m) = c("Sample_ID","Sex_metadata","Sex_plink_impute(1_is_male)","Sex_y_inf(is_female)","Cohort","Raw_call_rate")
+write.table(m,file=paste(job_dir,"sex_impute_analysis_report.txt",sep=''),sep="\t",quote=F)
+
+# Missigness report after quality and maf filtering
 # look at the results, compare to Illumina's 
 missinigness_report = read_plink_table(paste(job_dir,"maf_filter_missing.imiss",sep=''))
 call_rates_after_filters = 1-as.numeric(missinigness_report[,6])
-quantile(call_rates_after_filters)
-table(call_rates_after_filters<0.97)
+names(call_rates_after_filters) = rownames(missinigness_report)
 low_cr_samples = missinigness_report[call_rates_after_filters<0.98,2]
-sample_metadata_raw[low_cr_samples,]$Cohort
-intersect(sex_errs,low_cr_samples)
+raw_call_rates = sample_data[rownames(missinigness_report),"Call.Rate"]
 
-# Exclude samples with low call rate
+# Report low call rate samples
+m = sample_metadata_raw[low_cr_samples,]$Cohort
+# look at call rates of the samples with error in sex imputation
+m = cbind(m,sample_data[low_cr_samples,]$Call.Rate)
+m = cbind(m,call_rates_after_filters[low_cr_samples])
+m = cbind(sample_metadata_raw[low_cr_samples,"Sample_ID"],m)
+colnames(m) = c("Sample_ID","Cohort","Raw_call_rate","Call_rate_qc_maf_filters")
+write.table(m,file=paste(job_dir,"missigness_analysis_report.txt",sep=''),sep="\t",quote=F)
 
-# Separate chrs 1-22 from other snps
+# Analyze the PCA results
+pca_res = read_plink_table(paste(job_dir,"maf_filter.eigenvec",sep=''),F)
+pca_res = pca_res[,-c(1:2)]
+colnames(pca_res) = paste("PC",1:ncol(pca_res),sep='')
 
-# Infer sex and compare to our covariates
+# some sanity checks before printing the output report
+all(rownames(pca_res) == names(call_rates_after_filters))
+all(rownames(pca_res) == names(imputed_sex))
+all(rownames(pca_res) == names(raw_call_rates))
 
-# Recalculate call rates
+# put all covariates in one table
+covariate_matrix = cbind(sample_metadata_raw[rownames(pca_res),c(6:8,11,12:17,20:23)],
+                         raw_call_rates,call_rates_after_filters,imputed_sex,
+                         pca_res)
+# note that the plink data may have additional samples not in the samples
+# we wish to analyze in this specific project.
+# We therefore have to make sure we proceed only with subjects in the metadata
+# file.
+covariate_matrix = covariate_matrix[intersect(rownames(sample_metadata_raw),
+                                              rownames(covariate_matrix)),]
+length(intersect(sex_errs,rownames(covariate_matrix)))
+write.table(covariate_matrix,file=
+              paste(job_dir,"integrated_sample_metadata_and_covariates.txt",sep=''),
+            sep="\t",quote=F)
 
-# Impute missing values
+####################################################################################################
+####################################################################################################
+####################################################################################################
+# Locally, should be commented out before running as a batch
+setwd("/Users/David/Desktop/elite/analysis/")
+d = read.delim("integrated_sample_metadata_and_covariates.txt")
+
+# PCA plots
+two_d_plot_visualize_covariate<-function(x1,x2,cov1,cov2=NULL,cuts=5,...){
+  if(is.null(cov2)){cov2=cov1}
+  if(is.numeric(cov1)){cov1=cut(cov1,breaks = cuts)}
+  if(is.numeric(cov2)){cov1=cut(cov2,breaks = cuts)}
+  cov1 = as.factor(cov1)
+  cov2 = as.factor(cov2)
+  cols = rainbow(length(unique(cov1)))
+  names(cols) = unique(cov1)
+  cols = cols[!is.na(names(cols))]
+  pchs = 1:length(unique(cov2))
+  names(pchs) = unique(cov2)
+  pchs = pchs[!is.na(names(pchs))]
+  plot(x1,x2,col=cols[cov1],pch=pchs[cov2],...)
+  return(list(cols,pchs))
+}
+
+inds = d$Cohort !="genepool"
+res = two_d_plot_visualize_covariate(d$PC2[inds],d$PC3[inds],d$Cohort[inds],d$Cohort[inds])
+legend(x="topleft",names(res[[1]]),fill = res[[1]])
+res = two_d_plot_visualize_covariate(d$PC2[inds],d$PC3[inds],
+                                     d$Cohort[inds],d$Cohort[inds],
+                                     xlim = c(0,0.01),
+                                     ylim = c(-0.01,0.01))
+
+
+####################################################################################################
+####################################################################################################
+####################################################################################################
+# From here: GWAS
+# Exclude samples with low call rate and error in sex inference
+
+# Impute missing values (?)
+
+# Create phe file for GWAS
 
 # Run gwas (multiclass, logistic)
 

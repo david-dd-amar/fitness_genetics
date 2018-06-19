@@ -1,20 +1,16 @@
+
+# Input files
 # Metadata: an excel file with multiple sheets. One per project.
-metadata_file = "/Users/David/Desktop/elite/fitness_genetics_ashleylab_metadata.xlsx"
-
-library(xlsx)
-metadata_sheets = list()
-for(j in 1:2){
-  metadata_sheets[[j]] = read.xlsx2(metadata_file,j,stringsAsFactors=F)
-}
-
+our_metadata_file = "/Users/David/Desktop/elite/fitness_genetics_ashleylab_metadata.xlsx"
 # Ukbb phenotypic data
 ukbb_pheno_file = "/Users/David/Desktop/ukbb/covariate_matrix.RData"
-ukbb_pheno = get(load(ukbb_pheno_file))
 # Load euro samples
 euro_sample_ids_file = "/Users/David/Desktop/ukbb/pca_results_v2_chrom1_euro.eigenvec"
 eu_ids = read.delim(euro_sample_ids_file)
 eu_ids = eu_ids[,1]
 gc()
+
+# Load input data
 
 # Define a set of features for the analysis
 colnames(covariate_matrix)[grepl("Sex",colnames(covariate_matrix))]

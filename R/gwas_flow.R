@@ -20,7 +20,8 @@ map_file = "/oak/stanford/groups/euan/projects/fitness_genetics/illu_processed_p
 snp_report_file = "/oak/stanford/groups/euan/projects/fitness_genetics/illu_processed_plink_data/no_reclustering/reports/no_reclustering_SNP_Table.txt"
 sample_report_file = "/oak/stanford/groups/euan/projects/fitness_genetics/illu_processed_plink_data/no_reclustering/reports/no_reclustering_Samples_Table.txt"
 sample_metadata = "/oak/stanford/groups/euan/projects/fitness_genetics/metadata/merged_metadata_file_stanford3k_elite_cooper.txt"
-script_file = "~/davidama/repos/fitness_genetics/R/gwas_flow_helper_functions.R"
+script_file = "/home/users/davidama/repos/fitness_genetics/R/gwas_flow_helper_functions.R"
+source(script_file)
 
 # TODO:
 # 1. (Later, low pref for now) Adapt the code to handle NULL snp and sample reports.

@@ -276,48 +276,62 @@ write.table(covariate_matrix,file=
               paste(job_dir,"integrated_sample_metadata_and_covariates.txt",sep=''),
             sep="\t",quote=F)
 
+# ####################################################################################################
+# ####################################################################################################
+# ####################################################################################################
+# # Locally, should be commented out before running as a batch
+# setwd("/Users/David/Desktop/elite/analysis/")
+# d = read.delim("integrated_sample_metadata_and_covariates.txt")
+# 
+# # PCA plots
+# two_d_plot_visualize_covariate<-function(x1,x2,cov1,cov2=NULL,cuts=5,...){
+#   if(is.null(cov2)){cov2=cov1}
+#   if(is.numeric(cov1)){cov1=cut(cov1,breaks = cuts)}
+#   if(is.numeric(cov2)){cov1=cut(cov2,breaks = cuts)}
+#   cov1 = as.factor(cov1)
+#   cov2 = as.factor(cov2)
+#   cols = rainbow(length(unique(cov1)))
+#   names(cols) = unique(cov1)
+#   cols = cols[!is.na(names(cols))]
+#   pchs = 1:length(unique(cov2))
+#   names(pchs) = unique(cov2)
+#   pchs = pchs[!is.na(names(pchs))]
+#   plot(x1,x2,col=cols[cov1],pch=pchs[cov2],...)
+#   return(list(cols,pchs))
+# }
+# 
+# inds = d$Cohort !="genepool"
+# res = two_d_plot_visualize_covariate(d$PC2[inds],d$PC3[inds],d$Cohort[inds],d$Cohort[inds])
+# legend(x="topleft",names(res[[1]]),fill = res[[1]])
+# res = two_d_plot_visualize_covariate(d$PC2[inds],d$PC3[inds],
+#                                      d$Cohort[inds],d$Cohort[inds],
+#                                      xlim = c(0,0.01),
+#                                      ylim = c(-0.01,0.01))
 ####################################################################################################
 ####################################################################################################
 ####################################################################################################
-# Locally, should be commented out before running as a batch
-setwd("/Users/David/Desktop/elite/analysis/")
-d = read.delim("integrated_sample_metadata_and_covariates.txt")
+# From here: prepare data and run GWAS
+covariate_matrix = read.delim(paste(job_dir,"integrated_sample_metadata_and_covariates.txt",sep=''),stringsAsFactors = F)
 
-# PCA plots
-two_d_plot_visualize_covariate<-function(x1,x2,cov1,cov2=NULL,cuts=5,...){
-  if(is.null(cov2)){cov2=cov1}
-  if(is.numeric(cov1)){cov1=cut(cov1,breaks = cuts)}
-  if(is.numeric(cov2)){cov1=cut(cov2,breaks = cuts)}
-  cov1 = as.factor(cov1)
-  cov2 = as.factor(cov2)
-  cols = rainbow(length(unique(cov1)))
-  names(cols) = unique(cov1)
-  cols = cols[!is.na(names(cols))]
-  pchs = 1:length(unique(cov2))
-  names(pchs) = unique(cov2)
-  pchs = pchs[!is.na(names(pchs))]
-  plot(x1,x2,col=cols[cov1],pch=pchs[cov2],...)
-  return(list(cols,pchs))
-}
+# Fill in some info:
+# No shipment date into one batch
+covariate_matrix$Shipment.date[is.na(covariate_matrix$Shipment.date)] = "uknown"
 
-inds = d$Cohort !="genepool"
-res = two_d_plot_visualize_covariate(d$PC2[inds],d$PC3[inds],d$Cohort[inds],d$Cohort[inds])
-legend(x="topleft",names(res[[1]]),fill = res[[1]])
-res = two_d_plot_visualize_covariate(d$PC2[inds],d$PC3[inds],
-                                     d$Cohort[inds],d$Cohort[inds],
-                                     xlim = c(0,0.01),
-                                     ylim = c(-0.01,0.01))
-
-
-####################################################################################################
-####################################################################################################
-####################################################################################################
-# From here: GWAS
 # Exclude samples with low call rate and error in sex inference
+sex_analysis_report = read.delim(file=paste(job_dir,"sex_impute_analysis_report.txt",sep=''))
+excluded_samples = union(rownames(sex_analysis_report),rownames(covariate_matrix)[covariate_matrix$call_rates_after_filters<0.98])
+write.table(t(t(excluded_samples)),file = paste(job_dir,"gwas_excluded_samples.txt",sep=''),row.names = F,col.names = F,quote=F)
+remaining_samples = rownames(covariate_matrix)[!is.element(rownames(covariate_matrix),set=excluded_samples)]
 
-# Impute missing values (?)
-
-# Create phe file for GWAS
+# Create phe file for GWAS 
+pheno_cols = c(
+  "Cohort",
+  "Shipment.date",
+  "Sex_input_data",
+  "Age..at.test.",
+  paste("PC",1:10,sep="")
+)
+pheno_data = cbind(remaining_samples,covariate_matrix[remaining_samples,pheno_cols])
 
 # Run gwas (multiclass, logistic)
 

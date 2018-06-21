@@ -20,6 +20,26 @@ get_sh_default_prefix<-function(err="",log=""){
     )
   )
 }
+
+get_sh_prefix_one_node_specify_cpu_and_mem<-function(err="",log="",Ncpu,mem_size){
+  return(
+    c(
+      "#!/bin/bash",
+      "#",
+      "#SBATCH --time=24:00:00",
+      "#SBATCH --partition=euan,mrivas,normal,owners",
+      "#SBATCH --nodes=1",
+      paste("#SBATCH --c",Ncpu),
+      paste("#SBATCH --mem=",mem_size,sep=""),
+      paste("#SBATCH --error",err),
+      paste("#SBATCH --out",log),
+      "",
+      "module load biology",
+      "module load plink/1.90b5.3"
+    )
+  )
+}
+
 print_sh_file<-function(path,prefix,cmd){
   cmd = c(prefix,cmd)
   write.table(file=path,t(t(cmd)),row.names = F,col.names = F,quote = F)
@@ -95,3 +115,13 @@ two_d_plot_visualize_covariate<-function(x1,x2,cov1,cov2=NULL,cuts=5,...){
   plot(x1,x2,col=cols[cov1],pch=pchs[cov2],...)
   return(list(cols,pchs))
 }
+
+cov_phe_col_to_plink_numeric_format<-function(x){
+  if(is.numeric(x)){return(x)}
+  x = as.numeric(as.factor(x))
+  x[is.na(x)] = -9
+  return(x)
+}
+
+
+

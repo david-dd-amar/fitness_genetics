@@ -375,7 +375,7 @@ pheno_file = paste(job_dir,"three_group_analysis_genepool_controls.phe",sep='')
 curr_cmd = paste("plink --bfile",paste(job_dir,"maf_filter",sep=''),
                  "--linear",
                  paste("--pheno",pheno_file,"--pheno-name","ExerciseGroup --prune"),
-                 paste("--sex-update", paste(job_dir,"three_group_analysis_sex_update.phe",sep='')),
+                 paste("--update-sex", paste(job_dir,"three_group_analysis_sex_update.phe",sep='')),
                  paste("--covar",pheno_file,"--covar-name","sex,Batch,PC1,PC2,PC3,PC4,PC5,PC6,PC7,PC8,PC9,PC10"),
                   "--out",paste(job_dir,"genepool_controls_simple_linear_wo_age",sep=''))
 curr_sh_file = "genepool_controls_simple_linear_wo_age.sh"

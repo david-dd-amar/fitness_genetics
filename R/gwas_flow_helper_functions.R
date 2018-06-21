@@ -7,7 +7,7 @@ get_sh_default_prefix<-function(err="",log=""){
     c(
       "#!/bin/bash",
       "#",
-      "#SBATCH --time=24:00:00",
+      "#SBATCH --time=12:00:00",
       "#SBATCH --partition=euan,mrivas,normal,owners",
       "#SBATCH --nodes=1",
       "#SBATCH --cpus-per-task=2",
@@ -26,10 +26,10 @@ get_sh_prefix_one_node_specify_cpu_and_mem<-function(err="",log="",Ncpu,mem_size
     c(
       "#!/bin/bash",
       "#",
-      "#SBATCH --time=24:00:00",
+      "#SBATCH --time=12:00:00",
       "#SBATCH --partition=euan,mrivas,normal,owners",
       "#SBATCH --nodes=1",
-      paste("#SBATCH --c",Ncpu),
+      paste("#SBATCH -c",Ncpu),
       paste("#SBATCH --mem=",mem_size,sep=""),
       paste("#SBATCH --error",err),
       paste("#SBATCH --out",log),
@@ -45,9 +45,9 @@ print_sh_file<-function(path,prefix,cmd){
   write.table(file=path,t(t(cmd)),row.names = F,col.names = F,quote = F)
 }
 
-get_my_jobs<-function(){
+get_my_jobs<-function(uname="davidama"){
   tmp = paste("tmp",abs(rnorm(1)),sep='')
-  system(paste("squeue | grep davidama >",tmp),wait = T)
+  system(paste("squeue | grep", uname," >",tmp),wait = T)
   jobs = readLines(tmp)
   system(paste("rm",tmp))
   return(jobs)

@@ -21,6 +21,7 @@ snp_report_file = "/oak/stanford/groups/euan/projects/fitness_genetics/illu_proc
 sample_report_file = "/oak/stanford/groups/euan/projects/fitness_genetics/illu_processed_plink_data/no_reclustering/reports/no_reclustering_Samples_Table.txt"
 sample_metadata = "/oak/stanford/groups/euan/projects/fitness_genetics/metadata/merged_metadata_file_stanford3k_elite_cooper.txt"
 script_file = "/home/users/davidama/repos/fitness_genetics/R/gwas_flow_helper_functions.R"
+script_file = "/oak/stanford/groups/euan/projects/fitness_genetics/scripts/fitness_genetics/R/gwas_flow_helper_functions.R"
 source(script_file)
 
 # TODO:
@@ -323,18 +324,63 @@ excluded_samples = union(rownames(sex_analysis_report),rownames(covariate_matrix
 write.table(t(t(excluded_samples)),file = paste(job_dir,"gwas_excluded_samples.txt",sep=''),row.names = F,col.names = F,quote=F)
 remaining_samples = rownames(covariate_matrix)[!is.element(rownames(covariate_matrix),set=excluded_samples)]
 
+Y_missing_report = read_plink_table(paste(job_dir,"Y_snps_analysis.imiss",sep=''))
+Y_inferred_sex = Y_missing_report[,6] == "nan"
+Sex = Y_inferred_sex[remaining_samples]
+Sex[Sex] = "0"
+Sex[Sex=="FALSE"] = "1"
+table(Sex)
+
 # Create phe file for GWAS 
 pheno_cols = c(
   "Cohort",
   "Shipment.date",
-  "Sex_input_data",
   "Age..at.test.",
   paste("PC",1:10,sep="")
 )
-pheno_data = cbind(remaining_samples,covariate_matrix[remaining_samples,pheno_cols])
+pheno_data = cbind(remaining_samples,Sex,covariate_matrix[remaining_samples,pheno_cols])
+# Correct the cohort
+pheno_data$Cohort[pheno_data$Cohort=="ELITE"] = "3"
+pheno_data$Cohort[pheno_data$Cohort=="Cooper"] = "2"
+pheno_data$Cohort[pheno_data$Cohort=="genepool"] = "1"
+pheno_data$Cohort = as.numeric(pheno_data$Cohort)
+
+
+table(pheno_data$Cohort)
+for(j in 4:6){
+  pheno_data[[j]] = cov_phe_col_to_plink_numeric_format(pheno_data[[j]])
+}
+table(pheno_data[[4]])
+
+# read our fam file
+fam_info = read_plink_table(paste(job_dir,"maf_filter.fam",sep=""),has_header = F)
+iid_to_fid = fam_info[,1]
+
+# write phe file
+pheno_data = cbind(iid_to_fid[pheno_data[,1]],pheno_data)
+colnames(pheno_data) = c("FID","IID","Sex","ExerciseGroup","Batch","Age",paste("PC",1:10,sep=""))
+write.table(file=paste(job_dir,"three_group_analysis_genepool_controls.phe",sep=''),
+            pheno_data,sep=" ",row.names = F,col.names = T,quote=F)
 
 # Run gwas (multiclass, logistic)
 
+# 1. Try simple linear without age
+jobs_before = get_my_jobs("dhsua")
+err_path = paste(job_dir,"genepool_controls_simple_linear_wo_age.err",sep="")
+log_path = paste(job_dir,"genepool_controls_simple_linear_wo_age.log",sep="")
+pheno_file = paste(job_dir,"three_group_analysis_genepool_controls.phe",sep='')
+curr_cmd = paste("plink --bfile",paste(job_dir,"maf_filter",sep=''),
+                 "--linear",
+                 paste("--pheno",pheno_file,"--pheno-name","ExerciseGroup --all-pheno --prune "),
+                 paste("--covar",pheno_file,"--covar-name","Sex,Batch,PC1,PC2,PC3,PC4,PC5,PC6,PC7,PC8,PC9,PC10"),
+                  "--out",paste(job_dir,"genepool_controls_simple_linear_wo_age",sep=''))
+curr_sh_file = "genepool_controls_simple_linear_wo_age.sh"
+print_sh_file(paste(job_dir,curr_sh_file,sep=''),
+              get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,4,10000),curr_cmd)
+system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
+wait_for_job(jobs_before,5)
+list.files(job_dir)
+readLines(err_path)
 
 
 

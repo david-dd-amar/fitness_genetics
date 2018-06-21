@@ -327,7 +327,7 @@ remaining_samples = rownames(covariate_matrix)[!is.element(rownames(covariate_ma
 Y_missing_report = read_plink_table(paste(job_dir,"Y_snps_analysis.imiss",sep=''))
 Y_inferred_sex = Y_missing_report[,6] == "nan"
 Sex = Y_inferred_sex[remaining_samples]
-Sex[Sex] = "0"
+Sex[Sex] = "2"
 Sex[Sex=="FALSE"] = "1"
 table(Sex)
 
@@ -358,25 +358,29 @@ iid_to_fid = fam_info[,1]
 
 # write phe file
 pheno_data = cbind(iid_to_fid[pheno_data[,1]],pheno_data)
-colnames(pheno_data) = c("FID","IID","Sex","ExerciseGroup","Batch","Age",paste("PC",1:10,sep=""))
+colnames(pheno_data) = c("FID","IID","sex","ExerciseGroup","Batch","Age",paste("PC",1:10,sep=""))
 write.table(file=paste(job_dir,"three_group_analysis_genepool_controls.phe",sep=''),
             pheno_data,sep=" ",row.names = F,col.names = T,quote=F)
+
+write.table(file=paste(job_dir,"three_group_analysis_sex_update.phe",sep=''),
+            pheno_data[,1:3],sep=" ",row.names = F,col.names = T,quote=F)
 
 # Run gwas (multiclass, logistic)
 
 # 1. Try simple linear without age
-jobs_before = get_my_jobs("dhsua")
+jobs_before = get_my_jobs()
 err_path = paste(job_dir,"genepool_controls_simple_linear_wo_age.err",sep="")
 log_path = paste(job_dir,"genepool_controls_simple_linear_wo_age.log",sep="")
 pheno_file = paste(job_dir,"three_group_analysis_genepool_controls.phe",sep='')
 curr_cmd = paste("plink --bfile",paste(job_dir,"maf_filter",sep=''),
                  "--linear",
-                 paste("--pheno",pheno_file,"--pheno-name","ExerciseGroup --all-pheno --prune "),
-                 paste("--covar",pheno_file,"--covar-name","Sex,Batch,PC1,PC2,PC3,PC4,PC5,PC6,PC7,PC8,PC9,PC10"),
+                 paste("--pheno",pheno_file,"--pheno-name","ExerciseGroup --prune"),
+                 paste("--sex-update", paste(job_dir,"three_group_analysis_sex_update.phe",sep='')),
+                 paste("--covar",pheno_file,"--covar-name","sex,Batch,PC1,PC2,PC3,PC4,PC5,PC6,PC7,PC8,PC9,PC10"),
                   "--out",paste(job_dir,"genepool_controls_simple_linear_wo_age",sep=''))
 curr_sh_file = "genepool_controls_simple_linear_wo_age.sh"
 print_sh_file(paste(job_dir,curr_sh_file,sep=''),
-              get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,4,10000),curr_cmd)
+              get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,2,10000),curr_cmd)
 system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
 wait_for_job(jobs_before,5)
 list.files(job_dir)

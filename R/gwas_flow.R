@@ -12,6 +12,7 @@ snp_min_call_rate = 0.95
 snp_min_het_ex = -0.3
 snp_max_het_ex = 0.2
 min_maf = 0.005
+run_loacally = F
 
 # Define Input parameters
 job_dir = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl/"
@@ -204,6 +205,20 @@ system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
 wait_for_job(jobs_before,5)
 list.files(job_dir)
 
+# Run freq
+jobs_before = get_my_jobs()
+err_path = paste(job_dir,"maf_filter_freq.err",sep="")
+log_path = paste(job_dir,"maf_filter_freq.log",sep="")
+curr_cmd = paste("plink --bfile",paste(job_dir,"maf_filter",sep=''),
+                 "--freq --out",paste(job_dir,"maf_filter",sep=''))
+curr_sh_file = "maf_filter_freq.sh"
+print_sh_file(paste(job_dir,curr_sh_file,sep=''),
+              get_sh_default_prefix(err_path,log_path),curr_cmd)
+system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
+wait_for_job(jobs_before,5)
+list.files(job_dir)
+
+
 ####################################################################################################
 ####################################################################################################
 ####################################################################################################
@@ -311,18 +326,30 @@ write.table(covariate_matrix,file=
 ####################################################################################################
 ####################################################################################################
 ####################################################################################################
+# job_dir = "/Users/David/Desktop/elite/analysis/" # for local tests
+# run_loacally = T
 # From here: prepare data and run GWAS
 covariate_matrix = read.delim(paste(job_dir,"integrated_sample_metadata_and_covariates.txt",sep=''),stringsAsFactors = F)
+covariate_matrix[covariate_matrix$Cohort=="genepool",]$Age..at.test.
+covariate_matrix[covariate_matrix==""] = NA
 
 # Fill in some info:
 # No shipment date into one batch
 covariate_matrix$Shipment.date[is.na(covariate_matrix$Shipment.date)] = "uknown"
 
+# read our fam file
+fam_info = read_plink_table(paste(job_dir,"maf_filter.fam",sep=""),has_header = F)
+iid_to_fid = fam_info[,1]
+
 # Exclude samples with low call rate and error in sex inference
 sex_analysis_report = read.delim(file=paste(job_dir,"sex_impute_analysis_report.txt",sep=''))
 excluded_samples = union(rownames(sex_analysis_report),rownames(covariate_matrix)[covariate_matrix$call_rates_after_filters<0.98])
-write.table(t(t(excluded_samples)),file = paste(job_dir,"gwas_excluded_samples.txt",sep=''),row.names = F,col.names = F,quote=F)
 remaining_samples = rownames(covariate_matrix)[!is.element(rownames(covariate_matrix),set=excluded_samples)]
+
+# Print excluded into file
+m1 = cbind(iid_to_fid[excluded_samples],excluded_samples)
+colnames(m1) = c("FID","IID")
+write.table(m1,file = paste(job_dir,"gwas_excluded_samples.txt",sep=''),row.names = F,col.names = T,quote=F,sep=" ")
 
 Y_missing_report = read_plink_table(paste(job_dir,"Y_snps_analysis.imiss",sep=''))
 Y_inferred_sex = Y_missing_report[,6] == "nan"
@@ -345,19 +372,15 @@ pheno_data$Cohort[pheno_data$Cohort=="Cooper"] = "2"
 pheno_data$Cohort[pheno_data$Cohort=="genepool"] = "1"
 pheno_data$Cohort = as.numeric(pheno_data$Cohort)
 
-
 table(pheno_data$Cohort)
 for(j in 4:6){
   pheno_data[[j]] = cov_phe_col_to_plink_numeric_format(pheno_data[[j]])
 }
-table(pheno_data[[4]])
-
-# read our fam file
-fam_info = read_plink_table(paste(job_dir,"maf_filter.fam",sep=""),has_header = F)
-iid_to_fid = fam_info[,1]
+table(pheno_data$Age)
+pheno_data[pheno_data$ExerciseGroup==1,]$Age
 
 # write phe file
-pheno_data = cbind(iid_to_fid[pheno_data[,1]],pheno_data)
+pheno_data = cbind(as.character(iid_to_fid[remaining_samples]),pheno_data)
 colnames(pheno_data) = c("FID","IID","sex","ExerciseGroup","Batch","Age",paste("PC",1:10,sep=""))
 write.table(file=paste(job_dir,"three_group_analysis_genepool_controls.phe",sep=''),
             pheno_data,sep=" ",row.names = F,col.names = T,quote=F)
@@ -365,27 +388,61 @@ write.table(file=paste(job_dir,"three_group_analysis_genepool_controls.phe",sep=
 write.table(file=paste(job_dir,"three_group_analysis_sex_update.phe",sep=''),
             pheno_data[,1:3],sep=" ",row.names = F,col.names = T,quote=F)
 
+####################################################################################################
+####################################################################################################
+####################################################################################################
+# Clean the data for the analysis
+
+
+####################################################################################################
+####################################################################################################
+####################################################################################################
 # Run gwas (multiclass, logistic)
-
 # 1. Try simple linear without age
-jobs_before = get_my_jobs()
-err_path = paste(job_dir,"genepool_controls_simple_linear_wo_age.err",sep="")
-log_path = paste(job_dir,"genepool_controls_simple_linear_wo_age.log",sep="")
 pheno_file = paste(job_dir,"three_group_analysis_genepool_controls.phe",sep='')
-curr_cmd = paste("plink --bfile",paste(job_dir,"maf_filter",sep=''),
-                 "--linear",
-                 paste("--pheno",pheno_file,"--pheno-name","ExerciseGroup --prune"),
-                 paste("--update-sex", paste(job_dir,"three_group_analysis_sex_update.phe",sep='')),
-                 paste("--covar",pheno_file,"--covar-name","sex,Batch,PC1,PC2,PC3,PC4,PC5,PC6,PC7,PC8,PC9,PC10"),
-                  "--out",paste(job_dir,"genepool_controls_simple_linear_wo_age",sep=''))
-curr_sh_file = "genepool_controls_simple_linear_wo_age.sh"
-print_sh_file(paste(job_dir,curr_sh_file,sep=''),
-              get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,2,10000),curr_cmd)
-system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
-wait_for_job(jobs_before,5)
-list.files(job_dir)
-readLines(err_path)
-
+write.table(file=pheno_file,pheno_data[,c(1:2,4)],sep=" ",row.names = F,col.names = T,quote=F)
+covar_file = paste(job_dir,"three_group_analysis_genepool_controls_covar.phe",sep='')
+write.table(file=covar_file,pheno_data[,-4],sep=" ",row.names = F,col.names = T,quote=F)
+#jobs_before = get_my_jobs()
+if (!run_loacally){
+  err_path = paste(job_dir,"genepool_controls_simple_linear_wo_age.err",sep="")
+  log_path = paste(job_dir,"genepool_controls_simple_linear_wo_age.log",sep="")
+  curr_cmd = paste("plink2 --bfile",paste(job_dir,"maf_filter",sep=''), "\\",
+                   "--glm hide-covar firth-fallback \\",
+                   paste("--pheno",pheno_file,"\\"),
+                   paste("--pheno-name ExerciseGroup \\"),
+                   "--allow-no-sex \\",
+                   paste("--covar",covar_file,"\\"),
+                   "--covar-name sex,Batch,PC1,PC2,PC3,PC4,PC5 \\",
+                   "--adjust \\",
+                   "--out",paste(job_dir,"genepool_controls_simple_linear_wo_age",sep=''))
+  curr_sh_file = "genepool_controls_simple_linear_wo_age.sh"
+  print_sh_file(paste(job_dir,curr_sh_file,sep=''),
+                get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,"plink/2a1",2,10000),curr_cmd)
+  system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
+  #wait_for_job(jobs_before,5)
+  list.files(job_dir)
+  readLines(err_path)
+}
+if(run_loacally){
+  curr_cmd = paste(paste(job_dir,"plink2",sep=""),
+                   "--bfile",paste(job_dir,"maf_filter",sep=''),
+                   "--glm hide-covar firth-fallback",
+                   paste("--pheno",pheno_file),
+                   paste("--pheno-name ExerciseGroup"),
+                   "--allow-no-sex",
+                   paste("--covar",covar_file),
+                   "--covar-name sex,Batch,PC1,PC2,PC3,PC4,PC5",
+                   "--adjust",
+                   "--out",paste(job_dir,"genepool_controls_simple_linear_wo_age",sep=''))
+  system(curr_cmd)
+  
+  res_files = list.files(job_dir)
+  res_files = res_files[grepl("genepool_controls_simple_linear_wo_age",res_files)]
+  res_file = res_files[grepl("adjusted$",res_files)]
+  res = read.delim(paste(job_dir,res_file,sep=''),stringsAsFactors = F)
+  res_fuma = from_our_sol_to_fuma_res(res_file,)
+}
 
 
 

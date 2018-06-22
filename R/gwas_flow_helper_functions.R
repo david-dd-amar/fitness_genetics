@@ -21,7 +21,7 @@ get_sh_default_prefix<-function(err="",log=""){
   )
 }
 
-get_sh_prefix_one_node_specify_cpu_and_mem<-function(err="",log="",Ncpu,mem_size){
+get_sh_prefix_one_node_specify_cpu_and_mem<-function(err="",log="",plink_pkg = "plink/1.90b5.3", Ncpu,mem_size){
   return(
     c(
       "#!/bin/bash",
@@ -35,7 +35,7 @@ get_sh_prefix_one_node_specify_cpu_and_mem<-function(err="",log="",Ncpu,mem_size
       paste("#SBATCH --out",log),
       "",
       "module load biology",
-      "module load plink/1.90b5.3"
+      paste("module load",plink_pkg)
     )
   )
 }
@@ -119,8 +119,23 @@ two_d_plot_visualize_covariate<-function(x1,x2,cov1,cov2=NULL,cuts=5,...){
 cov_phe_col_to_plink_numeric_format<-function(x){
   if(is.numeric(x)){return(x)}
   x = as.numeric(as.factor(x))
-  x[is.na(x)] = -9
   return(x)
+}
+
+from_our_sol_to_fuma_res<-function(assoc_file,bim_file,freq_file=NULL,maf = 0.01,p=1){
+  res = read.delim(paste(job_dir,res_file,sep=''),stringsAsFactors = F)
+  mafs = read.table(freq_file,stringsAsFactors = F,header=T)
+  bim = read.delim(bim_file,stringsAsFactors = F,header=F)
+  rownames(bim) = bim[,2]
+  rownames(mafs) = mafs$SNP
+  rownames(res) = res$ID
+  selected_snps = intersect(
+    rownames(res)[res$UNADJ <= p],
+    rownames(mafs)[mafs$MAF >= maf]
+  )
+  m = cbind(as.character(bim[selected_snps,1]),as.character(bim[selected_snps,4]),res[selected_snps,]$UNADJ)
+  colnames(m) = c("chromosome","position","P-value")
+  return(m)
 }
 
 

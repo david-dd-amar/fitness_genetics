@@ -64,7 +64,6 @@ selected_samples = sort(c(male_samples,female_samples))
 selected_samples = cbind(selected_samples,
                          pheno_data[selected_samples,defined_features["sex","ukbb"]],
                          pheno_data[selected_samples,defined_features["age","ukbb"]])
-write.table()
 
 # Later: we can choose based on other features as well
 # Take a cohort from our data and get their control group

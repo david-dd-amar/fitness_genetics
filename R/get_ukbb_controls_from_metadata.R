@@ -61,10 +61,15 @@ N_female = N - length(male_samples)
 female_samples = geno_samples[sample(which(!geno_samples_sex_male))[1:N_female]]
 
 selected_samples = sort(c(male_samples,female_samples))
+write.table(cbind(selected_samples,selected_samples),file="/Users/David/Desktop/elite/ukbb/10k_rand_controls_sex_age.txt",
+            sep="\t",row.names = F,col.names = F,quote=F)
 selected_samples = cbind(selected_samples,
                          pheno_data[selected_samples,defined_features["sex","ukbb"]],
                          pheno_data[selected_samples,defined_features["age","ukbb"]])
+write.table(selected_samples,file="/Users/David/Desktop/elite/ukbb/10k_rand_controls_sex_age_with_info.txt",
+            sep="",row.names = F,col.names = F,quote=F)
 
+###########################################################################
 # Later: we can choose based on other features as well
 # Take a cohort from our data and get their control group
 cohort_name = "elite"

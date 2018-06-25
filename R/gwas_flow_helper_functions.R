@@ -138,5 +138,31 @@ from_our_sol_to_fuma_res<-function(assoc_file,bim_file,freq_file=NULL,maf = 0.01
   return(m)
 }
 
+# This function takes a vector of size 4
+# The first two entries are from the first bim files and
+# the second two are from the second bim file
+# The function returns 1 if the snp info are the same (after sort)
+# -1 if the snp is flipped
+# 2 if the snp is deletion (D) or insertion (I) and ...
+# 0 otherwise.
+# 0 can occur, for example if we see three alleles overall
+# which makes the snp problematic, especially for analysis with plink
+check_bims_snp_info<-function(x){
+  x1 = sort(x[1:2])
+  x2 = sort(x[3:4])
+  if(all(x1==x2)){return(1)}
+  x1_1 = sapply(x1,rev_nucleotide)
+  x1_1 = sort(x1_1)
+  if(all(x2==x1_1)){return(-1)}
+  return(0)
+}
+rev_nucleotide<-function(x){
+  x = toupper(x)
+  if(x=="A"){return("T")}
+  if(x=="C"){return("G")}
+  if(x=="G"){return("C")}
+  if(x=="T"){return("A")}
+  return(x)
+}
 
 

@@ -38,6 +38,13 @@ metadata_file = "/Users/David/Desktop/elite/metadata/june_2018_integrated_info/m
 # locally
 gs_excluded_file = "/Users/David/Desktop/elite/metadata/june_2018_integrated_info/low_call_rate_samples_genomestudio.txt"
 
+# in sherlock
+ukbb_bim_file = ""
+our_bim_file = ""
+# localy
+ukbb_bim_files = "/Users/David/Desktop/elite/ukbb/bims/"
+our_bim_file = "/Users/David/Desktop/elite/analysis/maf_filter.bim"
+
 # load SNP info
 snp_data = read.delim(snp_report_file)
 rownames(snp_data) = snp_data$Name
@@ -121,5 +128,60 @@ write.table(
   gs_excluded$Call.Rate),
             file ="/Users/David/Desktop/elite/metadata/june_2018_integrated_info/low_call_rate_samples_genomestudio_our_ids.txt",
             sep="\t",quote=F)
+
+# Compare bim files: get SNPs that should be flipped
+our_bim_data = read.table(our_bim_file,stringsAsFactors = F)
+# correct our bim info
+id_is_location = grepl(":",our_bim_data[,2])
+# extract true locations from the snp ids
+id_is_lc_arr = sapply(our_bim_data[id_is_location,2],function(x)strsplit(x,":|-",perl=T)[[1]][1:2])
+our_bim_data[id_is_location,1] = id_is_lc_arr[1,]
+our_bim_data[id_is_location,4] = id_is_lc_arr[2,]
+our_locs = apply(our_bim_data[,c(1,4)],1,function(x)paste(sort(x),collapse=";"))
+rownames(our_bim_data) = our_bim_data[,2]
+
+# loop 1: correct our ids to match those in ukbb
+for(f in list.files(ukbb_bim_files)){
+  curr_bim = read.table(paste(ukbb_bim_files,f,sep=""),stringsAsFactors = F)
+  rownames(curr_bim) = curr_bim[,2]
+  curr_locs = apply(curr_bim[,c(1,4)],1,function(x)paste(sort(x),collapse=";"))
+  loc_intersect = intersect(our_locs,curr_locs)
+  # analyze the snps with the same location but different ids
+  l1_inds = is.element(curr_locs,set=loc_intersect)
+  l2_inds = is.element(our_locs,set=loc_intersect)
+  our_bim_data[l2_inds,2] = curr_bim[l1_inds,2]
+}
+rownames(our_bim_data) = our_bim_data[,2]
+
+# loop2: look at the intersection
+intersect_snps_our = c()
+intersect_snps_ukbb = c()
+for(f in list.files(ukbb_bim_files)){
+  curr_bim = read.table(paste(ukbb_bim_files,f,sep=""),stringsAsFactors = F)
+  rownames(curr_bim) = curr_bim[,2]
+  inds = intersect(curr_bim[,2],rownames(our_bim_data))
+  curr_locs = apply(curr_bim[,c(1,4)],1,function(x)paste(sort(x),collapse=";"))
+  print(length(inds))
+  d1 = our_bim_data[inds,];d2=curr_bim[inds,]
+  intersect_snps_our = rbind(intersect_snps_our,d1)
+  intersect_snps_ukbb = rbind(intersect_snps_ukbb,d2)
+}
+dim(intersect_snps_our)
+table(intersect_snps_our$V3 == intersect_snps_ukbb$V3)
+table(intersect_snps_our$V4 == intersect_snps_ukbb$V4)
+wrong_loc = which(intersect_snps_our$V4 != intersect_snps_ukbb$V4)
+
+our_snps = apply(intersect_snps_our[,5:6],1,function(x)paste(sort(x),collapse=";"))
+ukbb_snps = apply(intersect_snps_ukbb[,5:6],1,function(x)paste(sort(x),collapse=";"))
+table(our_snps==ukbb_snps) # diffs: should be flipped
+
+# print results into three files: 
+#   1. our corrected bim
+#   2. Intersect SNPs
+#   3. SNPs that should be flipped
+
+
+
+
 
 

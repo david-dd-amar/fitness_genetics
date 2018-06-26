@@ -71,6 +71,8 @@ system(paste("rm ",out_path,"merge_geno_chr*",sep=""))
 # analyze the bim files: check SNP intersect, locations,
 # and which snps must be flipped before we analyze
 # Compare bim files: get SNPs that should be flipped
+# TODO: write a custom script that merges the data - will need to recode and solve
+# maf issues
 our_bim_file = paste(our_bed_path,".bim",sep="")
 
 # Compare bim files: get SNPs that should be flipped
@@ -130,8 +132,8 @@ length(wrong_loc1)
 bim_check = cbind(intersect_snps_our[,5:6],intersect_snps_ukbb[,5:6])
 bim_check_res = apply(bim_check,1,check_bims_snp_info)
 table(bim_check_res)
-bim_check[which(bim_check_res==0),]
-intersect_snps_our["Affx-89021291",]
+# bim_check[which(bim_check_res==0),]
+# intersect_snps_our["Affx-89021291",]
 
 our_snps = apply(intersect_snps_our[,5:6],1,function(x)paste(sort(x),collapse=";"))
 ukbb_snps = apply(intersect_snps_ukbb[,5:6],1,function(x)paste(sort(x),collapse=";"))

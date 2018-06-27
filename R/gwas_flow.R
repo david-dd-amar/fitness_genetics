@@ -407,27 +407,29 @@ pheno_file = paste(job_dir,"three_group_analysis_genepool_controls.phe",sep='')
 write.table(file=pheno_file,pheno_data[sample_inds,c(1:2,4)],sep=" ",row.names = F,col.names = T,quote=F)
 covar_file = paste(job_dir,"three_group_analysis_genepool_controls_covar.phe",sep='')
 write.table(file=covar_file,pheno_data[sample_inds,-4],sep=" ",row.names = F,col.names = T,quote=F)
-# #jobs_before = get_my_jobs()
-# if (!run_loacally){
-#   err_path = paste(job_dir,"genepool_controls_simple_linear_wo_age.err",sep="")
-#   log_path = paste(job_dir,"genepool_controls_simple_linear_wo_age.log",sep="")
-#   curr_cmd = paste("plink2 --bfile",paste(job_dir,"maf_filter",sep=''), "\\",
-#                    "--glm hide-covar firth-fallback \\",
-#                    paste("--pheno",pheno_file,"\\"),
-#                    paste("--pheno-name ExerciseGroup \\"),
-#                    "--allow-no-sex \\",
-#                    paste("--covar",covar_file,"\\"),
-#                    "--covar-name sex,Batch,PC1,PC2,PC3,PC4,PC5 \\",
-#                    "--adjust \\",
-#                    "--out",paste(job_dir,"genepool_controls_simple_linear_wo_age",sep=''))
-#   curr_sh_file = "genepool_controls_simple_linear_wo_age.sh"
-#   print_sh_file(paste(job_dir,curr_sh_file,sep=''),
-#                 get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,"plink/2a1",2,10000),curr_cmd)
-#   system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
-#   #wait_for_job(jobs_before,5)
-#   list.files(job_dir)
-#   readLines(err_path)
-# }
+#jobs_before = get_my_jobs()
+if (!run_loacally){
+  err_path = paste(job_dir,"genepool_controls_simple_linear_wo_age.err",sep="")
+  log_path = paste(job_dir,"genepool_controls_simple_linear_wo_age.log",sep="")
+  curr_cmd = paste(paste(job_dir,"plink2",sep=""),
+                   "--bfile",paste(job_dir,"maf_filter",sep=''),
+                   "--logistic hide-covar firth-fallback",
+                   paste("--pheno",pheno_file),
+                   paste("--pheno-name ExerciseGroup"),
+                   "--allow-no-sex",
+                   "--1",
+                   paste("--covar",covar_file),
+                   "--covar-name sex,Batch,PC1,PC2,PC3,PC4,PC5,PC6",
+                   "--adjust",
+                   "--out",paste(job_dir,"genepool_controls_simple_linear_wo_age",sep=''))
+  curr_sh_file = "genepool_controls_simple_linear_wo_age.sh"
+  print_sh_file(paste(job_dir,curr_sh_file,sep=''),
+                get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,"plink/2.0a1",2,10000),curr_cmd)
+  system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
+  #wait_for_job(jobs_before,5)
+  list.files(job_dir)
+  readLines(err_path)
+}
 if(run_loacally){
   curr_cmd = paste(paste(job_dir,"plink2",sep=""),
                    "--bfile",paste(job_dir,"maf_filter",sep=''),

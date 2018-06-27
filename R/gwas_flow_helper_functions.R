@@ -21,6 +21,7 @@ get_sh_default_prefix<-function(err="",log=""){
   )
 }
 
+# plink2: plink/2.0a1
 get_sh_prefix_one_node_specify_cpu_and_mem<-function(err="",log="",plink_pkg = "plink/1.90b5.3", Ncpu,mem_size){
   return(
     c(
@@ -164,5 +165,19 @@ rev_nucleotide<-function(x){
   if(x=="T"){return("A")}
   return(x)
 }
+
+# get_gwas_command_using_plink2<-function(job_dir,bfile_name){
+#   curr_cmd = paste(paste(job_dir,"plink2",sep=""),
+#                    "--bfile",paste(job_dir,bfile_name,sep=''),
+#                    "--logistic hide-covar firth-fallback",
+#                    paste("--pheno",pheno_file),
+#                    paste("--pheno-name ExerciseGroup"),
+#                    "--allow-no-sex",
+#                    "--1",
+#                    paste("--covar",covar_file),
+#                    "--covar-name sex,Batch,PC1,PC2,PC3,PC4,PC5,PC6",
+#                    "--adjust",
+#                    "--out",paste(job_dir,"genepool_controls_simple_linear_wo_age",sep=''))
+# }
 
 

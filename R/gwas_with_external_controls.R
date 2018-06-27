@@ -5,7 +5,9 @@ source(script_file)
 
 external_files_path = "/oak/stanford/groups/euan/projects/ukbb/data/genetic_data/v2/plink_dir_genotype/"
 external_control_ids = "/oak/stanford/groups/euan/projects/fitness_genetics/ukbb/10k_rand_controls_sex_age.txt"
+external_covars_path = "/oak/stanford/groups/euan/projects/fitness_genetics/ukbb/10k_rand_controls_sex_age_with_info.txt"
 our_bed_path = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl/maf_filter"
+our_covars_path = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl/three_group_analysis_genepool_controls_covar.phe"
 out_path = "/oak/stanford/groups/euan/projects/fitness_genetics/ukbb/"
 chrs = 1:22
 all_files = list.files(external_files_path)
@@ -134,10 +136,8 @@ bim_check_res = apply(bim_check,1,check_bims_snp_info)
 table(bim_check_res)
 # bim_check[which(bim_check_res==0),]
 # intersect_snps_our["Affx-89021291",]
-
-our_snps = apply(intersect_snps_our[,5:6],1,function(x)paste(sort(x),collapse=";"))
-ukbb_snps = apply(intersect_snps_ukbb[,5:6],1,function(x)paste(sort(x),collapse=";"))
-snps_to_filp = our_snps!=ukbb_snps # diffs: should be flipped
+wrong_loc = union(wrong_loc1,which(bim_check_res==0))
+snps_to_filp = names(bim_check_res)[which(bim_check_res==-1)]
 
 intersect_snps_our = intersect_snps_our[-wrong_loc,]
 intersect_snps_ukbb = intersect_snps_ukbb[-wrong_loc,]
@@ -151,7 +151,7 @@ write.table(t(t(rownames(intersect_snps_ukbb))),
             file=paste(out_path,"bims_analysis_intersect_snps.txt",sep=""),sep="\t",
             row.names=F,col.names=F,quote=F)
 #   3. SNPs that should be flipped
-write.table(t(t(rownames(intersect_snps_ukbb)[snps_to_filp])),
+write.table(t(t(snps_to_filp)),
             file=paste(out_path,"bims_analysis_intersect_snps_to_flip.txt",sep=""),sep="\t",
             row.names=F,col.names=F,quote=F)
 
@@ -183,6 +183,7 @@ err_path = paste(out_path,"merge_with_our_bed.err",sep="")
 log_path = paste(out_path,"merge_with_our_bed.log",sep="")
 curr_cmd = paste("plink --bfile", paste(out_path,"our_bed_data_extracted_flipped",sep=''),
                  "--bmerge",controls_bed,
+                 "--extract",paste(out_path,"bims_analysis_intersect_snps.txt",sep=""),
                  "--make-bed --out",paste(out_path,"merged_bed_final_for_gwas",sep=''))
 curr_sh_file = "merge_with_our_bed.sh"
 print_sh_file(paste(out_path,curr_sh_file,sep=''),
@@ -194,9 +195,74 @@ readLines(log_path)
 ####################################################################################################
 ####################################################################################################
 ####################################################################################################
-# Create phe file
+# Run PCA and freq
+jobs_before = get_my_jobs()
+err_path = paste(out_path,"maf_and_pca.err",sep="")
+log_path = paste(out_path,"maf_and_pca.log",sep="")
+curr_cmd = paste("plink --bfile",paste(out_path,"merged_bed_final_for_gwas",sep=''),
+                 "--pca --freq --out",paste(out_path,"merged_bed_final_for_gwas",sep=''))
+curr_sh_file = "maf_and_pca.sh"
+print_sh_file(paste(out_path,curr_sh_file,sep=''),
+              get_sh_default_prefix(err_path,log_path),curr_cmd)
+system(paste("sbatch",paste(out_path,curr_sh_file,sep='')))
+wait_for_job(jobs_before,5)
+list.files(out_path)
+
+####################################################################################################
+####################################################################################################
+####################################################################################################
+# Read covars, pca, and create phe file
+our_covars = read.table(our_covars_path,header=T,stringsAsFactors = F)
+external_covars = read.table(external_covars_path,stringsAsFactors = F)
+external_covars = cbind(as.character(external_covars[,1]),external_covars)
+external_samples = as.character(external_covars[,1])
+
+# temp sol for ukbb - add batches
+batch_data = read.table("/oak/stanford/groups/euan/projects/ukbb/data/genetic_data/v2/ukb2228.tab.fam",
+                        stringsAsFactors = F, header=T)
+rownames(batch_data) = as.character(batch_data[,1])
+# check sex
+external_covars = as.matrix(cbind(batch_data[external_samples,c(1:2,5:6)],external_covars[,4]))
+
+colnames(external_covars) = colnames(our_covars)[1:5]
+covars = rbind(external_covars,our_covars[,1:5])
+
+pca_res = read_plink_table(paste(job_dir,"maf_filter.eigenvec",sep=''),F)
+pca_res = pca_res[,-c(1:2)]
+colnames(pca_res) = paste("PC",1:ncol(pca_res),sep='')
+
 
 ####################################################################################################
 ####################################################################################################
 ####################################################################################################
 # Run GWAS
+
+# 1. Logistic with age and sex: elite vs. cooper vs. ukbb, 5 PCs
+table(pheno_data$ExerciseGroup)
+sample_inds = pheno_data$ExerciseGroup != "-1"
+pheno_file = paste(job_dir,"three_group_analysis_genepool_controls.phe",sep='')
+write.table(file=pheno_file,pheno_data[sample_inds,c(1:2,4)],sep=" ",row.names = F,col.names = T,quote=F)
+covar_file = paste(job_dir,"three_group_analysis_genepool_controls_covar.phe",sep='')
+write.table(file=covar_file,pheno_data[sample_inds,-4],sep=" ",row.names = F,col.names = T,quote=F)
+jobs_before = get_my_jobs()
+err_path = paste(job_dir,"genepool_controls_simple_linear_wo_age.err",sep="")
+log_path = paste(job_dir,"genepool_controls_simple_linear_wo_age.log",sep="")
+curr_cmd = paste(paste(job_dir,"plink2",sep=""),
+                 "--bfile",paste(job_dir,"maf_filter",sep=''),
+                 "--logistic hide-covar firth-fallback",
+                 paste("--pheno",pheno_file),
+                 paste("--pheno-name ExerciseGroup"),
+                 "--allow-no-sex",
+                 "--1",
+                 paste("--covar",covar_file),
+                 "--covar-name sex,Batch,PC1,PC2,PC3,PC4,PC5,PC6",
+                 "--adjust",
+                 "--out",paste(job_dir,"genepool_controls_simple_linear_wo_age",sep=''))
+curr_sh_file = "genepool_controls_simple_linear_wo_age.sh"
+print_sh_file(paste(job_dir,curr_sh_file,sep=''),
+              get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,"plink/2.0a1",2,10000),curr_cmd)
+system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
+#wait_for_job(jobs_before,5)
+list.files(job_dir)
+readLines(err_path)
+

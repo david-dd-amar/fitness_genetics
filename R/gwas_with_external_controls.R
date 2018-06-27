@@ -227,7 +227,7 @@ external_covars = as.matrix(cbind(batch_data[external_samples,c(1:2,5:6)],extern
 colnames(external_covars) = colnames(our_covars)[1:5]
 covars = rbind(external_covars,our_covars[,1:5])
 
-pca_res = read_plink_table(paste(job_dir,"maf_filter.eigenvec",sep=''),F)
+pca_res = read_plink_table(paste(job_dir,"merged_bed_final_for_gwas.eigenvec",sep=''),F)
 pca_res = pca_res[,-c(1:2)]
 colnames(pca_res) = paste("PC",1:ncol(pca_res),sep='')
 

@@ -119,12 +119,15 @@ two_d_plot_visualize_covariate<-function(x1,x2,cov1,cov2=NULL,cuts=5,...){
 
 cov_phe_col_to_plink_numeric_format<-function(x){
   if(is.numeric(x)){return(x)}
+  num_nas = sum(is.na(x))
+  v = as.numeric(as.character(x))
+  if(num_nas == sum(is.na(v))){return(v)}
   x = as.numeric(as.factor(x))
   return(x)
 }
 
 from_our_sol_to_fuma_res<-function(assoc_file,bim_file,freq_file=NULL,maf = 0.01,p=1){
-  res = read.delim(paste(job_dir,res_file,sep=''),stringsAsFactors = F)
+  res = read.delim(assoc_file,stringsAsFactors = F)
   mafs = read.table(freq_file,stringsAsFactors = F,header=T)
   bim = read.delim(bim_file,stringsAsFactors = F,header=F)
   rownames(bim) = bim[,2]

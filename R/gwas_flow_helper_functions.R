@@ -22,14 +22,38 @@ get_sh_default_prefix<-function(err="",log=""){
 }
 
 # plink2: plink/2.0a1
-get_sh_prefix_one_node_specify_cpu_and_mem<-function(err="",log="",plink_pkg = "plink/1.90b5.3", Ncpu,mem_size){
+get_sh_prefix_one_node_specify_cpu_and_mem<-function(err="",log="",plink_pkg = "plink/1.90b5.3",Ncpu,mem_size){
+  partition_line = #SBATCH --partition=euan,mrivas,normal,owners"
+  if(mem_size>32000){
+    partition_line = "#SBATCH --partition=bigmem,euan,mrivas"
+  }
   return(
     c(
       "#!/bin/bash",
       "#",
-      "#SBATCH --time=12:00:00",
-      "#SBATCH --partition=euan,mrivas,normal,owners",
+      "#SBATCH --time=6:00:00",
+      partition_line,
       "#SBATCH --nodes=1",
+      paste("#SBATCH -c",Ncpu),
+      paste("#SBATCH --mem=",mem_size,sep=""),
+      paste("#SBATCH --error",err),
+      paste("#SBATCH --out",log),
+      "",
+      "module load biology",
+      paste("module load",plink_pkg)
+    )
+  )
+}
+
+get_sh_prefix_bigmem<-function(err="",log="",plink_pkg = "plink/1.90b5.3",Ncpu=1,mem_size){
+  return(
+    c(
+      "#!/bin/bash",
+      "#",
+      "#SBATCH --time=6:00:00",
+      "#SBATCH --partition=bigmem,euan,mrivas",
+      "--qos=bigmem",
+      "#SBATCH --nodes=2",
       paste("#SBATCH -c",Ncpu),
       paste("#SBATCH --mem=",mem_size,sep=""),
       paste("#SBATCH --error",err),

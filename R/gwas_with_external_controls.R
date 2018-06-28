@@ -1,18 +1,26 @@
 
-script_file = "/home/users/davidama/repos/fitness_genetics/R/gwas_flow_helper_functions.R"
 script_file = "/oak/stanford/groups/euan/projects/fitness_genetics/scripts/fitness_genetics/R/gwas_flow_helper_functions.R"
 source(script_file)
 
+# UKBB: direct genotypes
 external_files_path = "/oak/stanford/groups/euan/projects/ukbb/data/genetic_data/v2/plink_dir_genotype/"
 external_control_ids = "/oak/stanford/groups/euan/projects/fitness_genetics/ukbb/10k_rand_controls_sex_age.txt"
 external_covars_path = "/oak/stanford/groups/euan/projects/fitness_genetics/ukbb/10k_rand_controls_sex_age_with_info.txt"
+analysis_name = "ukbb_10k_rand_controls_sex_age"
+
+# UKBB: imputed genotypes
+external_files_path = "/oak/stanford/groups/euan/projects/ukbb/data/genetic_data/v2/plink_small/"
+external_control_ids = "/oak/stanford/groups/euan/projects/fitness_genetics/ukbb/10k_rand_controls_sex_age.txt"
+external_covars_path = "/oak/stanford/groups/euan/projects/fitness_genetics/ukbb/10k_rand_controls_sex_age_with_info.txt"
+analysis_name = "ukbb_imputed_10k_rand_controls_sex_age"
+
+# Our stuff
 our_bed_path = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl/maf_filter"
 our_covars_path = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl/three_group_analysis_genepool_controls.phe"
 our_phe_path = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl/three_group_analysis_genepool_controls.phe"
 out_path = "/oak/stanford/groups/euan/projects/fitness_genetics/ukbb/"
 chrs = 1:22
 all_files = list.files(external_files_path)
-analysis_name = "ukbb_10k_rand_controls_sex_age"
 if(analysis_name != ""){
   out_path = paste(out_path,analysis_name,"/",sep="")
   system(paste("mkdir",out_path))
@@ -59,7 +67,7 @@ curr_cmd = paste("plink --bfile",all_out_bed_files[1],
                  "--make-bed --out",paste(out_path,"merged_control_geno",sep=''))
 curr_sh_file = "merged_control_beds.sh"
 print_sh_file(paste(out_path,curr_sh_file,sep=''),
-              get_sh_default_prefix(err_path,log_path),curr_cmd)
+              get_sh_prefix_bigmem(err_path,log_path,Ncpu=2,mem_size=64000),curr_cmd)
 system(paste("sbatch",paste(out_path,curr_sh_file,sep='')))
 wait_for_job(jobs_before,5)
 list.files(out_path)

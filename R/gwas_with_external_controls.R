@@ -67,7 +67,7 @@ curr_cmd = paste("plink --bfile",all_out_bed_files[1],
                  "--make-bed --out",paste(out_path,"merged_control_geno",sep=''))
 curr_sh_file = "merged_control_beds.sh"
 print_sh_file(paste(out_path,curr_sh_file,sep=''),
-              get_sh_prefix_bigmem(err_path,log_path,Ncpu=2,mem_size=64000),curr_cmd)
+              get_sh_prefix_bigmem(err_path,log_path,Ncpu=1,mem_size=256000),curr_cmd)
 system(paste("sbatch",paste(out_path,curr_sh_file,sep='')))
 wait_for_job(jobs_before,5)
 list.files(out_path)
@@ -114,6 +114,18 @@ for(f in ukbb_bim_files){
   x1 = our_bim_data[l2_inds,]
   x1 = x1[order(as.numeric(x1[,4])),]
   x2 = curr_bim[l1_inds,]
+  # x2 may have redundancies: need to solve this issue
+  dups = names(which(table(curr_locs[l1_inds])>1))
+  rows_to_remove = c()
+  for(dup in dups){
+    arr = strsplit(dup,split = ";")[[1]]
+    curr_rows = x2[,1]==arr[1] & x2[,4]==arr[2]
+    curr_rows = which(curr_rows)[-1]
+    rows_to_remove = union(rows_to_remove,curr_rows)
+  }
+  if(length(rows_to_remove)>0){
+    x2 = x2[-rows_to_remove,]  
+  }
   x2 = x2[order(as.numeric(x2[,4])),]
   print(all(x1[,4]==x2[,4]))
   our_new_snp_ids[rownames(x1)] = rownames(x2)

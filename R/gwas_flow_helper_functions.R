@@ -11,7 +11,7 @@ get_sh_default_prefix<-function(err="",log=""){
       "#SBATCH --partition=euan,mrivas,normal,owners",
       "#SBATCH --nodes=1",
       "#SBATCH --cpus-per-task=2",
-      "#SBATCH --mem=64000",
+      "#SBATCH --mem=32000",
       paste("#SBATCH --error",err),
       paste("#SBATCH --out",log),
       "",
@@ -68,31 +68,33 @@ print_sh_file<-function(path,prefix,cmd){
   write.table(file=path,t(t(cmd)),row.names = F,col.names = F,quote = F)
 }
 
-get_my_jobs<-function(uname="davidama"){
+get_my_jobs<-function(){
   tmp = paste("tmp",abs(rnorm(1)),sep='')
-  system(paste("squeue | grep", uname," >",tmp),wait = T)
-  jobs = readLines(tmp)
+  system(paste("sacct > ",tmp),wait = T)
+  jobs = readLines(tmp)[-c(1:2)]
+  jobs = jobs[!grepl("^\\d+\\.",jobs)]
+  jobs = t(sapply(jobs,function(x)strsplit(x,split="\\s+")[[1]]))
+  rownames(jobs) = as.character(jobs[,1])
+  jobs = jobs[,-1]
+  jobs = jobs[jobs[,1]!="bash",]
   system(paste("rm",tmp))
   return(jobs)
 }
-
-get_job_id<-function(x){
-  x = strsplit(x,split="\\s+",perl=T)[[1]][-1]
-  return(x[1])
-}
-
-wait_for_job<-function(jobs_before,waittime=30){
+get_job_id<-function(x){return(x[1])}
+wait_for_job<-function(jobs_before=NULL,waittime=6,max_wait=6000){
   Sys.sleep(waittime)
-  jobs_before = sapply(jobs_before,get_job_id)
   curr_jobs = get_my_jobs()
-  curr_jobs = sapply(curr_jobs,get_job_id)
-  new_job = setdiff(curr_jobs,jobs_before)
-  if(length(new_job)==0){return(NULL)}
-  print(paste("new added job is: ",new_job))
-  while(is.element(new_job,set=curr_jobs)){
+  new_jobs = rownames(curr_jobs)[curr_jobs[,5]=="RUNNING" | curr_jobs[,5]=="PENDING"]
+  if(length(new_jobs)==0){return(NULL)}
+  print(paste("new added jobs are: ",new_jobs))
+  i = 1
+  while(T){
     Sys.sleep(waittime)
     curr_jobs = get_my_jobs()
-    curr_jobs = sapply(curr_jobs,get_job_id)
+    new_jobs = rownames(curr_jobs)[curr_jobs[,5]=="RUNNING" | curr_jobs[,5]=="PENDING"]
+    if(length(new_jobs)==0){return(NULL)}
+    i=i+1
+    if(i>max_wait){break}
   }
 }
 

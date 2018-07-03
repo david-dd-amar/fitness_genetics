@@ -78,8 +78,7 @@ curr_sh_file = "raw_bed.sh"
 print_sh_file(paste(job_dir,curr_sh_file,sep=''),
               get_sh_default_prefix(err_path,log_path),curr_cmd)
 system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
-wait_for_job(jobs_before,5)
-list.files(job_dir)
+wait_for_job()
 
 ####################################################################################################
 ####################################################################################################
@@ -106,7 +105,7 @@ curr_sh_file = "impute_sex.sh"
 print_sh_file(paste(job_dir,curr_sh_file,sep=''),
               get_sh_default_prefix(err_path,log_path),curr_cmd)
 system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
-wait_for_job(jobs_before,5)
+wait_for_job()
 list.files(job_dir)
 # get simple imputation by looking at call rates in Y chromosome
 Y_snps = grepl("^Y$",snp_data$Chr,ignore.case = T)
@@ -123,7 +122,7 @@ curr_sh_file = "Y_snps_analysis.sh"
 print_sh_file(paste(job_dir,curr_sh_file,sep=''),
               get_sh_default_prefix(err_path,log_path),curr_cmd)
 system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
-wait_for_job(jobs_before,5)
+wait_for_job()
 list.files(job_dir)
 
 ####################################################################################################
@@ -149,7 +148,7 @@ curr_sh_file = "chr_filter.sh"
 print_sh_file(paste(job_dir,curr_sh_file,sep=''),
               get_sh_default_prefix(err_path,log_path),curr_cmd)
 system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
-wait_for_job(jobs_before,5)
+wait_for_job()
 list.files(job_dir)
 
 ####################################################################################################
@@ -165,12 +164,13 @@ err_path = paste(job_dir,"maf_filter.err",sep="")
 log_path = paste(job_dir,"maf_filter.log",sep="")
 curr_cmd = paste("plink --bfile",paste(job_dir,"chr_filter",sep=''),
                  "--exclude",paste(job_dir,"maf_snps_to_exclude.txt",sep=''),
+                 "--maf",min_maf,
                  "--make-bed --out",paste(job_dir,"maf_filter",sep=''))
 curr_sh_file = "maf_filter.sh"
 print_sh_file(paste(job_dir,curr_sh_file,sep=''),
               get_sh_default_prefix(err_path,log_path),curr_cmd)
 system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
-wait_for_job(jobs_before,5)
+wait_for_job()
 list.files(job_dir)
 
 ####################################################################################################
@@ -186,7 +186,7 @@ curr_sh_file = "maf_filter_missing.sh"
 print_sh_file(paste(job_dir,curr_sh_file,sep=''),
               get_sh_default_prefix(err_path,log_path),curr_cmd)
 system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
-wait_for_job(jobs_before,5)
+wait_for_job()
 list.files(job_dir)
 
 ####################################################################################################
@@ -202,7 +202,7 @@ curr_sh_file = "maf_filter_pca.sh"
 print_sh_file(paste(job_dir,curr_sh_file,sep=''),
               get_sh_default_prefix(err_path,log_path),curr_cmd)
 system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
-wait_for_job(jobs_before,5)
+wait_for_job()
 list.files(job_dir)
 
 # Run freq
@@ -215,7 +215,7 @@ curr_sh_file = "maf_filter_freq.sh"
 print_sh_file(paste(job_dir,curr_sh_file,sep=''),
               get_sh_default_prefix(err_path,log_path),curr_cmd)
 system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
-wait_for_job(jobs_before,5)
+wait_for_job()
 list.files(job_dir)
 
 
@@ -295,12 +295,36 @@ write.table(covariate_matrix,file=
 # ####################################################################################################
 # ####################################################################################################
 # ####################################################################################################
-# # Locally, should be commented out before running as a batch
-# setwd("/Users/David/Desktop/elite/analysis/")
-# d = read.delim("integrated_sample_metadata_and_covariates.txt")
-# 
-# # PCA plots
-# two_d_plot_visualize_covariate<-function(x1,x2,cov1,cov2=NULL,cuts=5,...){
+# Locally, should be commented out before running as a batch
+setwd("/Users/David/Desktop/elite/analysis/")
+d = read.delim("integrated_sample_metadata_and_covariates.txt")
+d2 = read.delim("../metadata/june_2018_integrated_info/merged_metadata_file_stanford3k_elite_cooper.txt")
+d2_ids = paste(d2$SentrixBarcode_A,d2$SentrixPosition_A,sep="_")
+samp_id = d2$Sample_ID
+altsamp_id = d2$alt_sample_id
+names(samp_id) = d2_ids
+names(altsamp_id) = d2_ids
+is_jap = grepl(altsamp_id,pattern="JA"); names(is_jap) = d2_ids
+
+# PCA plots
+two_d_plot_visualize_covariate<-function(x1,x2,cov1,cov2=NULL,cuts=5,...){
+  if(is.null(cov2)){cov2=cov1}
+  if(is.numeric(cov1)){cov1=cut(cov1,breaks = cuts)}
+  if(is.numeric(cov2)){cov1=cut(cov2,breaks = cuts)}
+  cov1 = as.factor(cov1)
+  cov2 = as.factor(cov2)
+  cols = rainbow(length(unique(cov1)))
+  names(cols) = unique(cov1)
+  cols = cols[!is.na(names(cols))]
+  pchs = 1:length(unique(cov2))
+  names(pchs) = unique(cov2)
+  pchs = pchs[!is.na(names(pchs))]
+  plot(x1,x2,col=cols[cov1],pch=pchs[cov2],...)
+  return(list(cols,pchs))
+}
+
+# library(ggplot2)
+# two_d_plot_visualize_covariate_ggplot<-function(x1,x2,cov1,cov2=NULL,cuts=5,...){
 #   if(is.null(cov2)){cov2=cov1}
 #   if(is.numeric(cov1)){cov1=cut(cov1,breaks = cuts)}
 #   if(is.numeric(cov2)){cov1=cut(cov2,breaks = cuts)}
@@ -312,17 +336,49 @@ write.table(covariate_matrix,file=
 #   pchs = 1:length(unique(cov2))
 #   names(pchs) = unique(cov2)
 #   pchs = pchs[!is.na(names(pchs))]
-#   plot(x1,x2,col=cols[cov1],pch=pchs[cov2],...)
+#   df = data.frame(x1,x2,col=cols[cov1],pch=pchs[cov2])
+#   plot1 = ggplot(aes(x=x1, y=x2, group = cols[cov1]),data = df) + 
+#     geom_point(shape=pchs[cov2],alpha=0.2, aes(colour = cols[cov1])) +
+#     theme_bw(25)
+#   plot(plot1)
 #   return(list(cols,pchs))
 # }
-# 
-# inds = d$Cohort !="genepool"
-# res = two_d_plot_visualize_covariate(d$PC2[inds],d$PC3[inds],d$Cohort[inds],d$Cohort[inds])
-# legend(x="topleft",names(res[[1]]),fill = res[[1]])
-# res = two_d_plot_visualize_covariate(d$PC2[inds],d$PC3[inds],
-#                                      d$Cohort[inds],d$Cohort[inds],
-#                                      xlim = c(0,0.01),
-#                                      ylim = c(-0.01,0.01))
+
+inds = d$Cohort !="genepool"
+inds = 1:nrow(d)
+res = two_d_plot_visualize_covariate(d$PC1[inds],
+    d$PC2[inds],d$Cohort[inds],d$Cohort[inds],
+    main = "Cooper and Elite",xlab="PC1",ylab="PC2")
+legend(x="topleft",names(res[[1]]),fill = res[[1]])
+
+res = two_d_plot_visualize_covariate(d$PC3[inds],
+    d$PC2[inds],d$Cohort[inds],d$Cohort[inds],
+    main = "Cooper and Elite",xlab="PC3",ylab="PC2")
+legend(x="topleft",names(res[[1]]),fill = res[[1]])
+
+res = two_d_plot_visualize_covariate(d$PC1[inds],
+    d$PC2[inds],d$Shipment.date[inds],d$Shipment.date[inds],
+    main = "Cooper and Elite",xlab="PC1",ylab="PC2")
+legend(x="topleft",names(res[[1]]),fill = res[[1]])
+
+res = two_d_plot_visualize_covariate(d$PC1[inds],
+    d$PC2[inds],d$Shipment.date[inds],d$Shipment.date[inds],
+    main = "All samples by shipment date",xlab="PC1",ylab="PC2")
+legend(x="topleft",names(res[[1]]),fill = res[[1]])
+
+curr_is_jap = is_jap[rownames(d)]
+table(curr_is_jap)
+inds = curr_is_jap[inds]
+res = two_d_plot_visualize_covariate(d$PC6[inds],
+    d$PC7[inds],curr_is_jap[inds],curr_is_jap[inds],
+    main = "Is JA sample?",xlab="PC6",ylab="PC7",
+    cex = 1+1*curr_is_jap[inds])
+legend(x="bottomleft",names(res[[1]]),fill = res[[1]])
+
+
+two_d_plot_visualize_covariate_ggplot(d$PC1[inds],
+  d$PC2[inds],d$Shipment.date[inds],d$Shipment.date[inds])
+
 ####################################################################################################
 ####################################################################################################
 ####################################################################################################
@@ -426,7 +482,7 @@ write.table(file=paste(job_dir,"three_group_analysis_sex_update.phe",sep=''),
 #   print_sh_file(paste(job_dir,curr_sh_file,sep=''),
 #                 get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,"plink/2.0a1",2,10000),curr_cmd)
 #   system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
-#   #wait_for_job(jobs_before,5)
+#   #wait_for_job()
 #   list.files(job_dir)
 #   readLines(err_path)
 # }

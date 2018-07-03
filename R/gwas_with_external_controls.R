@@ -208,7 +208,7 @@ curr_cmd = paste("plink --bfile", paste(out_path,"our_bed_data_extracted_flipped
                  "--make-bed --out",paste(out_path,"merged_bed_final_for_gwas",sep=''))
 curr_sh_file = "merge_with_our_bed.sh"
 print_sh_file(paste(out_path,curr_sh_file,sep=''),
-              get_sh_default_prefix(err_path,log_path),curr_cmd)
+              get_sh_prefix_bigmem(err_path,log_path,Ncpu=1,mem_size=256000),curr_cmd)
 system(paste("sbatch",paste(out_path,curr_sh_file,sep='')))
 wait_for_job(jobs_before,5)
 readLines(log_path)
@@ -224,7 +224,7 @@ curr_cmd = paste("plink --bfile",paste(out_path,"merged_bed_final_for_gwas",sep=
                  "--pca --freq --out",paste(out_path,"merged_bed_final_for_gwas",sep=''))
 curr_sh_file = "maf_and_pca.sh"
 print_sh_file(paste(out_path,curr_sh_file,sep=''),
-              get_sh_default_prefix(err_path,log_path),curr_cmd)
+              get_sh_prefix_bigmem(err_path,log_path,Ncpu=1,mem_size=256000),curr_cmd)
 system(paste("sbatch",paste(out_path,curr_sh_file,sep='')))
 wait_for_job(jobs_before,5)
 list.files(out_path)

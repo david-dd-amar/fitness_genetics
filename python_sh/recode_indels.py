@@ -8,6 +8,7 @@
 import re
 import random
 import os
+import sys
 
 def read_bim(p):
     f = open(p)
@@ -31,12 +32,18 @@ def read_bim_ids_as_array(p):
     f.close()
     return ids
 
-bfile = "/Users/David/Desktop/repos/fitness_genetics/python_sh/merged_control_geno"
+
+bfile = sys.argv[1]
+out_path = sys.argv[2]
+
+# bfile = "/Users/David/Desktop/repos/fitness_genetics/python_sh/merged_control_geno"
+# out_path = "/Users/David/Desktop/repos/fitness_genetics/python_sh/merged_control_geno_recoded"
+# plink_cmd = "/Users/David/Desktop/elite/analysis/plink_mac/plink"
+
 bim = bfile +".bim"
-out_path = "/Users/David/Desktop/repos/fitness_genetics/python_sh/merged_control_geno_recoded"
 sep = " "
-plink_cmd = "/Users/David/Desktop/elite/analysis/plink_mac/plink"
-tmp = os.path.dirname(os.path.realpath(__file__)) + "/tmp"+str(random.randint(1, 1000))
+plink_cmd = "plink"
+tmp = os.path.dirname(os.path.realpath(__file__)) + "/tmp"+str(random.randint(1, 10000))
 os.system("mkdir " + tmp)
 
 print("reading the bim, searching for the indels")

@@ -386,7 +386,6 @@ two_d_plot_visualize_covariate_ggplot(d$PC1[inds],
 # run_loacally = T
 # From here: prepare data and run GWAS
 covariate_matrix = read.delim(paste(job_dir,"integrated_sample_metadata_and_covariates.txt",sep=''),stringsAsFactors = F)
-covariate_matrix[covariate_matrix$Cohort=="genepool",]$Age..at.test.
 covariate_matrix[covariate_matrix==""] = NA
 
 # Fill in some info:
@@ -428,11 +427,9 @@ pheno_data$Cohort[pheno_data$Cohort=="Cooper"] = "0"
 pheno_data$Cohort[pheno_data$Cohort=="genepool"] = "-1"
 pheno_data$Cohort = as.numeric(pheno_data$Cohort)
 
-table(pheno_data$Cohort)
 for(j in 4:4){
   pheno_data[[j]] = cov_phe_col_to_plink_numeric_format(pheno_data[[j]])
 }
-table(pheno_data$Age)
 pheno_data[pheno_data$ExerciseGroup==1,]$Age
 
 # write phe file
@@ -454,15 +451,81 @@ write.table(file=paste(job_dir,"three_group_analysis_sex_update.phe",sep=''),
 ####################################################################################################
 ####################################################################################################
 # A set of GWAS runs starts here
-# We run these locally as a mac is perfectly fine and we do not need the cluster for this
 
-# # 1. Logistic with age: elite vs. cooper, 5 PCs
-# table(pheno_data$ExerciseGroup)
-# sample_inds = pheno_data$ExerciseGroup != "-1"
-# pheno_file = paste(job_dir,"three_group_analysis_genepool_controls.phe",sep='')
-# write.table(file=pheno_file,pheno_data[sample_inds,c(1:2,4)],sep=" ",row.names = F,col.names = T,quote=F)
-# covar_file = paste(job_dir,"three_group_analysis_genepool_controls_covar.phe",sep='')
-# write.table(file=covar_file,pheno_data[sample_inds,-4],sep=" ",row.names = F,col.names = T,quote=F)
+# 0. Linear for all groups + age, sex, 5 PCs
+pheno_file = paste(job_dir,"three_group_analysis_genepool_controls.phe",sep='')
+covar_file = paste(job_dir,"three_group_analysis_genepool_controls.phe",sep='')
+#jobs_before = get_my_jobs()
+err_path = paste(job_dir,"gwas_three_groups_linear.err",sep="")
+log_path = paste(job_dir,"gwas_three_groups_linear.log",sep="")
+curr_cmd = paste("plink2",
+                 "--bfile",paste(job_dir,"maf_filter",sep=''),
+                 "--linear hide-covar",
+                 paste("--pheno",pheno_file),
+                 paste("--pheno-name ExerciseGroup"),
+                 "--allow-no-sex",
+                 paste("--covar",covar_file),
+                 "--covar-name sex,Batch,Age,PC1,PC2,PC3,PC4,PC5",
+                 "--adjust",
+                 "--out",paste(job_dir,"gwas_three_groups_linear",sep=''))
+curr_sh_file = "gwas_three_groups_linear.sh"
+print_sh_file(paste(job_dir,curr_sh_file,sep=''),
+              get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,"plink/2.0a1",2,10000),curr_cmd)
+system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
+wait_for_job()
+
+# 1. Linear for all groups + sex, 5 PCs
+pheno_file = paste(job_dir,"three_group_analysis_genepool_controls.phe",sep='')
+covar_file = paste(job_dir,"three_group_analysis_genepool_controls.phe",sep='')
+#jobs_before = get_my_jobs()
+err_path = paste(job_dir,"gwas_three_groups_linear.err",sep="")
+log_path = paste(job_dir,"gwas_three_groups_linear.log",sep="")
+curr_cmd = paste("plink2",
+                 "--bfile",paste(job_dir,"maf_filter",sep=''),
+                 "--linear hide-covar",
+                 paste("--pheno",pheno_file),
+                 paste("--pheno-name ExerciseGroup"),
+                 "--allow-no-sex",
+                 paste("--covar",covar_file),
+                 "--covar-name sex,Batch,PC1,PC2,PC3,PC4,PC5",
+                 "--adjust",
+                 "--out",paste(job_dir,"gwas_three_groups_linear_no_age",sep=''))
+curr_sh_file = "gwas_three_groups_linear.sh"
+print_sh_file(paste(job_dir,curr_sh_file,sep=''),
+              get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,"plink/2.0a1",2,10000),curr_cmd)
+system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
+wait_for_job()
+
+# 3. Logistic Cooper vs. Genepool
+table(pheno_data$ExerciseGroup)
+sample_inds = pheno_data$ExerciseGroup != "1"
+curr_pheno = pheno_data[sample_inds,]
+curr_pheno[,4] = as.character(as.numeric(curr_pheno[,4]+1))
+pheno_file = paste(job_dir,"cooper_vs_genepool.phe",sep='')
+write.table(file=pheno_file,curr_pheno[,c(1:2,4)],sep=" ",row.names = F,col.names = T,quote=F)
+covar_file = paste(job_dir,"cooper_vs_genepool_covar.phe",sep='')
+write.table(file=covar_file,curr_pheno[,-4],sep=" ",row.names = F,col.names = T,quote=F)
+#jobs_before = get_my_jobs()
+err_path = paste(job_dir,"cooper_vs_genepool.err",sep="")
+log_path = paste(job_dir,"cooper_vs_genepool.log",sep="")
+curr_cmd = paste("plink2",
+                 "--bfile",paste(job_dir,"maf_filter",sep=''),
+                 "--logistic hide-covar firth-fallback",
+                 "--1",
+                 paste("--pheno",pheno_file),
+                 paste("--pheno-name ExerciseGroup"),
+                 "--allow-no-sex",
+                 paste("--covar",covar_file),
+                 "--covar-name sex,Batch,PC1,PC2,PC3,PC4,PC5",
+                 "--adjust",
+                 "--out",paste(job_dir,"cooper_vs_genepool",sep=''))
+curr_sh_file = "cooper_vs_genepool.sh"
+print_sh_file(paste(job_dir,curr_sh_file,sep=''),
+              get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,"plink/2.0a1",2,10000),curr_cmd)
+system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
+wait_for_job()
+
+# 1. Logistic with age: elite vs. cooper, 5 PCs
 # #jobs_before = get_my_jobs()
 # if (!run_loacally){
 #   err_path = paste(job_dir,"genepool_controls_simple_linear_wo_age.err",sep="")

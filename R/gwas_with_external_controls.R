@@ -1,5 +1,6 @@
 
 script_file = "/oak/stanford/groups/euan/projects/fitness_genetics/scripts/fitness_genetics/R/gwas_flow_helper_functions.R"
+python_script = "/oak/stanford/groups/euan/projects/fitness_genetics/scripts/fitness_genetics/python_sh/recode_indels.py"
 source(script_file)
 
 # UKBB: direct genotypes
@@ -30,7 +31,6 @@ if(analysis_name != ""){
 ####################################################################################################
 ####################################################################################################
 # Create control files
-jobs_before = get_my_jobs()
 for (chr in chrs){
   curr_file = all_files[grepl(".bed$",all_files) & grepl(paste("chr",chr,"_",sep=""),all_files)]
   curr_file = gsub(pattern = ".bed$",replacement = "",curr_file)
@@ -44,7 +44,7 @@ for (chr in chrs){
                 get_sh_default_prefix(err_path,log_path),curr_cmd)
   system(paste("sbatch",paste(out_path,curr_sh_file,sep='')))
 }
-wait_for_job(jobs_before,5)
+wait_for_job()
 
 ####################################################################################################
 ####################################################################################################
@@ -59,7 +59,6 @@ allfiles_path = paste(out_path,"allfiles.txt",sep="")
 write.table(t(t(all_out_bed_files[-1])),
             file = allfiles_path,sep="",row.names = F,col.names = F,quote = F)
 
-jobs_before = get_my_jobs()
 err_path = paste(out_path,"merge_control_beds.err",sep="")
 log_path = paste(out_path,"merge_control_beds.log",sep="")
 curr_cmd = paste("plink --bfile",all_out_bed_files[1],
@@ -69,12 +68,21 @@ curr_sh_file = "merged_control_beds.sh"
 print_sh_file(paste(out_path,curr_sh_file,sep=''),
               get_sh_prefix_bigmem(err_path,log_path,Ncpu=1,mem_size=256000),curr_cmd)
 system(paste("sbatch",paste(out_path,curr_sh_file,sep='')))
-wait_for_job(jobs_before,5)
-list.files(out_path)
+wait_for_job()
 all_out_bed_files = list.files(out_path)
 all_out_bed_files = all_out_bed_files[grepl(".bed$",all_out_bed_files)]
-readLines(log_path)
 system(paste("rm ",out_path,"merge_geno_chr*",sep=""))
+
+# add frequencies
+err_path = paste(out_path,"merge_control_beds_frq.err",sep="")
+log_path = paste(out_path,"merge_control_beds_frq.log",sep="")
+curr_cmd = paste("plink --bfile",paste(out_path,"merged_control_geno",sep=''),
+                 "--freq --out",paste(out_path,"merged_control_geno",sep=''))
+curr_sh_file = "merged_control_beds_frq.sh"
+print_sh_file(paste(out_path,curr_sh_file,sep=''),
+              get_sh_prefix_bigmem(err_path,log_path,Ncpu=1,mem_size=256000),curr_cmd)
+system(paste("sbatch",paste(out_path,curr_sh_file,sep='')))
+wait_for_job()
 
 ####################################################################################################
 ####################################################################################################
@@ -85,9 +93,9 @@ system(paste("rm ",out_path,"merge_geno_chr*",sep=""))
 # TODO: write a custom script that merges the data - will need to recode and solve
 # maf issues
 our_bim_file = paste(our_bed_path,".bim",sep="")
-
 # Compare bim files: get SNPs that should be flipped
 our_bim_data = read.table(our_bim_file,stringsAsFactors = F,header = F)
+our_original_snp_ids = as.character(our_bim_data[,2])
 # correct our bim info
 id_is_location = grepl(":",our_bim_data[,2])
 # extract true locations from the snp ids
@@ -132,7 +140,8 @@ for(f in ukbb_bim_files){
 }
 rownames(our_bim_data) = our_new_snp_ids[rownames(our_bim_data)]
 our_bim_data[,2] = rownames(our_bim_data)
-table(our_new_snp_ids!=names(our_new_snp_ids))
+table(our_new_snp_ids!=names(our_new_snp_ids)) # shows the number of changed IDs
+all(names(our_new_snp_ids)==our_original_snp_ids) # should be TRUE
 
 # loop2: look at the intersection
 intersect_snps_our = c()
@@ -148,23 +157,95 @@ for(f in ukbb_bim_files){
   intersect_snps_ukbb = rbind(intersect_snps_ukbb,d2)
 }
 diff_snp_inds = (abs(as.numeric(intersect_snps_our$V4) - as.numeric(intersect_snps_ukbb$V4))>10)
-table(diff_snp_inds)
 wrong_loc1 = which(intersect_snps_our$V4 != intersect_snps_ukbb$V4)
-length(wrong_loc1)
+intersect_snps_ukbb = intersect_snps_ukbb[-wrong_loc1,]
+intersect_snps_our = intersect_snps_our[-wrong_loc1,]
+
+############# Correct the Affymetrix indel issue ###############
+write.table(t(t(rownames(intersect_snps_our))),
+            file=paste(out_path,"bims_analysis_intersect_snps.txt",sep=""),sep="\t",
+            row.names=F,col.names=F,quote=F)
+
+# 1. Merged geno should use the intersect snps only
+err_path = paste(out_path,"merge_control_beds_filt1.err",sep="")
+log_path = paste(out_path,"merge_control_beds_filt1.log",sep="")
+curr_cmd = paste("plink --bfile",paste(out_path,"merged_control_geno",sep=''),
+                 "--extract",paste(out_path,"bims_analysis_intersect_snps.txt",sep=""),
+                 "--make-bed --out",paste(out_path,"merged_control_geno",sep=''))
+curr_sh_file = "merged_control_beds_filt1.sh"
+print_sh_file(paste(out_path,curr_sh_file,sep=''),
+              get_sh_prefix_bigmem(err_path,log_path,Ncpu=1,mem_size=256000),curr_cmd)
+system(paste("sbatch",paste(out_path,curr_sh_file,sep='')))
+wait_for_job()
+
+# 2. Run our custom script that deals with indels
+err_path = paste(out_path,"indels_recode.err",sep="")
+log_path = paste(out_path,"indels_recode.log",sep="")
+curr_cmd = paste("python",python_script,
+  paste(out_path,"merged_control_geno",sep=''),
+  paste(out_path,"merged_control_geno",sep='')
+)
+curr_sh_file = "indels_recode.sh"
+print_sh_file(paste(out_path,curr_sh_file,sep=''),
+              get_sh_prefix_bigmem(err_path,log_path,Ncpu=1,mem_size=256000),curr_cmd)
+system(paste("sbatch",paste(out_path,curr_sh_file,sep='')))
+wait_for_job()
+
+# The result of the script above: the merged_control_geno.bed and its bim
+# now code indels using the I/D notation, which fits our Illumina dataset.
+# Also, note that the code above will not change a bed that already uses
+# the I/D notation.
+
+# For the rest of script below, we now need to reread the new bim.
+intersect_snps_ukbb = read.table(paste(out_path,"merged_control_geno.bim",sep=''),
+                                 stringsAsFactors = F,header = F)
+rownames(intersect_snps_ukbb) = intersect_snps_ukbb[,2]
+# sanity checks:
+# This may be FALSE due to reordering, but an error is a problem
+all(rownames(intersect_snps_ukbb)==rownames(intersect_snps_our))
+# These two should be empty:
+setdiff(rownames(intersect_snps_ukbb),rownames(intersect_snps_our))
+setdiff(rownames(intersect_snps_our),rownames(intersect_snps_ukbb))
+
+# This reformatting is done only for the scripts below,
+# it does not mean we assume that the SNP order in both beds is 
+# the same
+intersect_snps_ukbb = intersect_snps_ukbb[rownames(intersect_snps_our),]
+
+################################################################
 
 bim_check = cbind(intersect_snps_our[,5:6],intersect_snps_ukbb[,5:6])
 bim_check_res = apply(bim_check,1,check_bims_snp_info)
 table(bim_check_res)
-# bim_check[which(bim_check_res==0),]
-# intersect_snps_our["Affx-89021291",]
-wrong_loc = union(wrong_loc1,which(bim_check_res==0))
+
+# Check those that are zero
+# These should be SNPs with the same location in both
+# platforms but one is a SNP and the other is an indel.
+# These should be ignored.
+# An example for such a variant: 
+# Affy: Affx-52323799, chr 1, position 57221553
+# To recheck this do:
+# less /oak/stanford/groups/euan/projects/ukbb/data/genetic_data/v2/plink_dir_genotype/ukb_cal_chr1_v2.bim | grep Affx-52323799
+# less /oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl/maf_filter.bim | grep 57221553
+bim_check[which(bim_check_res==0),]
+intersect_snps_our["Affx-52323799",]
+intersect_snps_ukbb["Affx-52323799",]
+
+wrong_loc = which(bim_check_res==0)
 snps_to_filp = names(bim_check_res)[which(bim_check_res==-1)]
+
+# Another test: did we get indel SNPs to flip?
+# All should be false:
+table(apply(intersect_snps_our[snps_to_filp,5:6],1,function(x){x[1]=="I"||x[1]=="D"||x[2]=="I"||x[2]=="D"}))
 
 intersect_snps_our = intersect_snps_our[-wrong_loc,]
 intersect_snps_ukbb = intersect_snps_ukbb[-wrong_loc,]
 
 # print results into three files: 
 #   1. our corrected bim
+#     Note that this is the same size of the original bim and in the same 
+#     order. The only change is the SNP ids, which can now be compared to
+#     the external data.
 write.table(our_bim_data,file=paste(out_path,"our_bim_data.bim",sep=""),sep="\t",
             row.names=F,col.names=F,quote=F)
 #   2. Intersect SNPs
@@ -181,7 +262,6 @@ write.table(t(t(snps_to_filp)),
 ####################################################################################################
 
 # extract the snp intersect and flip snps
-jobs_before = get_my_jobs()
 err_path = paste(out_path,"extract_snps_and_flip.err",sep="")
 log_path = paste(out_path,"extract_snps_and_flip.log",sep="")
 curr_cmd = paste("plink --bed",paste(our_bed_path,".bed",sep=""),
@@ -194,12 +274,10 @@ curr_sh_file = "extract_snps_and_flip.sh"
 print_sh_file(paste(out_path,curr_sh_file,sep=''),
               get_sh_default_prefix(err_path,log_path),curr_cmd)
 system(paste("sbatch",paste(out_path,curr_sh_file,sep='')))
-wait_for_job(jobs_before,5)
-readLines(log_path)
+wait_for_job()
 
 # merge with our bed file
 controls_bed = paste(out_path,"merged_control_geno",sep='')
-jobs_before = get_my_jobs()
 err_path = paste(out_path,"merge_with_our_bed.err",sep="")
 log_path = paste(out_path,"merge_with_our_bed.log",sep="")
 curr_cmd = paste("plink --bfile", paste(out_path,"our_bed_data_extracted_flipped",sep=''),
@@ -210,14 +288,12 @@ curr_sh_file = "merge_with_our_bed.sh"
 print_sh_file(paste(out_path,curr_sh_file,sep=''),
               get_sh_prefix_bigmem(err_path,log_path,Ncpu=1,mem_size=256000),curr_cmd)
 system(paste("sbatch",paste(out_path,curr_sh_file,sep='')))
-wait_for_job(jobs_before,5)
-readLines(log_path)
+wait_for_job()
 
 ####################################################################################################
 ####################################################################################################
 ####################################################################################################
 # Run PCA and freq
-jobs_before = get_my_jobs()
 err_path = paste(out_path,"maf_and_pca.err",sep="")
 log_path = paste(out_path,"maf_and_pca.log",sep="")
 curr_cmd = paste("plink --bfile",paste(out_path,"merged_bed_final_for_gwas",sep=''),
@@ -226,8 +302,7 @@ curr_sh_file = "maf_and_pca.sh"
 print_sh_file(paste(out_path,curr_sh_file,sep=''),
               get_sh_prefix_bigmem(err_path,log_path,Ncpu=1,mem_size=256000),curr_cmd)
 system(paste("sbatch",paste(out_path,curr_sh_file,sep='')))
-wait_for_job(jobs_before,5)
-list.files(out_path)
+wait_for_job()
 
 ####################################################################################################
 ####################################################################################################

@@ -13,6 +13,7 @@ snp_min_het_ex = -0.3
 snp_max_het_ex = 0.2
 min_maf = 0.005
 run_loacally = F
+num_pca_clusters = 3
 
 # Define Input parameters
 job_dir = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl/"
@@ -292,42 +293,27 @@ write.table(covariate_matrix,file=
               paste(job_dir,"integrated_sample_metadata_and_covariates.txt",sep=''),
             sep="\t",quote=F)
 
-# ####################################################################################################
-# ####################################################################################################
-# ####################################################################################################
-# Locally, should be commented out before running as a batch
-setwd("/Users/David/Desktop/elite/analysis/")
-d = read.delim("integrated_sample_metadata_and_covariates.txt")
-d2 = read.delim("../metadata/june_2018_integrated_info/merged_metadata_file_stanford3k_elite_cooper.txt")
-d2_ids = paste(d2$SentrixBarcode_A,d2$SentrixPosition_A,sep="_")
-samp_id = d2$Sample_ID
-altsamp_id = d2$alt_sample_id
-names(samp_id) = d2_ids
-names(altsamp_id) = d2_ids
-is_jap = grepl(altsamp_id,pattern="JA"); names(is_jap) = d2_ids
-
-# PCA plots
-two_d_plot_visualize_covariate<-function(x1,x2,cov1,cov2=NULL,cuts=5,...){
-  if(is.null(cov2)){cov2=cov1}
-  if(is.numeric(cov1)){cov1=cut(cov1,breaks = cuts)}
-  if(is.numeric(cov2)){cov1=cut(cov2,breaks = cuts)}
-  cov1 = as.factor(cov1)
-  cov2 = as.factor(cov2)
-  cols = rainbow(length(unique(cov1)))
-  names(cols) = unique(cov1)
-  cols = cols[!is.na(names(cols))]
-  pchs = 1:length(unique(cov2))
-  names(pchs) = unique(cov2)
-  pchs = pchs[!is.na(names(pchs))]
-  plot(x1,x2,col=cols[cov1],pch=pchs[cov2],...)
-  return(list(cols,pchs))
-}
-
-# library(ggplot2)
-# two_d_plot_visualize_covariate_ggplot<-function(x1,x2,cov1,cov2=NULL,cuts=5,...){
+# # ####################################################################################################
+# # ####################################################################################################
+# # ####################################################################################################
+# # Locally, should be commented out before running as a batch
+# setwd("/Users/David/Desktop/elite/analysis/")
+# d = read.delim("integrated_sample_metadata_and_covariates.txt")
+# d2 = read.delim("../metadata/june_2018_integrated_info/merged_metadata_file_stanford3k_elite_cooper.txt")
+# d2_ids = paste(d2$SentrixBarcode_A,d2$SentrixPosition_A,sep="_")
+# samp_id = d2$Sample_ID
+# altsamp_id = d2$alt_sample_id
+# names(samp_id) = d2_ids
+# names(altsamp_id) = d2_ids
+# is_jap = grepl(altsamp_id,pattern="JA"); names(is_jap) = d2_ids
+# 
+# # PCA plots
+# two_d_plot_visualize_covariate<-function(x1,x2,cov1,cov2=NULL,cuts=5,...){
 #   if(is.null(cov2)){cov2=cov1}
-#   if(is.numeric(cov1)){cov1=cut(cov1,breaks = cuts)}
-#   if(is.numeric(cov2)){cov1=cut(cov2,breaks = cuts)}
+#   n1 = length(unique(cov1))
+#   n2 = length(unique(cov2))
+#   if(is.numeric(cov1) && n1 > 10){cov1=cut(cov1,breaks = cuts)}
+#   if(is.numeric(cov2) && n2 > 10){cov1=cut(cov2,breaks = cuts)}
 #   cov1 = as.factor(cov1)
 #   cov2 = as.factor(cov2)
 #   cols = rainbow(length(unique(cov1)))
@@ -336,48 +322,65 @@ two_d_plot_visualize_covariate<-function(x1,x2,cov1,cov2=NULL,cuts=5,...){
 #   pchs = 1:length(unique(cov2))
 #   names(pchs) = unique(cov2)
 #   pchs = pchs[!is.na(names(pchs))]
-#   df = data.frame(x1,x2,col=cols[cov1],pch=pchs[cov2])
-#   plot1 = ggplot(aes(x=x1, y=x2, group = cols[cov1]),data = df) + 
-#     geom_point(shape=pchs[cov2],alpha=0.2, aes(colour = cols[cov1])) +
-#     theme_bw(25)
-#   plot(plot1)
+#   plot(x1,x2,col=cols[cov1],pch=pchs[cov2],...)
 #   return(list(cols,pchs))
 # }
-
-inds = d$Cohort !="genepool"
-inds = 1:nrow(d)
-res = two_d_plot_visualize_covariate(d$PC1[inds],
-    d$PC2[inds],d$Cohort[inds],d$Cohort[inds],
-    main = "Cooper and Elite",xlab="PC1",ylab="PC2")
-legend(x="topleft",names(res[[1]]),fill = res[[1]])
-
-res = two_d_plot_visualize_covariate(d$PC3[inds],
-    d$PC2[inds],d$Cohort[inds],d$Cohort[inds],
-    main = "Cooper and Elite",xlab="PC3",ylab="PC2")
-legend(x="topleft",names(res[[1]]),fill = res[[1]])
-
-res = two_d_plot_visualize_covariate(d$PC1[inds],
-    d$PC2[inds],d$Shipment.date[inds],d$Shipment.date[inds],
-    main = "Cooper and Elite",xlab="PC1",ylab="PC2")
-legend(x="topleft",names(res[[1]]),fill = res[[1]])
-
-res = two_d_plot_visualize_covariate(d$PC1[inds],
-    d$PC2[inds],d$Shipment.date[inds],d$Shipment.date[inds],
-    main = "All samples by shipment date",xlab="PC1",ylab="PC2")
-legend(x="topleft",names(res[[1]]),fill = res[[1]])
-
-curr_is_jap = is_jap[rownames(d)]
-table(curr_is_jap)
-inds = curr_is_jap[inds]
-res = two_d_plot_visualize_covariate(d$PC6[inds],
-    d$PC7[inds],curr_is_jap[inds],curr_is_jap[inds],
-    main = "Is JA sample?",xlab="PC6",ylab="PC7",
-    cex = 1+1*curr_is_jap[inds])
-legend(x="bottomleft",names(res[[1]]),fill = res[[1]])
-
-
-two_d_plot_visualize_covariate_ggplot(d$PC1[inds],
-  d$PC2[inds],d$Shipment.date[inds],d$Shipment.date[inds])
+# 
+# # Cluster by the first two PCs
+# pc_x = as.matrix(d[,c("PC1","PC2")])
+# pc_x_5means = kmeans(pc_x,5)
+# table(pc_x_5means$cluster)
+# table(pc_x_5means$cluster,d$Cohort)
+# kmeans_res = pc_x_5means$cluster
+# 
+# inds = d$Cohort !="genepool"
+# inds = 1:nrow(d)
+# inds = kmeans_res==2 | kmeans_res==5
+# res = two_d_plot_visualize_covariate(d$PC1[inds],
+#     d$PC2[inds],d$Cohort[inds],d$Cohort[inds],
+#     main = "Cooper and Elite",xlab="PC1",ylab="PC2")
+# legend(x="topleft",names(res[[1]]),fill = res[[1]])
+# 
+# res = two_d_plot_visualize_covariate(d$PC1[inds],
+#     d$PC2[inds],kmeans_res[inds],kmeans_res[inds],
+#     main = "PCA+Kmeans",xlab="PC1",ylab="PC2")
+# legend(x="topleft",names(res[[1]]),fill = res[[1]])
+# 
+# res = two_d_plot_visualize_covariate(d$PC3[inds],
+#     d$PC2[inds],d$Cohort[inds],d$Cohort[inds],
+#     main = "Cooper and Elite",xlab="PC3",ylab="PC2")
+# legend(x="topleft",names(res[[1]]),fill = res[[1]])
+# 
+# res = two_d_plot_visualize_covariate(d$PC1[inds],
+#     d$PC2[inds],d$Shipment.date[inds],d$Shipment.date[inds],
+#     main = "Cooper and Elite",xlab="PC1",ylab="PC2")
+# legend(x="topleft",names(res[[1]]),fill = res[[1]])
+# 
+# res = two_d_plot_visualize_covariate(d$PC1[inds],
+#     d$PC2[inds],d$Shipment.date[inds],d$Shipment.date[inds],
+#     main = "All samples by shipment date",xlab="PC1",ylab="PC2")
+# legend(x="topleft",names(res[[1]]),fill = res[[1]])
+# 
+# curr_is_jap = is_jap[rownames(d)]
+# table(curr_is_jap)
+# inds = curr_is_jap[inds]
+# res = two_d_plot_visualize_covariate(d$PC6[inds],
+#     d$PC7[inds],curr_is_jap[inds],curr_is_jap[inds],
+#     main = "Is JA sample?",xlab="PC6",ylab="PC7",
+#     cex = 1+1*curr_is_jap[inds])
+# legend(x="bottomleft",names(res[[1]]),fill = res[[1]])
+# 
+# two_d_plot_visualize_covariate_ggplot(d$PC1[inds],
+#   d$PC2[inds],d$Shipment.date[inds],d$Shipment.date[inds])
+# 
+# # Check number of clusters in PCA plot
+# wss <- sapply(1:5, 
+#               function(k){kmeans(pc_x, k, nstart=50,iter.max = 15 )$tot.withinss})
+# wss
+# plot(1:5, wss,
+#      type="b", pch = 19, frame = FALSE, 
+#      xlab="Number of clusters K",
+#      ylab="Total within-clusters sum of squares")
 
 ####################################################################################################
 ####################################################################################################
@@ -430,21 +433,15 @@ pheno_data$Cohort = as.numeric(pheno_data$Cohort)
 for(j in 4:4){
   pheno_data[[j]] = cov_phe_col_to_plink_numeric_format(pheno_data[[j]])
 }
-pheno_data[pheno_data$ExerciseGroup==1,]$Age
 
-# write phe file
+# write phe files
 pheno_data = cbind(as.character(iid_to_fid[remaining_samples]),pheno_data)
 colnames(pheno_data) = c("FID","IID","sex","ExerciseGroup","Batch","Age",paste("PC",1:10,sep=""))
+table(pheno_data$Age)
 write.table(file=paste(job_dir,"three_group_analysis_genepool_controls.phe",sep=''),
             pheno_data,sep=" ",row.names = F,col.names = T,quote=F)
-
 write.table(file=paste(job_dir,"three_group_analysis_sex_update.phe",sep=''),
             pheno_data[,1:3],sep=" ",row.names = F,col.names = T,quote=F)
-
-####################################################################################################
-####################################################################################################
-####################################################################################################
-# Clean the data for the analysis
 
 
 ####################################################################################################
@@ -496,7 +493,7 @@ print_sh_file(paste(job_dir,curr_sh_file,sep=''),
 system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
 wait_for_job()
 
-# 3. Logistic Cooper vs. Genepool
+# 3. Logistic Cooper vs. Genepool without age
 table(pheno_data$ExerciseGroup)
 sample_inds = pheno_data$ExerciseGroup != "1"
 curr_pheno = pheno_data[sample_inds,]
@@ -525,64 +522,126 @@ print_sh_file(paste(job_dir,curr_sh_file,sep=''),
 system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
 wait_for_job()
 
-# 1. Logistic with age: elite vs. cooper, 5 PCs
-# #jobs_before = get_my_jobs()
-# if (!run_loacally){
-#   err_path = paste(job_dir,"genepool_controls_simple_linear_wo_age.err",sep="")
-#   log_path = paste(job_dir,"genepool_controls_simple_linear_wo_age.log",sep="")
-#   curr_cmd = paste(paste(job_dir,"plink2",sep=""),
-#                    "--bfile",paste(job_dir,"maf_filter",sep=''),
-#                    "--logistic hide-covar firth-fallback",
-#                    paste("--pheno",pheno_file),
-#                    paste("--pheno-name ExerciseGroup"),
-#                    "--allow-no-sex",
-#                    "--1",
-#                    paste("--covar",covar_file),
-#                    "--covar-name sex,Batch,PC1,PC2,PC3,PC4,PC5,PC6",
-#                    "--adjust",
-#                    "--out",paste(job_dir,"genepool_controls_simple_linear_wo_age",sep=''))
-#   curr_sh_file = "genepool_controls_simple_linear_wo_age.sh"
-#   print_sh_file(paste(job_dir,curr_sh_file,sep=''),
-#                 get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,"plink/2.0a1",2,10000),curr_cmd)
-#   system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
-#   #wait_for_job()
-#   list.files(job_dir)
-#   readLines(err_path)
-# }
-# if(run_loacally){
-#   curr_cmd = paste(paste(job_dir,"plink2",sep=""),
-#                    "--bfile",paste(job_dir,"maf_filter",sep=''),
-#                    "--logistic hide-covar firth-fallback",
-#                    paste("--pheno",pheno_file),
-#                    paste("--pheno-name ExerciseGroup"),
-#                    "--allow-no-sex",
-#                    "--1",
-#                    paste("--covar",covar_file),
-#                    "--covar-name sex,Batch,PC1,PC2,PC3,PC4,PC5,PC6",
-#                    "--adjust",
-#                    "--out",paste(job_dir,"genepool_controls_simple_linear_wo_age",sep=''))
-#   system(curr_cmd)
-# }
-#   
-# res_files = list.files(job_dir)
-# res_files = res_files[grepl("genepool_controls_simple_linear_wo_age",res_files)]
-# res_file = res_files[grepl("adjusted$",res_files) & grepl("logistic",res_files)]
-# res = read.delim(paste(job_dir,res_file,sep=''),stringsAsFactors = F)
-# res[1:5,]
-# hist(res$UNADJ)
-# qqplot(-log10(sample(res$UNADJ)[1:10000]),-log10(runif(10000)));abline(0,1)
-# res_fuma = from_our_sol_to_fuma_res(res_file,
-#                                     paste(job_dir,"maf_filter.bim",sep=""),
-#                                     paste(job_dir,"maf_filter.frq",sep=""),maf = 0.01)
-# qqplot(-log10(sample(as.numeric(res_fuma[,3]))[1:10000]),-log10(runif(10000)));abline(0,1)
-# dim(res_fuma)
-# gc()
-# write.table(res_fuma,
-#             file= paste(job_dir,"genepool_controls_simple_linear_wo_age_fuma_res.txt",sep=""),
-#             row.names = F,col.names = T,quote = F,sep=" ")
-# 
-# 
+# 4. Logistic Cooper vs. Elite with age
+table(pheno_data$ExerciseGroup)
+sample_inds = pheno_data$ExerciseGroup != "-1"
+curr_pheno = pheno_data[sample_inds,]
+curr_pheno[,4] = as.character(as.numeric(curr_pheno[,4]+1))
+pheno_file = paste(job_dir,"cooper_vs_elite.phe",sep='')
+write.table(file=pheno_file,curr_pheno[,c(1:2,4)],sep=" ",row.names = F,col.names = T,quote=F)
+covar_file = paste(job_dir,"cooper_vs_elite.phe",sep='')
+write.table(file=covar_file,curr_pheno[,-4],sep=" ",row.names = F,col.names = T,quote=F)
+#jobs_before = get_my_jobs()
+err_path = paste(job_dir,"cooper_vs_elite.err",sep="")
+log_path = paste(job_dir,"cooper_vs_elite.log",sep="")
+curr_cmd = paste("plink2",
+                 "--bfile",paste(job_dir,"maf_filter",sep=''),
+                 "--logistic hide-covar firth-fallback",
+                 "--1",
+                 paste("--pheno",pheno_file),
+                 paste("--pheno-name ExerciseGroup"),
+                 "--allow-no-sex",
+                 paste("--covar",covar_file),
+                 "--covar-name sex,Age,Batch,PC1,PC2,PC3,PC4,PC5",
+                 "--adjust",
+                 "--out",paste(job_dir,"cooper_vs_elite",sep=''))
+curr_sh_file = "cooper_vs_elite.sh"
+print_sh_file(paste(job_dir,curr_sh_file,sep=''),
+              get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,"plink/2.0a1",2,10000),curr_cmd)
+system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
+wait_for_job()
 
+# ####################################################################################################
+# ####################################################################################################
+# ####################################################################################################
+# Repeat the GWAS above after applying PCA and clustering, number of clusters is a parameter
+# given by the user. This is determined based on either some prior knowledge or by looking at the
+# elbow plot of kmeans.
+d = covariate_matrix
+d2 = sample_metadata_raw
+d2_ids = paste(d2$SentrixBarcode_A,d2$SentrixPosition_A,sep="_")
+samp_id = d2$Sample_ID
+altsamp_id = d2$alt_sample_id
+names(samp_id) = d2_ids
+names(altsamp_id) = d2_ids
+is_jap = grepl(altsamp_id,pattern="JA"); names(is_jap) = d2_ids
+
+# Cluster by the first two PCs
+pc_x = as.matrix(d[,c("PC1","PC2")])
+pc_x_kmeans = kmeans(pc_x,num_pca_clusters)
+table(pc_x_kmeans$cluster)
+table(pc_x_kmeans$cluster,d$Cohort)
+kmeans_res = pc_x_kmeans$cluster
+
+# Select subjects from the largest cluster
+clustable = table(kmeans_res)
+selected_cluster = names(which(clustable == max(clustable)))
+selected_subjects = names(which(kmeans_res == selected_cluster))
+
+# 0. Linear for all groups + age, sex, 5 PCs
+sample_inds = is.element(rownames(pheno_data),set=selected_subjects)
+pheno_file = paste(job_dir,"three_group_analysis_genepool_controls_pcafilter.phe",sep='')
+covar_file = paste(job_dir,"three_group_analysis_genepool_controls_pcafilter.phe",sep='')
+curr_pheno = pheno_data[sample_inds,]
+write.table(file=pheno_file,curr_pheno[,c(1:2,4)],sep=" ",row.names = F,col.names = T,quote=F)
+write.table(file=covar_file,curr_pheno[,-4],sep=" ",row.names = F,col.names = T,quote=F)
+err_path = paste(job_dir,"gwas_three_groups_linear_pcafilter.err",sep="")
+log_path = paste(job_dir,"gwas_three_groups_linear_pcafilter.log",sep="")
+curr_cmd = paste("plink2",
+                 "--bfile",paste(job_dir,"maf_filter",sep=''),
+                 "--linear hide-covar",
+                 paste("--pheno",pheno_file),
+                 paste("--pheno-name ExerciseGroup"),
+                 "--allow-no-sex",
+                 paste("--covar",covar_file),
+                 "--covar-name sex,Batch,Age,PC1,PC2,PC3,PC4,PC5",
+                 "--adjust",
+                 "--out",paste(job_dir,"gwas_three_groups_linear_pcafilter",sep=''))
+curr_sh_file = "gwas_three_groups_linear_pcafilter.sh"
+print_sh_file(paste(job_dir,curr_sh_file,sep=''),
+              get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,"plink/2.0a1",2,10000),curr_cmd)
+system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
+wait_for_job()
+
+# 4. Logistic Cooper vs. Elite with age
+sample_inds = is.element(rownames(pheno_data),set=selected_subjects) & pheno_data$ExerciseGroup != "-1"
+curr_pheno = pheno_data[sample_inds,]
+pheno_file = paste(job_dir,"cooper_vs_elite_pcafilter.phe",sep='')
+write.table(file=pheno_file,curr_pheno[,c(1:2,4)],sep=" ",row.names = F,col.names = T,quote=F)
+covar_file = paste(job_dir,"cooper_vs_elite_covars_pcafilter.phe",sep='')
+write.table(file=covar_file,curr_pheno[,-4],sep=" ",row.names = F,col.names = T,quote=F)
+err_path = paste(job_dir,"cooper_vs_elite_pcafilter.err",sep="")
+log_path = paste(job_dir,"cooper_vs_elite_pcafilter.log",sep="")
+curr_cmd = paste("plink2",
+                 "--bfile",paste(job_dir,"maf_filter",sep=''),
+                 "--logistic hide-covar firth-fallback",
+                 "--1",
+                 paste("--pheno",pheno_file),
+                 paste("--pheno-name ExerciseGroup"),
+                 "--allow-no-sex",
+                 paste("--covar",covar_file),
+                 "--covar-name sex,Age,Batch,PC1,PC2,PC3,PC4,PC5",
+                 "--adjust",
+                 "--out",paste(job_dir,"cooper_vs_elite_pcafilter",sep=''))
+curr_sh_file = "cooper_vs_elite_pcafilter.sh"
+print_sh_file(paste(job_dir,curr_sh_file,sep=''),
+              get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,"plink/2.0a1",2,10000),curr_cmd)
+system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
+wait_for_job()
+
+# ####################################################################################################
+# ####################################################################################################
+# ####################################################################################################
+# ####################################################################################################
+# ####################################################################################################
+# ####################################################################################################
+# ####################################################################################################
+# ####################################################################################################
+# ####################################################################################################
+# Print all GWAS results in FUMA's format
+create_fuma_files_for_fir(job_dir,
+                          paste(job_dir,"maf_filter.bim",sep=""),
+                          paste(job_dir,"maf_filter.frq",sep=""))
 
 
 

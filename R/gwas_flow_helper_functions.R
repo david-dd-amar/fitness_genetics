@@ -150,7 +150,7 @@ cov_phe_col_to_plink_numeric_format<-function(x){
   return(x)
 }
 
-from_our_sol_to_fuma_res<-function(assoc_file,bim_file,freq_file=NULL,maf = 0.01,p=1){
+from_our_sol_to_fuma_res<-function(assoc_file,bim_file,freq_file=NULL,maf = 0.001,p=1){
   res = read.delim(assoc_file,stringsAsFactors = F)
   mafs = read.table(freq_file,stringsAsFactors = F,header=T)
   bim = read.delim(bim_file,stringsAsFactors = F,header=F)
@@ -207,4 +207,23 @@ rev_nucleotide<-function(x){
 #                    "--out",paste(job_dir,"genepool_controls_simple_linear_wo_age",sep=''))
 # }
 
-
+create_fuma_files_for_fir<-function(dir_path,bim_file,frq_file,maf=0.001){
+  res_files = list.files(dir_path)
+  res_files = res_files[grepl("adjusted$",res_files)]
+  newdir = paste(dir_path,"fuma/",sep="")
+  system(paste("mkdir",newdir))
+  for (f in res_files){
+    res = read.delim(paste(dir_path,f,sep=''),stringsAsFactors = F)
+    res_fuma = from_our_sol_to_fuma_res(paste(dir_path,f,sep=""),bim_file,frq_file,maf = maf)
+    write.table(res_fuma,file= paste(newdir,f,sep=""),
+                row.names = F,col.names = T,quote = F,sep=" ")
+  }
+  
+  mafs = read.table(frq_file,stringsAsFactors = F,header=T)
+  mafs=mafs[,c(1,2,5,6)]
+  nsample = (mafs[,3]^2 + 2*mafs[,3])*(mafs[,4]/2)
+  mafs = cbind(mafs,nsample)
+  write.table(mafs,file= paste(newdir,"mafs.txt",sep=""),
+              row.names = F,col.names = T,quote = F,sep=" ")
+  return(NULL)
+}

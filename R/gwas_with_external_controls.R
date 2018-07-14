@@ -214,6 +214,14 @@ intersect_snps_ukbb = intersect_snps_ukbb[rownames(intersect_snps_our),]
 
 ################################################################
 
+# Analysis of the alleles in the two bim files
+# 1 means the same alleles
+# -1 means the same after reverse complement
+# 0 means we cannot explain (hopefully very few of these)
+# These can happen, for example, when the same position codes for
+# an indel in one platform and a standard SNP in the other platform.
+# We ignore these cases. 
+# See comment below for an example from the direct genotypes of UKBB.
 bim_check = cbind(intersect_snps_our[,5:6],intersect_snps_ukbb[,5:6])
 bim_check_res = apply(bim_check,1,check_bims_snp_info)
 table(bim_check_res)
@@ -346,6 +354,7 @@ covars = cbind(covars,pca_res[covars[,"IID"],])
 covars = covars[-genepool_inds,]
 covars[,"Batch"] = cov_phe_col_to_plink_numeric_format(covars[,"Batch"])
 table(covars[,"Batch"])
+table(covars[,"Age"])
 for(j in 1:ncol(covars)){
   covars[,j] = gsub(" ","",as.character(covars[,j]))
 }
@@ -364,7 +373,6 @@ write.table(file=paste(out_path,"ukbb_elite_cooper_covars.phe",sep=''),
 # 1. Linear of all three groups + sex, age, and 5 PCs
 pheno_file = paste(out_path,"ukbb_elite_cooper.phe",sep='')
 covar_file = paste(out_path,"ukbb_elite_cooper_covars.phe",sep='')
-#jobs_before = get_my_jobs()
 err_path = paste(out_path,"gwas_three_groups_linear.err",sep="")
 log_path = paste(out_path,"gwas_three_groups_linear.log",sep="")
 curr_cmd = paste("plink2",
@@ -381,8 +389,6 @@ curr_sh_file = "gwas_three_groups_linear.sh"
 print_sh_file(paste(out_path,curr_sh_file,sep=''),
               get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,"plink/2.0a1",2,10000),curr_cmd)
 system(paste("sbatch",paste(out_path,curr_sh_file,sep='')))
-#list.files(out_path)
-#readLines(err_path)
 
 # 2. Logistic: Cooper vs. UKBB, + sex, age, and 5 PCs
 sample_inds = as.numeric(covars[,"ExerciseGroup"])!=1
@@ -395,8 +401,6 @@ write.table(file=pheno_file,
             covars_copy[sample_inds,c(1:2,ind)],sep=" ",row.names = F,col.names = T,quote=F)
 write.table(file=covar_file,
             covars_copy[sample_inds,-ind],sep=" ",row.names = F,col.names = T,quote=F)
-
-#jobs_before = get_my_jobs()
 err_path = paste(out_path,"gwas_two_groups_logistic.err",sep="")
 log_path = paste(out_path,"gwas_two_groups_logistic.log",sep="")
 curr_cmd = paste("plink2",
@@ -413,13 +417,10 @@ curr_sh_file = "gwas_two_groups_logistic.sh"
 print_sh_file(paste(out_path,curr_sh_file,sep=''),
               get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,"plink/2.0a1",2,10000),curr_cmd)
 system(paste("sbatch",paste(out_path,curr_sh_file,sep='')))
-#list.files(out_path)
-#readLines(err_path)
 
 # 3. Linear of all three groups + sex, and 5 PCs (no age)
 pheno_file = paste(out_path,"ukbb_elite_cooper.phe",sep='')
 covar_file = paste(out_path,"ukbb_elite_cooper_covars.phe",sep='')
-#jobs_before = get_my_jobs()
 err_path = paste(out_path,"gwas_three_groups_linear_wo_age.err",sep="")
 log_path = paste(out_path,"gwas_three_groups_linear_wo_age.log",sep="")
 curr_cmd = paste("plink2",
@@ -436,8 +437,7 @@ curr_sh_file = "gwas_three_groups_linear_wo_age.sh"
 print_sh_file(paste(out_path,curr_sh_file,sep=''),
               get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,"plink/2.0a1",2,10000),curr_cmd)
 system(paste("sbatch",paste(out_path,curr_sh_file,sep='')))
-#list.files(out_path)
-#readLines(err_path)
+wait_for_job()
 
 # get all result files, transform to fuma and keep in a new directory
 res_files = list.files(out_path)
@@ -449,15 +449,21 @@ for (f in res_files){
   print(table(res$UNADJ < 1e-8))
   res_fuma = from_our_sol_to_fuma_res(paste(out_path,f,sep=""),
                                       paste(out_path,"merged_bed_final_for_gwas.bim",sep=""),
-                                      paste(out_path,"merged_bed_final_for_gwas.frq",sep=""),maf = 0.01)
+                                      paste(out_path,"merged_bed_final_for_gwas.frq",sep=""),maf = 0.001)
   print(dim(res_fuma))
   write.table(res_fuma,
               file= paste(newdir,f,sep=""),
               row.names = F,col.names = T,quote = F,sep=" ")
 }
 
-
-
+mafs = read.table(paste(out_path,"merged_bed_final_for_gwas.frq",sep=""),
+                  stringsAsFactors = F,header=T)
+mafs=mafs[,c(1,2,5,6)]
+nsample = (mafs[,3]^2 + 2*mafs[,3])*(mafs[,4]/2)
+mafs = cbind(mafs,nsample)
+write.table(mafs,
+            file= paste(newdir,"mafs.txt",sep=""),
+            row.names = F,col.names = T,quote = F,sep=" ")
 
 
 

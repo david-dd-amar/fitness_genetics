@@ -78,6 +78,7 @@ get_my_jobs<-function(){
   jobs = jobs[,-1]
   jobs = jobs[jobs[,1]!="bash",]
   system(paste("rm",tmp))
+  #new_jobs = rownames(jobs)[jobs[,5]=="RUNNING" | jobs[,5]=="PENDING"]
   return(jobs)
 }
 get_job_id<-function(x){return(x[1])}
@@ -226,4 +227,23 @@ create_fuma_files_for_fir<-function(dir_path,bim_file,frq_file,maf=0.001){
   write.table(mafs,file= paste(newdir,"mafs.txt",sep=""),
               row.names = F,col.names = T,quote = F,sep=" ")
   return(NULL)
+}
+
+# PCA plots
+two_d_plot_visualize_covariate<-function(x1,x2,cov1,cov2=NULL,cuts=5,...){
+  if(is.null(cov2)){cov2=cov1}
+  n1 = length(unique(cov1))
+  n2 = length(unique(cov2))
+  if(is.numeric(cov1) && n1 > 10){cov1=cut(cov1,breaks = cuts)}
+  if(is.numeric(cov2) && n2 > 10){cov1=cut(cov2,breaks = cuts)}
+  cov1 = as.factor(cov1)
+  cov2 = as.factor(cov2)
+  cols = rainbow(length(unique(cov1)))
+  names(cols) = unique(cov1)
+  cols = cols[!is.na(names(cols))]
+  pchs = 1:length(unique(cov2))
+  names(pchs) = unique(cov2)
+  pchs = pchs[!is.na(names(pchs))]
+  plot(x1,x2,col=cols[cov1],pch=pchs[cov2],...)
+  return(list(cols,pchs))
 }

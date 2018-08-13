@@ -27,6 +27,11 @@ if(analysis_name != ""){
   system(paste("mkdir",out_path))
 }
 
+# Additional files for the PCA analysis
+sample_metadata = "/oak/stanford/groups/euan/projects/fitness_genetics/metadata/merged_metadata_file_stanford3k_elite_cooper.txt"
+sample_metadata_raw = read.delim(sample_metadata,stringsAsFactors = F)
+sample_metadata_raw = correct_dups_in_sample_metadata(sample_metadata_raw)
+
 ####################################################################################################
 ####################################################################################################
 ####################################################################################################
@@ -269,6 +274,9 @@ write.table(t(t(snps_to_filp)),
 ####################################################################################################
 ####################################################################################################
 
+# Below we have a plink-based merging of the data. As an alternative we can analyze merging results
+# from other tools such as qctools. These analyses are in external_merge_tools_output_analysis.R script.
+
 # extract the snp intersect and flip snps
 err_path = paste(out_path,"extract_snps_and_flip.err",sep="")
 log_path = paste(out_path,"extract_snps_and_flip.log",sep="")
@@ -284,7 +292,14 @@ print_sh_file(paste(out_path,curr_sh_file,sep=''),
 system(paste("sbatch",paste(out_path,curr_sh_file,sep='')))
 wait_for_job()
 
-# merge with our bed file
+# compare the resulting bims
+bimfile1 = "/oak/stanford/groups/euan/projects/fitness_genetics/ukbb/ukbb_imputed_10k_rand_controls_sex_age/our_bed_data_extracted_flipped.bim"
+bimfile2 = "/oak/stanford/groups/euan/projects/fitness_genetics/ukbb/ukbb_imputed_10k_rand_controls_sex_age/merged_control_geno.bim"
+bim1 = read.table(bimfile1)
+bim2 = read.table(bimfile2)
+length(intersect(bim1[,2],bim2[,2]))
+
+# merge with our bed file using plink
 controls_bed = paste(out_path,"merged_control_geno",sep='')
 err_path = paste(out_path,"merge_with_our_bed.err",sep="")
 log_path = paste(out_path,"merge_with_our_bed.log",sep="")
@@ -370,7 +385,7 @@ write.table(file=paste(out_path,"ukbb_elite_cooper_covars.phe",sep=''),
 ####################################################################################################
 # Run GWAS
 
-# 1. Linear of all three groups + sex, age, and 5 PCs
+# 1. Linear of all three groups + sex, age, and 10 PCs
 pheno_file = paste(out_path,"ukbb_elite_cooper.phe",sep='')
 covar_file = paste(out_path,"ukbb_elite_cooper_covars.phe",sep='')
 err_path = paste(out_path,"gwas_three_groups_linear.err",sep="")
@@ -382,7 +397,7 @@ curr_cmd = paste("plink2",
                  paste("--pheno-name ExerciseGroup"),
                  "--allow-no-sex",
                  paste("--covar",covar_file),
-                 "--covar-name sex,Batch,Age,PC1,PC2,PC3,PC4,PC5",
+                 "--covar-name sex,Batch,Age,PC1,PC2,PC3,PC4,PC5,PC6,PC7,PC8,PC9,PC10",
                  "--adjust",
                  "--out",paste(out_path,"gwas_three_groups_linear",sep=''))
 curr_sh_file = "gwas_three_groups_linear.sh"
@@ -390,7 +405,7 @@ print_sh_file(paste(out_path,curr_sh_file,sep=''),
               get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,"plink/2.0a1",2,10000),curr_cmd)
 system(paste("sbatch",paste(out_path,curr_sh_file,sep='')))
 
-# 2. Logistic: Cooper vs. UKBB, + sex, age, and 5 PCs
+# 2. Logistic: Cooper vs. UKBB, + sex, age, and 10 PCs
 sample_inds = as.numeric(covars[,"ExerciseGroup"])!=1
 covars_copy = covars
 covars_copy[,"ExerciseGroup"] = as.character(as.numeric(covars[,"ExerciseGroup"])+1)
@@ -401,8 +416,8 @@ write.table(file=pheno_file,
             covars_copy[sample_inds,c(1:2,ind)],sep=" ",row.names = F,col.names = T,quote=F)
 write.table(file=covar_file,
             covars_copy[sample_inds,-ind],sep=" ",row.names = F,col.names = T,quote=F)
-err_path = paste(out_path,"gwas_two_groups_logistic.err",sep="")
-log_path = paste(out_path,"gwas_two_groups_logistic.log",sep="")
+err_path = paste(out_path,"ukbb_vs_cooper.err",sep="")
+log_path = paste(out_path,"ukbb_vs_cooper.log",sep="")
 curr_cmd = paste("plink2",
                  "--bfile",paste(out_path,"merged_bed_final_for_gwas",sep=''),
                  "--logistic hide-covar firth-fallback",
@@ -410,15 +425,15 @@ curr_cmd = paste("plink2",
                  paste("--pheno-name ExerciseGroup"),
                  "--allow-no-sex",
                  paste("--covar",covar_file),
-                 "--covar-name sex,Batch,Age,PC1,PC2,PC3,PC4,PC5",
+                 "--covar-name sex,Batch,Age,PC1,PC2,PC3,PC4,PC5,PC6,PC7,PC8,PC9,PC10",
                  "--1 --adjust",
-                 "--out",paste(out_path,"gwas_two_groups_logistic",sep=''))
-curr_sh_file = "gwas_two_groups_logistic.sh"
+                 "--out",paste(out_path,"ukbb_vs_cooper",sep=''))
+curr_sh_file = "ukbb_vs_cooper.sh"
 print_sh_file(paste(out_path,curr_sh_file,sep=''),
               get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,"plink/2.0a1",2,10000),curr_cmd)
 system(paste("sbatch",paste(out_path,curr_sh_file,sep='')))
 
-# 3. Linear of all three groups + sex, and 5 PCs (no age)
+# 3. Linear of all three groups + sex, and 10 PCs (no age)
 pheno_file = paste(out_path,"ukbb_elite_cooper.phe",sep='')
 covar_file = paste(out_path,"ukbb_elite_cooper_covars.phe",sep='')
 err_path = paste(out_path,"gwas_three_groups_linear_wo_age.err",sep="")
@@ -430,7 +445,7 @@ curr_cmd = paste("plink2",
                  paste("--pheno-name ExerciseGroup"),
                  "--allow-no-sex",
                  paste("--covar",covar_file),
-                 "--covar-name sex,Batch,PC1,PC2,PC3,PC4,PC5",
+                 "--covar-name sex,Batch,PC1,PC2,PC3,PC4,PC5,PC6,PC7,PC8,PC9,PC10",
                  "--adjust",
                  "--out",paste(out_path,"gwas_three_groups_linear_wo_age",sep=''))
 curr_sh_file = "gwas_three_groups_linear_wo_age.sh"
@@ -438,6 +453,154 @@ print_sh_file(paste(out_path,curr_sh_file,sep=''),
               get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,"plink/2.0a1",2,10000),curr_cmd)
 system(paste("sbatch",paste(out_path,curr_sh_file,sep='')))
 wait_for_job()
+
+# 4. Logistic: Elite vs. UKBB, + sex, age, and 10 PCs
+sample_inds = as.numeric(covars[,"ExerciseGroup"])!=0
+covars_copy = covars
+covars_copy[,"ExerciseGroup"] = as.character(as.numeric(covars[,"ExerciseGroup"])+1)
+table(covars_copy[sample_inds,"ExerciseGroup"])
+pheno_file = paste(out_path,"ukbb_vs_elite.phe",sep='')
+covar_file = paste(out_path,"ukbb_vs_elite_covars.phe",sep='')
+write.table(file=pheno_file,
+            covars_copy[sample_inds,c(1:2,ind)],sep=" ",row.names = F,col.names = T,quote=F)
+write.table(file=covar_file,
+            covars_copy[sample_inds,-ind],sep=" ",row.names = F,col.names = T,quote=F)
+err_path = paste(out_path,"ukbb_vs_elite.err",sep="")
+log_path = paste(out_path,"ukbb_vs_elite.log",sep="")
+curr_cmd = paste("plink2",
+                 "--bfile",paste(out_path,"merged_bed_final_for_gwas",sep=''),
+                 "--logistic hide-covar firth-fallback",
+                 paste("--pheno",pheno_file),
+                 paste("--pheno-name ExerciseGroup"),
+                 "--allow-no-sex",
+                 paste("--covar",covar_file),
+                 "--covar-name sex,Batch,Age,PC1,PC2,PC3,PC4,PC5,PC6,PC7,PC8,PC9,PC10",
+                 "--1 --adjust",
+                 "--out",paste(out_path,"ukbb_vs_elite_logistic",sep=''))
+curr_sh_file = "ukbb_vs_elite_logistic.sh"
+print_sh_file(paste(out_path,curr_sh_file,sep=''),
+              get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,"plink/2.0a1",2,10000),curr_cmd)
+system(paste("sbatch",paste(out_path,curr_sh_file,sep='')))
+
+
+# ####################################################################################################
+# ####################################################################################################
+# ####################################################################################################
+# Repeat the GWAS above after applying PCA and clustering, number of clusters is a parameter
+# given by the user. This is determined based on either some prior knowledge or by looking at the
+# elbow plot of kmeans.
+# PROBLEM (July 2018): PCA only separates UKBB from others
+d = read.table(paste(out_path,"ukbb_elite_cooper_covars.phe",sep=''),header=T,stringsAsFactors = F)
+d2 = sample_metadata_raw
+d2_ids = paste(d2$SentrixBarcode_A,d2$SentrixPosition_A,sep="_")
+samp_id = d2$Sample_ID
+altsamp_id = d2$alt_sample_id
+names(samp_id) = d2_ids
+names(altsamp_id) = d2_ids
+is_jap = grepl(altsamp_id,pattern="JA"); names(is_jap) = d2_ids
+d_cohort = read.table(paste(out_path,"ukbb_elite_cooper.phe",sep=''),header=T,stringsAsFactors = F)
+
+# Association between PCs and UKBB or not
+ukbb_inds = d_cohort$ExerciseGroup == -1
+pc_pvals = c()
+for(k in 1:20){
+  x1 = d[ukbb_inds,paste("PC",k,sep="")]
+  x2 = d[!ukbb_inds,paste("PC",k,sep="")]
+  pc_pvals[k] = wilcox.test(x1,x2)$p.value
+}
+
+# Cluster by PCs
+# Assumption: use PC 3 and onwards as the first two are
+# batch PCs that separate UKBB from non-UKBB
+pc_x = as.matrix(d[,c("PC11","PC12")])
+
+# Check number of clusters in PCA plot
+wss <- sapply(1:10,
+              function(k){kmeans(pc_x, k, nstart=50,iter.max = 15 )$tot.withinss})
+wss[2:10]/wss[1:9] # by manual inspection we choose 3 clusters here (consistent with 
+# the analysis of our samples without UKBB)
+
+num_pca_clusters = 3
+pc_x_kmeans = kmeans(pc_x^4,num_pca_clusters)
+table(pc_x_kmeans$cluster)
+table(pc_x_kmeans$cluster,d_cohort$ExerciseGroup)
+kmeans_res = pc_x_kmeans$cluster
+
+# Select subjects from the largest cluster
+clustable = table(kmeans_res)
+selected_cluster = names(which(clustable == max(clustable)))
+selected_subjects = names(which(kmeans_res == selected_cluster))
+
+# ####################################################################################################
+# ####################################################################################################
+# ####################################################################################################
+# Local analysis
+setwd("/Users/David/Desktop/elite/gwas_results/ukbb_pca")
+d = read.table("ukbb_elite_cooper_covars.phe",header=T,stringsAsFactors = F)
+d2 = read.delim("../../metadata/june_2018_integrated_info/merged_metadata_file_stanford3k_elite_cooper.txt")
+d2_ids = paste(d2$SentrixBarcode_A,d2$SentrixPosition_A,sep="_")
+samp_id = d2$Sample_ID
+altsamp_id = d2$alt_sample_id
+names(samp_id) = d2_ids
+names(altsamp_id) = d2_ids
+is_jap = grepl(altsamp_id,pattern="JA"); names(is_jap) = d2_ids
+table(is_jap)
+d_cohort = read.table("ukbb_elite_cooper.phe",header=T,stringsAsFactors = F)
+cohorts = d_cohort$ExerciseGroup
+cohorts[cohorts=="-1"] = "UKBB"
+cohorts[cohorts=="1"] = "ELITE"
+cohorts[cohorts=="0"] = "Cooper"
+names(cohorts) = d_cohort[,2]
+table(cohorts)
+all(names(cohorts)==d[,2])
+
+# Cluster by PCs
+# Assumption: use PC 3 and onwards as the first two are
+# batch PCs that separate UKBB from non-UKBB
+pc_x = as.matrix(d[,c("PC11","PC12")])
+
+# Check number of clusters in PCA plot
+wss <- sapply(1:10,
+              function(k){kmeans(pc_x, k, nstart=50,iter.max = 15 )$tot.withinss})
+wss[2:10]/wss[1:9] # by manual inspection we choose 3 clusters here (consistent with 
+# the analysis of our samples without UKBB)
+plot(1:10, wss,
+     type="b", pch = 19, frame = FALSE,
+     xlab="Number of clusters K",
+     ylab="Total within-clusters sum of squares")
+
+# PCA plots
+inds = 1:nrow(d)
+res = two_d_plot_visualize_covariate(d$PC1[inds],
+    d$PC2[inds],cohorts[inds],cohorts[inds],
+    main = "UKBB, Cooper, ELITE",xlab="PC1",ylab="PC2")
+legend(x="top",names(res[[1]]),fill = res[[1]])
+
+res = two_d_plot_visualize_covariate(d$PC3[inds],
+    d$PC2[inds],cohorts[inds],cohorts[inds],
+    main = "UKBB, Cooper, ELITE",xlab="PC3",ylab="PC2")
+legend(x="top",names(res[[1]]),fill = res[[1]])
+
+res = two_d_plot_visualize_covariate(d$PC12[inds],
+    d$PC11[inds],cohorts[inds],cohorts[inds],
+    main = "UKBB, Cooper, ELITE",xlab="PC12",ylab="PC11")
+legend(x="bottomleft",names(res[[1]]),fill = res[[1]])
+
+table(kmeans_res)
+res = two_d_plot_visualize_covariate(d$PC12[inds],
+    d$PC11[inds],kmeans_res,kmeans_res,
+    main = "UKBB, Cooper, ELITE",xlab="PC12",ylab="PC11")
+legend(x="bottomleft",names(res[[1]]),fill = res[[1]])
+
+# ####################################################################################################
+# ####################################################################################################
+# ####################################################################################################
+# ####################################################################################################
+# ####################################################################################################
+# ####################################################################################################
+# ####################################################################################################
+# ####################################################################################################
+# ####################################################################################################
 
 # get all result files, transform to fuma and keep in a new directory
 res_files = list.files(out_path)

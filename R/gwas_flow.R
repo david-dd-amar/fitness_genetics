@@ -307,25 +307,6 @@ write.table(covariate_matrix,file=
 # names(altsamp_id) = d2_ids
 # is_jap = grepl(altsamp_id,pattern="JA"); names(is_jap) = d2_ids
 # 
-# # PCA plots
-# two_d_plot_visualize_covariate<-function(x1,x2,cov1,cov2=NULL,cuts=5,...){
-#   if(is.null(cov2)){cov2=cov1}
-#   n1 = length(unique(cov1))
-#   n2 = length(unique(cov2))
-#   if(is.numeric(cov1) && n1 > 10){cov1=cut(cov1,breaks = cuts)}
-#   if(is.numeric(cov2) && n2 > 10){cov1=cut(cov2,breaks = cuts)}
-#   cov1 = as.factor(cov1)
-#   cov2 = as.factor(cov2)
-#   cols = rainbow(length(unique(cov1)))
-#   names(cols) = unique(cov1)
-#   cols = cols[!is.na(names(cols))]
-#   pchs = 1:length(unique(cov2))
-#   names(pchs) = unique(cov2)
-#   pchs = pchs[!is.na(names(pchs))]
-#   plot(x1,x2,col=cols[cov1],pch=pchs[cov2],...)
-#   return(list(cols,pchs))
-# }
-# 
 # # Cluster by the first two PCs
 # pc_x = as.matrix(d[,c("PC1","PC2")])
 # pc_x_5means = kmeans(pc_x,5)

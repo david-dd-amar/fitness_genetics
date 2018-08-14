@@ -3,7 +3,6 @@ script_file = "/oak/stanford/groups/euan/projects/fitness_genetics/scripts/fitne
 python_script = "/oak/stanford/groups/euan/projects/fitness_genetics/scripts/fitness_genetics/python_sh/recode_indels.py"
 source(script_file)
 
-
 bgen_file = "/oak/stanford/groups/euan/projects/ukbb/qctool/aug10_full_set"
 out_path = "/oak/stanford/groups/euan/projects/ukbb/qctool/"
 
@@ -11,8 +10,6 @@ external_control_ids = "/oak/stanford/groups/euan/projects/fitness_genetics/ukbb
 external_covars_path = "/oak/stanford/groups/euan/projects/fitness_genetics/ukbb/10k_rand_controls_sex_age_with_info.txt"
 
 our_covars_path = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl/three_group_analysis_genepool_controls.phe"
-our_phe_path = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl/three_group_analysis_genepool_controls.phe"
-
 
 ######################################################################################################
 # Correct some issues in the sample file
@@ -42,6 +39,19 @@ print_sh_file(paste(out_path,curr_sh_file,sep=''),
 system(paste("sbatch",paste(out_path,curr_sh_file,sep='')))
 wait_for_job()
 
+# ####################################################################################################
+# bgen to bed
+err_path = paste(out_path,"bgen_to_bed.err",sep="")
+log_path = paste(out_path,"bgen_to_bed.log",sep="")
+curr_cmd = paste("plink2 --bgen",paste(bgen_file,".bgen",sep=""),
+                 "--sample",paste(bgen_file,".sample",sep=""),
+                 "--make-bed --out",paste(out_path,"merged_bed_final_for_gwas",sep=''))
+curr_sh_file = "bgen_to_bed.sh"
+print_sh_file(paste(out_path,curr_sh_file,sep=''),
+              get_sh_prefix_bigmem(err_path,log_path,Ncpu=1,mem_size=256000,plink_pkg = "plink/2.0a1"),curr_cmd)
+system(paste("sbatch",paste(out_path,curr_sh_file,sep='')))
+wait_for_job()
+
 ####################################################################################################
 ####################################################################################################
 ####################################################################################################
@@ -55,6 +65,22 @@ wait_for_job()
 our_covars = read.table(our_covars_path,header=T,stringsAsFactors = F)
 our_phe = as.character(our_covars[,4])
 genepool_inds = which(as.numeric(our_phe)==-1)
+
+# fix the sample ids to match those in the sample file
+sample_file = paste(bgen_file,".sample",sep="")
+sample_bgen_data = read.table(sample_file,header=T,stringsAsFactors = F)
+ids1 = our_covars$IID
+ids2 = sample_bgen_data$ID_2
+if (length(intersect(ids1,ids2))==0 && grepl("-",ids2[2])){
+  our_covars$IID = gsub("_","-",our_covars$IID)
+}
+if (length(intersect(ids1,ids2))==0 && grepl("_",ids2[2])){
+  our_covars$IID = gsub("-","_",our_covars$IID)
+}
+ids1 = our_covars$IID
+ids2 = sample_bgen_data$ID_2
+length(intersect(ids1,ids2))
+
 # all(our_covars[,1]==our_phe[,1])
 # table(our_phe[,3])
 external_covars = read.table(external_covars_path,stringsAsFactors = F)
@@ -78,7 +104,6 @@ colnames(external_covars) = c("FID","IID","sex","Batch","Age","ExerciseGroup")
 covars = rbind(our_covars[,c(1,2,3,5,6,4)],external_covars)
 pca_res = read.table(paste(out_path,"merged_bed_final_for_gwas.eigenvec",sep=''),stringsAsFactors = F)
 rownames(pca_res) = pca_res[,2]
-rownames(pca_res) = gsub("-","_",rownames(pca_res))
 length(intersect(rownames(pca_res),covars[,"IID"]))
 setdiff(rownames(pca_res),covars[,"IID"])
 pca_res = pca_res[,-c(1:2)]
@@ -87,17 +112,15 @@ table(is.element(covars[,"IID"],set=rownames(pca_res))) # all should be true
 covars = cbind(covars,pca_res[covars[,"IID"],])
 covars = covars[-genepool_inds,]
 covars[,"Batch"] = cov_phe_col_to_plink_numeric_format(covars[,"Batch"])
-table(covars[,"Batch"])
-table(covars[,"Age"])
 for(j in 1:ncol(covars)){
   covars[,j] = gsub(" ","",as.character(covars[,j]))
 }
 
-ind = which(colnames(covars)=="ExerciseGroup")
-write.table(file=paste(out_path,"ukbb_elite_cooper.phe",sep=''),
-            covars[,c(1:2,ind)],sep=" ",row.names = F,col.names = T,quote=F)
+covars[,"ExerciseGroup"] = as.numeric(as.character(covars[,"ExerciseGroup"])) + 2
+table(covars[,"ExerciseGroup"])
+
 write.table(file=paste(out_path,"ukbb_elite_cooper_covars.phe",sep=''),
-            covars[,-ind],sep=" ",row.names = F,col.names = T,quote=F)
+            covars,sep=" ",row.names = F,col.names = T,quote=F)
 
 ####################################################################################################
 ####################################################################################################
@@ -105,19 +128,17 @@ write.table(file=paste(out_path,"ukbb_elite_cooper_covars.phe",sep=''),
 # Run GWAS
 
 # 1. Linear of all three groups + sex, age, and 10 PCs
-pheno_file = paste(out_path,"ukbb_elite_cooper.phe",sep='')
 covar_file = paste(out_path,"ukbb_elite_cooper_covars.phe",sep='')
 err_path = paste(out_path,"gwas_three_groups_linear.err",sep="")
 log_path = paste(out_path,"gwas_three_groups_linear.log",sep="")
 curr_cmd = paste("plink2",
-                 "--bgen",paste(bgen_file,".bgen",sep=""),
-                 "--sample",paste(bgen_file,".sample",sep=""),
+                 "--bfile",paste(out_path,"merged_bed_final_for_gwas",sep=''),
                  "--linear hide-covar",
-                 paste("--pheno",pheno_file),
+                 paste("--pheno",covar_file),
                  paste("--pheno-name ExerciseGroup"),
                  "--allow-no-sex",
                  paste("--covar",covar_file),
-                 "--covar-name sex,Batch,Age,PC1,PC2,PC3,PC4,PC5,PC6,PC7,PC8,PC9,PC10",
+                 "--covar-name sex,Age,PC1,PC2,PC3,PC4,PC5,PC6,PC7,PC8,PC9,PC10",
                  "--adjust",
                  "--out",paste(out_path,"gwas_three_groups_linear",sep=''))
 curr_sh_file = "gwas_three_groups_linear.sh"
@@ -126,26 +147,50 @@ print_sh_file(paste(out_path,curr_sh_file,sep=''),
 system(paste("sbatch",paste(out_path,curr_sh_file,sep='')))
 
 
-# 1. Linear of all three groups + sex, age, and 5 PCs
-pheno_file = paste(out_path,"ukbb_elite_cooper.phe",sep='')
+# 2. Linear of all three groups + sex, age, and 5 PCs
 covar_file = paste(out_path,"ukbb_elite_cooper_covars.phe",sep='')
 err_path = paste(out_path,"gwas_three_groups_linear_5pcs.err",sep="")
 log_path = paste(out_path,"gwas_three_groups_linear_5pcs.log",sep="")
 curr_cmd = paste("plink2",
-                 "--bgen",paste(bgen_file,".bgen",sep=""),
-                 "--sample",paste(bgen_file,".sample",sep=""),
+                 "--bfile",paste(out_path,"merged_bed_final_for_gwas",sep=''),
                  "--linear hide-covar",
-                 paste("--pheno",pheno_file),
+                 paste("--pheno",covar_file),
                  paste("--pheno-name ExerciseGroup"),
                  "--allow-no-sex",
                  paste("--covar",covar_file),
-                 "--covar-name sex,Batch,Age,PC1,PC2,PC3,PC4,PC5",
+                 "--covar-name sex,Age,PC1,PC2,PC3,PC4,PC5",
                  "--adjust",
                  "--out",paste(out_path,"gwas_three_groups_linear_5pcs",sep=''))
 curr_sh_file = "gwas_three_groups_linear_5pcs.sh"
 print_sh_file(paste(out_path,curr_sh_file,sep=''),
               get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,"plink/2.0a1",2,10000),curr_cmd)
 system(paste("sbatch",paste(out_path,curr_sh_file,sep='')))
+
+# ####################################################################################################
+# ####################################################################################################
+# ####################################################################################################
+# ####################################################################################################
+# Print all GWAS results in FUMA's format
+
+from_our_sol_to_fuma_res<-function(assoc_file,bim_file,freq_file=NULL,maf = 0.001,p=1){
+  res = read.delim(assoc_file,stringsAsFactors = F)
+  mafs = read.table(freq_file,stringsAsFactors = F,header=F)
+  bim = read.delim(bim_file,stringsAsFactors = F,header=F)
+  rownames(bim) = bim[,2]
+  rownames(mafs) = mafs[,2]
+  rownames(res) = res$ID
+  selected_snps = intersect(
+    rownames(res)[res$UNADJ <= p],
+    rownames(mafs)[mafs[,5] >= maf]
+  )
+  m = cbind(as.character(bim[selected_snps,1]),as.character(bim[selected_snps,4]),res[selected_snps,]$UNADJ)
+  colnames(m) = c("chromosome","position","P-value")
+  return(m)
+}
+
+create_fuma_files_for_fir(out_path,
+                          paste(out_path,"merged_bed_final_for_gwas.bim",sep=""),
+                          paste(out_path,"merged_bed_final_for_gwas.afreq",sep=""))
 
 ####################################################################################################
 ####################################################################################################

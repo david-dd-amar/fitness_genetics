@@ -23,7 +23,7 @@ get_sh_default_prefix<-function(err="",log=""){
 
 # plink2: plink/2.0a1
 get_sh_prefix_one_node_specify_cpu_and_mem<-function(err="",log="",plink_pkg = "plink/1.90b5.3",Ncpu,mem_size){
-  partition_line = #SBATCH --partition=euan,mrivas,normal,owners"
+  partition_line = "#SBATCH --partition=euan,mrivas,normal,owners"
   if(mem_size>32000){
     partition_line = "#SBATCH --partition=bigmem,euan,mrivas"
   }
@@ -154,6 +154,10 @@ cov_phe_col_to_plink_numeric_format<-function(x){
 from_our_sol_to_fuma_res<-function(assoc_file,bim_file,freq_file=NULL,maf = 0.001,p=1){
   res = read.delim(assoc_file,stringsAsFactors = F)
   mafs = read.table(freq_file,stringsAsFactors = F,header=T)
+  if(grepl("afreq$",freq_file)){
+    colnames(mafs)[colnames(mafs)=="ID"] = "SNP"
+    colnames(mafs)[colnames(mafs)=="ALT_FREQS"] = "MAF"
+  }
   bim = read.delim(bim_file,stringsAsFactors = F,header=F)
   rownames(bim) = bim[,2]
   rownames(mafs) = mafs$SNP

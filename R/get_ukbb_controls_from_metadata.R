@@ -1,6 +1,6 @@
 
 # Number of controls for selecion:
-N = 10000
+N = 50000
 
 # Input files: locally
 # Metadata: an excel file with multiple sheets. One per project.

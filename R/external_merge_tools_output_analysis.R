@@ -3,8 +3,8 @@ script_file = "/oak/stanford/groups/euan/projects/fitness_genetics/scripts/fitne
 python_script = "/oak/stanford/groups/euan/projects/fitness_genetics/scripts/fitness_genetics/python_sh/recode_indels.py"
 source(script_file)
 
-bgen_file = "/oak/stanford/groups/euan/projects/ukbb/qctool/aug10_full_set"
-out_path = "/oak/stanford/groups/euan/projects/ukbb/qctool/"
+bgen_file = "/oak/stanford/groups/euan/projects/fitness_genetics/ukbb/qctool/aug10_full_set"
+out_path = "/oak/stanford/groups/euan/projects/fitness_genetics/ukbb/qctool/"
 
 external_control_ids = "/oak/stanford/groups/euan/projects/fitness_genetics/ukbb/10k_rand_controls_sex_age.txt"
 external_covars_path = "/oak/stanford/groups/euan/projects/fitness_genetics/ukbb/10k_rand_controls_sex_age_with_info.txt"
@@ -219,8 +219,7 @@ all(names(cohorts)==d[,2])
 # Cluster by PCs
 # Assumption: use PC 3 and onwards as the first two are
 # batch PCs that separate UKBB from non-UKBB
-pc_x = as.matrix(d[,c("PC1","PC2")])
-pc_x = as.matrix(d[,c("PC3","PC2")])
+pc_x = as.matrix(d[,c("PC1","PC2","PC3","PC4","PC5")])
 
 # Check number of clusters in PCA plot
 wss <- sapply(1:10,
@@ -231,28 +230,32 @@ plot(1:10, wss,
      type="b", pch = 19, frame = FALSE,
      xlab="Number of clusters K",
      ylab="Total within-clusters sum of squares")
+clusters = kmeans(pc_x,centers = 5)
+table(clusters$cluster,cohorts)
 
 # PCA plots
 inds = 1:nrow(d)
+inds = cohorts!="UKBB"
+inds = clusters$cluster==1
 res = two_d_plot_visualize_covariate(d$PC1[inds],
-                                     d$PC2[inds],cohorts[inds],cohorts[inds],
-                                     main = "UKBB, Cooper, ELITE",xlab="PC1",ylab="PC2")
+    d$PC2[inds],cohorts[inds],cohorts[inds],
+    main = "UKBB, Cooper, ELITE",xlab="PC1",ylab="PC2")
 legend(x="top",names(res[[1]]),fill = res[[1]])
 
 res = two_d_plot_visualize_covariate(d$PC3[inds],
-                                     d$PC2[inds],cohorts[inds],cohorts[inds],
-                                     main = "UKBB, Cooper, ELITE",xlab="PC3",ylab="PC2")
+    d$PC2[inds],cohorts[inds],cohorts[inds],
+    main = "UKBB, Cooper, ELITE",xlab="PC3",ylab="PC2")
 legend(x="top",names(res[[1]]),fill = res[[1]])
 
 res = two_d_plot_visualize_covariate(d$PC3[inds],
-                                     d$PC4[inds],cohorts[inds],cohorts[inds],
-                                     main = "UKBB, Cooper, ELITE",xlab="PC12",ylab="PC11")
+    d$PC4[inds],cohorts[inds],cohorts[inds],
+    main = "UKBB, Cooper, ELITE",xlab="PC12",ylab="PC11")
 legend(x="bottomleft",names(res[[1]]),fill = res[[1]])
 
 table(kmeans_res)
 res = two_d_plot_visualize_covariate(d$PC12[inds],
-                                     d$PC11[inds],kmeans_res,kmeans_res,
-                                     main = "UKBB, Cooper, ELITE",xlab="PC12",ylab="PC11")
+    d$PC11[inds],kmeans_res,kmeans_res,
+    main = "UKBB, Cooper, ELITE",xlab="PC12",ylab="PC11")
 legend(x="bottomleft",names(res[[1]]),fill = res[[1]])
 
 

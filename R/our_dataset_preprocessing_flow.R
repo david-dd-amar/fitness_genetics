@@ -91,29 +91,16 @@ wait_for_job()
 ####################################################################################################
 ####################################################################################################
 # impute sex
-# select snps to exclude
-X_snps = grepl("^X$",snp_data$Chr,ignore.case = T)
-X_snps_to_exclude =  snp_data$Call.Freq < snp_min_call_rate |
-  snp_data$Multi.EthnicGlobal_D1.bpm.Cluster.Sep < snp_min_clustersep_thr |
-  snp_data$Het.Excess < snp_min_het_ex |
-  snp_data$Het.Excess > snp_max_het_ex
-X_snps_to_exclude = X_snps_to_exclude & X_snps
-write.table(t(t(as.character(snp_data$Name[X_snps_to_exclude]))),
-            file=paste(job_dir,"X_snps_to_exclude.txt",sep=''),
-            row.names = F,col.names = F,quote = F)
-# run imputation in plink
-jobs_before = get_my_jobs()
 err_path = paste(job_dir,"impute_sex.err",sep="")
 log_path = paste(job_dir,"impute_sex.log",sep="")
 curr_cmd = paste("plink --bfile",paste(job_dir,"raw",sep=''),
-                 "--exclude X_snps_to_exclude.txt",
-                 "--check-sex --out",paste(job_dir,"impute_sex",sep=''))
+                 "--check-sex .3 .9 --chr 23",
+                 "--out",paste(job_dir,"impute_sex",sep=''))
 curr_sh_file = "impute_sex.sh"
 print_sh_file(paste(job_dir,curr_sh_file,sep=''),
               get_sh_default_prefix(err_path,log_path),curr_cmd)
 system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
-wait_for_job()
-list.files(job_dir)
+
 # get simple imputation by looking at call rates in Y chromosome
 Y_snps = grepl("^Y$",snp_data$Chr,ignore.case = T)
 write.table(t(t(as.character(snp_data$Name[Y_snps]))),
@@ -129,8 +116,6 @@ curr_sh_file = "Y_snps_analysis.sh"
 print_sh_file(paste(job_dir,curr_sh_file,sep=''),
               get_sh_default_prefix(err_path,log_path),curr_cmd)
 system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
-wait_for_job()
-list.files(job_dir)
 
 ####################################################################################################
 ####################################################################################################
@@ -140,7 +125,6 @@ list.files(job_dir)
 # in theory we can use the ped itself for inference and filtering
 # however, here we assume we have the snp report that we can use
 # above the list of excluded snps was printed to a file in the job dir
-jobs_before = get_my_jobs()
 err_path = paste(job_dir,"chr_filter.err",sep="")
 log_path = paste(job_dir,"chr_filter.log",sep="")
 chr_filter = "--chr 0-22"
@@ -155,76 +139,37 @@ curr_sh_file = "chr_filter.sh"
 print_sh_file(paste(job_dir,curr_sh_file,sep=''),
               get_sh_default_prefix(err_path,log_path),curr_cmd)
 system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
-wait_for_job()
-list.files(job_dir)
 
+# quick comparison of the data using TOP strand vs + strand
+# plus_bim = read.table("/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl_fwd_strand/raw.bim")
+# top_bim = read.table("/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl/raw.bim")
+# dim(plus_bim)
+# dim(top_bim)
+# comparisons = list()
+# for(j in 1:ncol(plus_bim)){
+#   comparisons[[j]] = table(plus_bim[,j]==top_bim[,j])  
+# }
 ####################################################################################################
 ####################################################################################################
 ####################################################################################################
-# Exclude low maf snps
+# Exclude low maf snps.
+# Also add freq, pca, and misingness analyses
 maf_snps_to_exclude = snp_data$Name[snp_data$Minor.Freq<min_maf]
 write.table(t(t(as.character(snp_data$Name[maf_snps_to_exclude]))),
             file=paste(job_dir,"maf_snps_to_exclude.txt",sep=''),
             row.names = F,col.names = F,quote = F)
-jobs_before = get_my_jobs()
 err_path = paste(job_dir,"maf_filter.err",sep="")
 log_path = paste(job_dir,"maf_filter.log",sep="")
 curr_cmd = paste("plink --bfile",paste(job_dir,"chr_filter",sep=''),
                  "--exclude",paste(job_dir,"maf_snps_to_exclude.txt",sep=''),
                  "--maf",min_maf,
-                 "--make-bed --out",paste(job_dir,"maf_filter",sep=''))
+                 "--pca --freq --missing",
+                 "--make-bed --out",paste(job_dir,"maf_filter_data",sep=''))
 curr_sh_file = "maf_filter.sh"
 print_sh_file(paste(job_dir,curr_sh_file,sep=''),
               get_sh_default_prefix(err_path,log_path),curr_cmd)
 system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
 wait_for_job()
-list.files(job_dir)
-
-####################################################################################################
-####################################################################################################
-####################################################################################################
-# Get missigness results
-jobs_before = get_my_jobs()
-err_path = paste(job_dir,"maf_filter_missing.err",sep="")
-log_path = paste(job_dir,"maf_filter_missing.log",sep="")
-curr_cmd = paste("plink --bfile",paste(job_dir,"maf_filter",sep=''),
-                 "--missing --out",paste(job_dir,"maf_filter_missing",sep=''))
-curr_sh_file = "maf_filter_missing.sh"
-print_sh_file(paste(job_dir,curr_sh_file,sep=''),
-              get_sh_default_prefix(err_path,log_path),curr_cmd)
-system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
-wait_for_job()
-list.files(job_dir)
-
-####################################################################################################
-####################################################################################################
-####################################################################################################
-# Run PCA
-jobs_before = get_my_jobs()
-err_path = paste(job_dir,"maf_filter_pca.err",sep="")
-log_path = paste(job_dir,"maf_filter_pca.log",sep="")
-curr_cmd = paste("plink --bfile",paste(job_dir,"maf_filter",sep=''),
-                 "--pca --out",paste(job_dir,"maf_filter",sep=''))
-curr_sh_file = "maf_filter_pca.sh"
-print_sh_file(paste(job_dir,curr_sh_file,sep=''),
-              get_sh_default_prefix(err_path,log_path),curr_cmd)
-system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
-wait_for_job()
-list.files(job_dir)
-
-# Run freq
-jobs_before = get_my_jobs()
-err_path = paste(job_dir,"maf_filter_freq.err",sep="")
-log_path = paste(job_dir,"maf_filter_freq.log",sep="")
-curr_cmd = paste("plink --bfile",paste(job_dir,"maf_filter",sep=''),
-                 "--freq --out",paste(job_dir,"maf_filter",sep=''))
-curr_sh_file = "maf_filter_freq.sh"
-print_sh_file(paste(job_dir,curr_sh_file,sep=''),
-              get_sh_default_prefix(err_path,log_path),curr_cmd)
-system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
-wait_for_job()
-list.files(job_dir)
-
 
 ####################################################################################################
 ####################################################################################################
@@ -234,7 +179,7 @@ list.files(job_dir)
 #   Y-based sex analysis: Y_snps_analysis.imiss
 #   Plink's sex analysis: impute_sex.sexcheck
 # Analyze the sex analysis results
-Y_missing_report = read_plink_table(paste(job_dir,"Y_snps_analysis.imiss",sep=''))
+Y_missing_report = read_plink_table("/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl/Y_snps_analysis.imiss")
 Y_inferred_sex = Y_missing_report[,6] == "nan"
 # compare to known sex from the metadata
 metadata_sex = sample_metadata_raw$Sex_input_data
@@ -259,7 +204,7 @@ write.table(m,file=paste(job_dir,"sex_impute_analysis_report.txt",sep=''),sep="\
 
 # Missigness report after quality and maf filtering
 # look at the results, compare to Illumina's 
-missinigness_report = read_plink_table(paste(job_dir,"maf_filter_missing.imiss",sep=''))
+missinigness_report = read_plink_table(paste(job_dir,"maf_filter_data.imiss",sep=''))
 call_rates_after_filters = 1-as.numeric(missinigness_report[,6])
 names(call_rates_after_filters) = rownames(missinigness_report)
 low_cr_samples = missinigness_report[call_rates_after_filters<0.98,2]
@@ -275,7 +220,7 @@ colnames(m) = c("Sample_ID","Cohort","Raw_call_rate","Call_rate_qc_maf_filters")
 write.table(m,file=paste(job_dir,"missigness_analysis_report.txt",sep=''),sep="\t",quote=F)
 
 # Analyze the PCA results
-pca_res = read_plink_table(paste(job_dir,"maf_filter.eigenvec",sep=''),F)
+pca_res = read_plink_table(paste(job_dir,"maf_filter_data.eigenvec",sep=''),F)
 pca_res = pca_res[,-c(1:2)]
 colnames(pca_res) = paste("PC",1:ncol(pca_res),sep='')
 
@@ -284,20 +229,61 @@ all(rownames(pca_res) == names(call_rates_after_filters))
 all(rownames(pca_res) == names(imputed_sex))
 all(rownames(pca_res) == names(raw_call_rates))
 
+# define the samples to exclude for subsequent analysis, get the bed, bgen, and covariate files
+subjects_for_analysis = intersect(rownames(sample_metadata_raw),
+                                  rownames(covariate_matrix))
+subjects_for_analysis = setdiff(subjects_for_analysis,low_cr_samples)
+subjects_for_analysis = setdiff(subjects_for_analysis,sex_errs)
+
 # put all covariates in one table
-covariate_matrix = cbind(sample_metadata_raw[rownames(pca_res),c(6:8,11,12:17,20:23)],
+covariate_matrix = cbind(sample_metadata_raw[subjects_for_analysis,c(6:8,11,12:17,20:23)],
                          raw_call_rates,call_rates_after_filters,imputed_sex,
                          pca_res)
 # note that the plink data may have additional samples not in the samples
 # we wish to analyze in this specific project.
 # We therefore have to make sure we proceed only with subjects in the metadata
 # file.
-covariate_matrix = covariate_matrix[intersect(rownames(sample_metadata_raw),
-                                              rownames(covariate_matrix)),]
+covariate_matrix = covariate_matrix[subjects_for_analysis,]
 length(intersect(sex_errs,rownames(covariate_matrix)))
 write.table(covariate_matrix,file=
               paste(job_dir,"integrated_sample_metadata_and_covariates.txt",sep=''),
             sep="\t",quote=F)
+
+####################################################################################################
+####################################################################################################
+####################################################################################################
+
+write.table(covariate_matrix[,c("FID","IID")],file=
+              paste(job_dir,"subjects_for_analysis.txt",sep=''),
+            sep="\t",quote=F,row.names = F)
+err_path = paste(job_dir,"exclude_failed_subjects.err",sep="")
+log_path = paste(job_dir,"exclude_failed_subjects.log",sep="")
+curr_cmd = paste("plink --bfile",paste(job_dir,"chr_filter",sep=''),
+                 "--keep",paste(job_dir,"subjects_for_analysis.txt",sep=''),
+                 "--freq --missing --make-bed --out",paste(job_dir,"final_dataset_for_analysis",sep=''))
+curr_sh_file = "exclude_failed_subjects.sh"
+print_sh_file(paste(job_dir,curr_sh_file,sep=''),
+              get_sh_default_prefix(err_path,log_path),curr_cmd)
+system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
+
+
+####################################################################################################
+####################################################################################################
+####################################################################################################
+# Transform the dataset into HRC-based data
+# Run the check_bim analysis
+err_path = paste(job_dir,"run_check_bim.err",sep="")
+log_path = paste(job_dir,"run_check_bim.log",sep="")
+system(paste("cp /home/users/davidama/apps/check_bim/HRC-1000G-check-bim-NoReadKey.pl",job_dir))
+curr_cmd = paste("perl", paste(job_dir, "HRC-1000G-check-bim-NoReadKey.pl",sep=""),
+                 "-b", paste(job_dir,"final_dataset_for_analysis.bim",sep=''),
+                 "-f", paste(job_dir,"final_dataset_for_analysis.frq",sep=''),
+                 "-hrc -p EUR -r",
+                 "/home/users/davidama/apps/check_bim/HRC.r1-1.GRCh37.wgs.mac5.sites.tab")
+curr_sh_file = "run_check_bim.sh"
+print_sh_file(paste(job_dir,curr_sh_file,sep=''),
+              get_sh_default_prefix(err_path,log_path),curr_cmd)
+system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
 
 # # ####################################################################################################
 # # ####################################################################################################
@@ -368,272 +354,4 @@ write.table(covariate_matrix,file=
 #      type="b", pch = 19, frame = FALSE, 
 #      xlab="Number of clusters K",
 #      ylab="Total within-clusters sum of squares")
-
-####################################################################################################
-####################################################################################################
-####################################################################################################
-# job_dir = "/Users/David/Desktop/elite/analysis/" # for local tests
-# run_loacally = T
-# From here: prepare data and run GWAS
-covariate_matrix = read.delim(paste(job_dir,"integrated_sample_metadata_and_covariates.txt",sep=''),stringsAsFactors = F)
-covariate_matrix[covariate_matrix==""] = NA
-
-# Fill in some info:
-# No shipment date into one batch
-covariate_matrix$Shipment.date[is.na(covariate_matrix$Shipment.date)] = "uknown"
-
-# read our fam file
-fam_info = read_plink_table(paste(job_dir,"maf_filter.fam",sep=""),has_header = F)
-iid_to_fid = fam_info[,1]
-
-# Exclude samples with low call rate and error in sex inference
-sex_analysis_report = read.delim(file=paste(job_dir,"sex_impute_analysis_report.txt",sep=''))
-excluded_samples = union(rownames(sex_analysis_report),rownames(covariate_matrix)[covariate_matrix$call_rates_after_filters<0.98])
-remaining_samples = rownames(covariate_matrix)[!is.element(rownames(covariate_matrix),set=excluded_samples)]
-
-# Print excluded into file
-m1 = cbind(iid_to_fid[excluded_samples],excluded_samples)
-colnames(m1) = c("FID","IID")
-write.table(m1,file = paste(job_dir,"gwas_excluded_samples.txt",sep=''),row.names = F,col.names = T,quote=F,sep=" ")
-
-Y_missing_report = read_plink_table(paste(job_dir,"Y_snps_analysis.imiss",sep=''))
-Y_inferred_sex = Y_missing_report[,6] == "nan"
-Sex = Y_inferred_sex[remaining_samples]
-Sex[Sex] = "2"
-Sex[Sex=="FALSE"] = "1"
-table(Sex)
-
-# Create phe file for GWAS 
-pheno_cols = c(
-  "Cohort",
-  "Shipment.date",
-  "Age..at.test.",
-  paste("PC",1:10,sep="")
-)
-pheno_data = cbind(remaining_samples,Sex,covariate_matrix[remaining_samples,pheno_cols])
-# Correct the cohort
-pheno_data$Cohort[pheno_data$Cohort=="ELITE"] = "1"
-pheno_data$Cohort[pheno_data$Cohort=="Cooper"] = "0"
-pheno_data$Cohort[pheno_data$Cohort=="genepool"] = "-1"
-pheno_data$Cohort = as.numeric(pheno_data$Cohort)
-
-for(j in 4:4){
-  pheno_data[[j]] = cov_phe_col_to_plink_numeric_format(pheno_data[[j]])
-}
-
-# write phe files
-pheno_data = cbind(as.character(iid_to_fid[remaining_samples]),pheno_data)
-colnames(pheno_data) = c("FID","IID","sex","ExerciseGroup","Batch","Age",paste("PC",1:10,sep=""))
-table(pheno_data$Age)
-write.table(file=paste(job_dir,"three_group_analysis_genepool_controls.phe",sep=''),
-            pheno_data,sep=" ",row.names = F,col.names = T,quote=F)
-write.table(file=paste(job_dir,"three_group_analysis_sex_update.phe",sep=''),
-            pheno_data[,1:3],sep=" ",row.names = F,col.names = T,quote=F)
-
-
-####################################################################################################
-####################################################################################################
-####################################################################################################
-# A set of GWAS runs starts here
-
-# 0. Linear for all groups + age, sex, 5 PCs
-pheno_file = paste(job_dir,"three_group_analysis_genepool_controls.phe",sep='')
-covar_file = paste(job_dir,"three_group_analysis_genepool_controls.phe",sep='')
-#jobs_before = get_my_jobs()
-err_path = paste(job_dir,"gwas_three_groups_linear.err",sep="")
-log_path = paste(job_dir,"gwas_three_groups_linear.log",sep="")
-curr_cmd = paste("plink2",
-                 "--bfile",paste(job_dir,"maf_filter",sep=''),
-                 "--linear hide-covar",
-                 paste("--pheno",pheno_file),
-                 paste("--pheno-name ExerciseGroup"),
-                 "--allow-no-sex",
-                 paste("--covar",covar_file),
-                 "--covar-name sex,Batch,Age,PC1,PC2,PC3,PC4,PC5",
-                 "--adjust",
-                 "--out",paste(job_dir,"gwas_three_groups_linear",sep=''))
-curr_sh_file = "gwas_three_groups_linear.sh"
-print_sh_file(paste(job_dir,curr_sh_file,sep=''),
-              get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,"plink/2.0a1",2,10000),curr_cmd)
-system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
-wait_for_job()
-
-# 1. Linear for all groups + sex, 5 PCs
-pheno_file = paste(job_dir,"three_group_analysis_genepool_controls.phe",sep='')
-covar_file = paste(job_dir,"three_group_analysis_genepool_controls.phe",sep='')
-#jobs_before = get_my_jobs()
-err_path = paste(job_dir,"gwas_three_groups_linear.err",sep="")
-log_path = paste(job_dir,"gwas_three_groups_linear.log",sep="")
-curr_cmd = paste("plink2",
-                 "--bfile",paste(job_dir,"maf_filter",sep=''),
-                 "--linear hide-covar",
-                 paste("--pheno",pheno_file),
-                 paste("--pheno-name ExerciseGroup"),
-                 "--allow-no-sex",
-                 paste("--covar",covar_file),
-                 "--covar-name sex,Batch,PC1,PC2,PC3,PC4,PC5",
-                 "--adjust",
-                 "--out",paste(job_dir,"gwas_three_groups_linear_no_age",sep=''))
-curr_sh_file = "gwas_three_groups_linear.sh"
-print_sh_file(paste(job_dir,curr_sh_file,sep=''),
-              get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,"plink/2.0a1",2,10000),curr_cmd)
-system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
-wait_for_job()
-
-# 3. Logistic Cooper vs. Genepool without age
-table(pheno_data$ExerciseGroup)
-sample_inds = pheno_data$ExerciseGroup != "1"
-curr_pheno = pheno_data[sample_inds,]
-curr_pheno[,4] = as.character(as.numeric(curr_pheno[,4]+1))
-pheno_file = paste(job_dir,"cooper_vs_genepool.phe",sep='')
-write.table(file=pheno_file,curr_pheno[,c(1:2,4)],sep=" ",row.names = F,col.names = T,quote=F)
-covar_file = paste(job_dir,"cooper_vs_genepool_covar.phe",sep='')
-write.table(file=covar_file,curr_pheno[,-4],sep=" ",row.names = F,col.names = T,quote=F)
-#jobs_before = get_my_jobs()
-err_path = paste(job_dir,"cooper_vs_genepool.err",sep="")
-log_path = paste(job_dir,"cooper_vs_genepool.log",sep="")
-curr_cmd = paste("plink2",
-                 "--bfile",paste(job_dir,"maf_filter",sep=''),
-                 "--logistic hide-covar firth-fallback",
-                 "--1",
-                 paste("--pheno",pheno_file),
-                 paste("--pheno-name ExerciseGroup"),
-                 "--allow-no-sex",
-                 paste("--covar",covar_file),
-                 "--covar-name sex,Batch,PC1,PC2,PC3,PC4,PC5",
-                 "--adjust",
-                 "--out",paste(job_dir,"cooper_vs_genepool",sep=''))
-curr_sh_file = "cooper_vs_genepool.sh"
-print_sh_file(paste(job_dir,curr_sh_file,sep=''),
-              get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,"plink/2.0a1",2,10000),curr_cmd)
-system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
-wait_for_job()
-
-# 4. Logistic Cooper vs. Elite with age
-table(pheno_data$ExerciseGroup)
-sample_inds = pheno_data$ExerciseGroup != "-1"
-curr_pheno = pheno_data[sample_inds,]
-curr_pheno[,4] = as.character(as.numeric(curr_pheno[,4]+1))
-pheno_file = paste(job_dir,"cooper_vs_elite.phe",sep='')
-write.table(file=pheno_file,curr_pheno[,c(1:2,4)],sep=" ",row.names = F,col.names = T,quote=F)
-covar_file = paste(job_dir,"cooper_vs_elite.phe",sep='')
-write.table(file=covar_file,curr_pheno[,-4],sep=" ",row.names = F,col.names = T,quote=F)
-#jobs_before = get_my_jobs()
-err_path = paste(job_dir,"cooper_vs_elite.err",sep="")
-log_path = paste(job_dir,"cooper_vs_elite.log",sep="")
-curr_cmd = paste("plink2",
-                 "--bfile",paste(job_dir,"maf_filter",sep=''),
-                 "--logistic hide-covar firth-fallback",
-                 "--1",
-                 paste("--pheno",pheno_file),
-                 paste("--pheno-name ExerciseGroup"),
-                 "--allow-no-sex",
-                 paste("--covar",covar_file),
-                 "--covar-name sex,Age,Batch,PC1,PC2,PC3,PC4,PC5",
-                 "--adjust",
-                 "--out",paste(job_dir,"cooper_vs_elite",sep=''))
-curr_sh_file = "cooper_vs_elite.sh"
-print_sh_file(paste(job_dir,curr_sh_file,sep=''),
-              get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,"plink/2.0a1",2,10000),curr_cmd)
-system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
-wait_for_job()
-
-# ####################################################################################################
-# ####################################################################################################
-# ####################################################################################################
-# Repeat the GWAS above after applying PCA and clustering, number of clusters is a parameter
-# given by the user. This is determined based on either some prior knowledge or by looking at the
-# elbow plot of kmeans.
-d = covariate_matrix
-d2 = sample_metadata_raw
-d2_ids = paste(d2$SentrixBarcode_A,d2$SentrixPosition_A,sep="_")
-samp_id = d2$Sample_ID
-altsamp_id = d2$alt_sample_id
-names(samp_id) = d2_ids
-names(altsamp_id) = d2_ids
-is_jap = grepl(altsamp_id,pattern="JA"); names(is_jap) = d2_ids
-
-# Cluster by the first two PCs
-pc_x = as.matrix(d[,c("PC1","PC2")])
-pc_x_kmeans = kmeans(pc_x,num_pca_clusters)
-table(pc_x_kmeans$cluster)
-table(pc_x_kmeans$cluster,d$Cohort)
-kmeans_res = pc_x_kmeans$cluster
-
-# Select subjects from the largest cluster
-clustable = table(kmeans_res)
-selected_cluster = names(which(clustable == max(clustable)))
-selected_subjects = names(which(kmeans_res == selected_cluster))
-
-# 0. Linear for all groups + age, sex, 5 PCs
-sample_inds = is.element(rownames(pheno_data),set=selected_subjects)
-pheno_file = paste(job_dir,"three_group_analysis_genepool_controls_pcafilter.phe",sep='')
-covar_file = paste(job_dir,"three_group_analysis_genepool_controls_pcafilter.phe",sep='')
-curr_pheno = pheno_data[sample_inds,]
-write.table(file=pheno_file,curr_pheno[,c(1:2,4)],sep=" ",row.names = F,col.names = T,quote=F)
-write.table(file=covar_file,curr_pheno[,-4],sep=" ",row.names = F,col.names = T,quote=F)
-err_path = paste(job_dir,"gwas_three_groups_linear_pcafilter.err",sep="")
-log_path = paste(job_dir,"gwas_three_groups_linear_pcafilter.log",sep="")
-curr_cmd = paste("plink2",
-                 "--bfile",paste(job_dir,"maf_filter",sep=''),
-                 "--linear hide-covar",
-                 paste("--pheno",pheno_file),
-                 paste("--pheno-name ExerciseGroup"),
-                 "--allow-no-sex",
-                 paste("--covar",covar_file),
-                 "--covar-name sex,Batch,Age,PC1,PC2,PC3,PC4,PC5",
-                 "--adjust",
-                 "--out",paste(job_dir,"gwas_three_groups_linear_pcafilter",sep=''))
-curr_sh_file = "gwas_three_groups_linear_pcafilter.sh"
-print_sh_file(paste(job_dir,curr_sh_file,sep=''),
-              get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,"plink/2.0a1",2,10000),curr_cmd)
-system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
-wait_for_job()
-
-# 4. Logistic Cooper vs. Elite with age
-sample_inds = is.element(rownames(pheno_data),set=selected_subjects) & pheno_data$ExerciseGroup != "-1"
-curr_pheno = pheno_data[sample_inds,]
-pheno_file = paste(job_dir,"cooper_vs_elite_pcafilter.phe",sep='')
-write.table(file=pheno_file,curr_pheno[,c(1:2,4)],sep=" ",row.names = F,col.names = T,quote=F)
-covar_file = paste(job_dir,"cooper_vs_elite_covars_pcafilter.phe",sep='')
-write.table(file=covar_file,curr_pheno[,-4],sep=" ",row.names = F,col.names = T,quote=F)
-err_path = paste(job_dir,"cooper_vs_elite_pcafilter.err",sep="")
-log_path = paste(job_dir,"cooper_vs_elite_pcafilter.log",sep="")
-curr_cmd = paste("plink2",
-                 "--bfile",paste(job_dir,"maf_filter",sep=''),
-                 "--logistic hide-covar firth-fallback",
-                 "--1",
-                 paste("--pheno",pheno_file),
-                 paste("--pheno-name ExerciseGroup"),
-                 "--allow-no-sex",
-                 paste("--covar",covar_file),
-                 "--covar-name sex,Age,Batch,PC1,PC2,PC3,PC4,PC5",
-                 "--adjust",
-                 "--out",paste(job_dir,"cooper_vs_elite_pcafilter",sep=''))
-curr_sh_file = "cooper_vs_elite_pcafilter.sh"
-print_sh_file(paste(job_dir,curr_sh_file,sep=''),
-              get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,"plink/2.0a1",2,10000),curr_cmd)
-system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
-wait_for_job()
-
-# ####################################################################################################
-# ####################################################################################################
-# ####################################################################################################
-# ####################################################################################################
-# ####################################################################################################
-# ####################################################################################################
-# ####################################################################################################
-# ####################################################################################################
-# ####################################################################################################
-# Print all GWAS results in FUMA's format
-create_fuma_files_for_fir(job_dir,
-                          paste(job_dir,"maf_filter.bim",sep=""),
-                          paste(job_dir,"maf_filter.frq",sep=""))
-
-
-
-
-
-
-
 

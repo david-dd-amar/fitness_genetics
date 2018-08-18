@@ -78,7 +78,7 @@ get_my_jobs<-function(){
   jobs = jobs[,-1]
   jobs = jobs[jobs[,1]!="bash",]
   system(paste("rm",tmp))
-  #new_jobs = rownames(jobs)[jobs[,5]=="RUNNING" | jobs[,5]=="PENDING"]
+  new_jobs = rownames(jobs)[jobs[,5]=="RUNNING" | jobs[,5]=="PENDING"]
   return(jobs)
 }
 get_job_id<-function(x){return(x[1])}
@@ -86,14 +86,14 @@ wait_for_job<-function(jobs_before=NULL,waittime=6,max_wait=6000){
   Sys.sleep(waittime)
   curr_jobs = get_my_jobs()
   new_jobs = rownames(curr_jobs)[curr_jobs[,5]=="RUNNING" | curr_jobs[,5]=="PENDING"]
-  if(length(new_jobs)==0){return(NULL)}
+  if(length(new_jobs)==0){return(matrix(NA,0,0))}
   print(paste("new added jobs are: ",new_jobs))
   i = 1
   while(T){
     Sys.sleep(waittime)
     curr_jobs = get_my_jobs()
     new_jobs = rownames(curr_jobs)[curr_jobs[,5]=="RUNNING" | curr_jobs[,5]=="PENDING"]
-    if(length(new_jobs)==0){return(NULL)}
+    if(length(new_jobs)==0){return(matrix(NA,0,0))}
     i=i+1
     if(i>max_wait){break}
   }

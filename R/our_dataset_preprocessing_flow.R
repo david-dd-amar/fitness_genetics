@@ -31,6 +31,7 @@ sample_metadata = "/oak/stanford/groups/euan/projects/fitness_genetics/metadata/
 script_file = "/home/users/davidama/repos/fitness_genetics/R/gwas_flow_helper_functions.R"
 script_file = "/oak/stanford/groups/euan/projects/fitness_genetics/scripts/fitness_genetics/R/gwas_flow_helper_functions.R"
 source(script_file)
+setwd(job_dir)
 
 # TODO:
 # 1. (Later, low pref for now) Adapt the code to handle NULL snp and sample reports.
@@ -258,7 +259,7 @@ write.table(covariate_matrix[,c("FID","IID")],file=
             sep="\t",quote=F,row.names = F)
 err_path = paste(job_dir,"exclude_failed_subjects.err",sep="")
 log_path = paste(job_dir,"exclude_failed_subjects.log",sep="")
-curr_cmd = paste("plink --bfile",paste(job_dir,"chr_filter",sep=''),
+curr_cmd = paste("plink --bfile",paste(job_dir,"maf_filter_data",sep=''),
                  "--keep",paste(job_dir,"subjects_for_analysis.txt",sep=''),
                  "--freq --missing --make-bed --out",paste(job_dir,"final_dataset_for_analysis",sep=''))
 curr_sh_file = "exclude_failed_subjects.sh"
@@ -284,6 +285,33 @@ curr_sh_file = "run_check_bim.sh"
 print_sh_file(paste(job_dir,curr_sh_file,sep=''),
               get_sh_default_prefix(err_path,log_path),curr_cmd)
 system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
+system(paste("mv /home/users/davidama/apps/check_bim/*final_dataset_for_analysis*",job_dir))
+system(paste("mv /home/users/davidama/apps/check_bim/Run-plink.sh",job_dir))
+system(paste("less ",job_dir,"Run-plink.sh | grep TEMP > ",job_dir,"Run-plink2.sh",sep=""))
+
+err_path = paste(job_dir,"run_check_bim_update.err",sep="")
+log_path = paste(job_dir,"run_check_bim_update.log",sep="")
+plink_commands = readLines(paste(job_dir,"Run-plink2.sh",sep=""))
+curr_sh_file = "run_check_bim_update.sh"
+print_sh_file(paste(job_dir,curr_sh_file,sep=''),
+              get_sh_default_prefix(err_path,log_path),plink_commands)
+system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
+
+# To download and install the tools on the cluster
+# 1. Check bim:
+# wget http://www.well.ox.ac.uk/~wrayner/tools/HRC-1000G-check-bim-v4.2.9-NoReadKey.zip
+# unzip HRC-1000G-check-bim-v4.2.9-NoReadKey.zip
+# mkdir check_bim
+# mv HRC* check_bim/
+# mv LICENSE.txt check_bim/
+# cd check_bim
+# wget ftp://ngs.sanger.ac.uk/production/hrc/HRC.r1-1/HRC.r1-1.GRCh37.wgs.mac5.sites.tab.gz
+# gunzip HRC.r1-1.GRCh37.wgs.mac5.sites.tab.gz
+#
+# 2. Strand analysis:
+# mkdir ~/apps/wrayner_strand/
+# cd ~/apps/wrayner_strand
+# wget http://www.well.ox.ac.uk/~wrayner/strand/update_build.sh
 
 # # ####################################################################################################
 # # ####################################################################################################

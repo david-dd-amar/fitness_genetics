@@ -70,6 +70,10 @@ for(chr in names(intersected_locations)){
     intersected_locations[[chr]][[3]],intersected_locations[[chr]][[4]]
   ))
 }
+# Order the SNPs by location: prevents issues with PLINK
+m = bim_data2[[1]][final_shared_snps[,2],]
+ord = order(as.numeric(m[,1]),as.numeric(m[,4]))
+final_shared_snps = final_shared_snps[ord,]
 save(intersected_locations,final_shared_snps,file=paste(out_path,"bim_overlap_analysis_results.RData",sep=""))
 
 # Create the reduced files
@@ -80,9 +84,9 @@ reduce_snps_using_plink<-function(bfile,snps,out_path,snpfile,newbedfile,batch_s
               row.names = F,col.names = F,quote = F)
   err_path = paste(out_path,"reduce_snps",snpfile,".err",sep="")
   log_path = paste(out_path,"reduce_snps",snpfile,".log",sep="")
-  curr_cmd = paste("plink2 --bfile",bfile,
+  curr_cmd = paste("plink --bfile",bfile,
                    "--extract",paste(out_path,snpfile,".txt",sep=''),
-                   "--freq --sort-vars --make-bed --out",paste(out_path,newbedfile,sep=''))
+                   "--freq --make-bed --out",paste(out_path,newbedfile,sep=''))
   curr_sh_file = paste(out_path,"reduce_snps",snpfile,".sh",sep="")
   batch_script_prefix = batch_script_func(err_path,log_path,...)
   print_sh_file(curr_sh_file,batch_script_prefix,curr_cmd)
@@ -90,43 +94,18 @@ reduce_snps_using_plink<-function(bfile,snps,out_path,snpfile,newbedfile,batch_s
 }
 load(paste(out_path,"bim_overlap_analysis_results.RData",sep=""))
 reduce_snps_using_plink(bfile2,final_shared_snps[,2],out_path,"file2_shared_snps","new_bed_2",
-                        get_sh_prefix_one_node_specify_cpu_and_mem,
-                        plink_pkg="plink/2.0a1",mem_size=16000,Ncpu=1)
+                        get_sh_default_prefix)
 reduce_snps_using_plink(bfile1,final_shared_snps[,1],out_path,"file1_shared_snps","new_bed_1",
-                        get_sh_prefix_one_node_specify_cpu_and_mem,
-                        plink_pkg="plink/2.0a1",mem_size=16000,Ncpu=1)
+                        get_sh_default_prefix)
 
 # Print the new bed file for file 2
 conv_ids = final_shared_snps[,1];names(conv_ids) = final_shared_snps[,2]
-new_bed_2_bim = process_bim_data(paste(out_path,new_bed_2,sep=""))
+new_bed_2_bim = process_bim_data(paste(out_path,"new_bed_2",sep=""))
 newbim2 = new_bed_2_bim[[1]]
 newbim2[,2] = conv_ids[newbim2[,2]]
 rownames(newbim2) = NULL
 write.table(newbim2,file=paste(out_path,"new_bed_2_alt.bim",sep=""),sep="\t",
             row.names=F,col.names=F,quote=F)
-
-# Convert to pgen
-err_path = paste(out_path,"convert2bgen2.err",sep="")
-log_path = paste(out_path,"convert2bgen2.log",sep="")
-curr_sbatch_prefix = get_sh_prefix_one_node_specify_cpu_and_mem(
-  err_path,log_path,plink_pkg="plink/2.0a1",mem_size=16000,Ncpu=1)
-curr_cmd = paste("plink2 --bed",paste(out_path,"new_bed_2.bed",sep=''),
-                 "--bim",paste(out_path,"new_bed_2_alt.bim",sep=''),
-                 "--fam", paste(out_path,"new_bed_2.fam",sep=''),
-                 "--make-pgen --sort-vars --out",paste(out_path,"new_pgen2",sep=''))
-curr_sh_file = "convert2bgen2.sh"
-print_sh_file(paste(out_path,curr_sh_file,sep=''), curr_sbatch_prefix,curr_cmd)
-system(paste("sbatch",paste(out_path,curr_sh_file,sep='')))
-
-err_path = paste(out_path,"convert2bgen1.err",sep="")
-log_path = paste(out_path,"convert2bgen1.log",sep="")
-curr_sbatch_prefix = get_sh_prefix_one_node_specify_cpu_and_mem(
-  err_path,log_path,plink_pkg="plink/2.0a1",mem_size=16000,Ncpu=1)
-curr_cmd = paste("plink2 --bfile",paste(out_path,"new_bed_1",sep=''),
-                 "--make-pgen --sort-vars --out",paste(out_path,"new_pgen1",sep=''))
-curr_sh_file = "convert2bgen1.sh"
-print_sh_file(paste(out_path,curr_sh_file,sep=''),curr_sbatch_prefix,curr_cmd)
-system(paste("sbatch",paste(out_path,curr_sh_file,sep='')))
 
 # Convert to bgen
 # August 2018: check rerunning with "id-delim=" because our ids have "_" in them
@@ -134,8 +113,10 @@ err_path = paste(out_path,"convert2bgen2.err",sep="")
 log_path = paste(out_path,"convert2bgen2.log",sep="")
 curr_sbatch_prefix = get_sh_prefix_one_node_specify_cpu_and_mem(
   err_path,log_path,plink_pkg="plink/2.0a1",mem_size=16000,Ncpu=1)
-curr_cmd = paste("~/apps/plink2/./plink2 --pfile",paste(out_path,"new_pgen2",sep=''),
-                 "--export bgen-1.3 --out",paste(out_path,"new_bgen2",sep=''))
+curr_cmd = paste("~/apps/plink2/./plink2 --bed",paste(out_path,"new_bed_2.bed",sep=''),
+                 "--bim",paste(out_path,"new_bed_2_alt.bim",sep=''),
+                 "--fam", paste(out_path,"new_bed_2.fam",sep=''),
+                 "--export bgen-1.3 --out",paste(out_path,"new_bgen_2",sep=''))
 curr_sh_file = "convert2bgen2.sh"
 print_sh_file(paste(out_path,curr_sh_file,sep=''), curr_sbatch_prefix,curr_cmd)
 system(paste("sbatch",paste(out_path,curr_sh_file,sep='')))
@@ -144,8 +125,8 @@ err_path = paste(out_path,"convert2bgen1.err",sep="")
 log_path = paste(out_path,"convert2bgen1.log",sep="")
 curr_sbatch_prefix = get_sh_prefix_one_node_specify_cpu_and_mem(
   err_path,log_path,plink_pkg="plink/2.0a1",mem_size=16000,Ncpu=1)
-curr_cmd = paste("~/apps/plink2/./plink2 --pfile",paste(out_path,"new_pgen1",sep=''),
-                 "--export bgen-1.3 --out",paste(out_path,"new_bgen1",sep=''))
+curr_cmd = paste("~/apps/plink2/./plink2 --bfile",paste(out_path,"new_bed_1",sep=''),
+                 "--export bgen-1.3 --out",paste(out_path,"new_bgen_1",sep=''))
 curr_sh_file = "convert2bgen1.sh"
 print_sh_file(paste(out_path,curr_sh_file,sep=''),curr_sbatch_prefix,curr_cmd)
 system(paste("sbatch",paste(out_path,curr_sh_file,sep='')))
@@ -154,16 +135,62 @@ system(paste("sbatch",paste(out_path,curr_sh_file,sep='')))
 err_path = paste(out_path,"merge_qctool.err",sep="")
 log_path = paste(out_path,"merge_qctool.log",sep="")
 curr_sbatch_prefix = get_sh_prefix_one_node_specify_cpu_and_mem(
-  err_path,log_path,plink_pkg="plink/2.0a1",mem_size=16000,Ncpu=1)
+  err_path,log_path,plink_pkg="plink/2.0a1",mem_size=32000,Ncpu=4,time="24:00:00")
 curr_cmd = paste("~/apps/qctool_v2/build/release/./qctool_v2.0.1", 
-            "-g",paste(out_path,"new_bgen1.bgen",sep=''),
-            "-s",paste(out_path,"new_bgen1.sample",sep=''),
-            "-g",paste(out_path,"new_bgen2.bgen",sep=''),
-            "-s",paste(out_path,"new_bgen2.sample",sep=''),
+            "-g",paste(out_path,"new_bgen_1.bgen",sep=''),
+            "-s",paste(out_path,"new_bgen_1.sample",sep=''),
+            "-g",paste(out_path,"new_bgen_2.bgen",sep=''),
+            "-s",paste(out_path,"new_bgen_2.sample",sep=''),
             "-og",paste(out_path,"merged_data.bgen",sep=''),
             "-os",paste(out_path,"merged_data.sample",sep=''))
-curr_sh_file = "merge_qctool.sh"
+curr_sh_file = "merge_qctool_v2.sh"
 print_sh_file(paste(out_path,curr_sh_file,sep=''),curr_sbatch_prefix,curr_cmd)
+system(paste("sbatch",paste(out_path,curr_sh_file,sep='')))
+
+# convert merged data into bed
+err_path = paste(out_path,"bgen_to_bed.err",sep="")
+log_path = paste(out_path,"bgen_to_bed.log",sep="")
+curr_cmd = paste("plink2 --bgen",paste(out_path,"merged_data.bgen",sep=""),
+                 "--sample",paste(out_path,"merged_data.sample",sep=""),
+                 "--make-bed --out",paste(out_path,"merged_data_qctool_bed",sep=''))
+curr_sh_file = "bgen_to_bed.sh"
+print_sh_file(paste(out_path,curr_sh_file,sep=''),
+              get_sh_prefix_bigmem(err_path,log_path,Ncpu=1,mem_size=256000,plink_pkg = "plink/2.0a1"),curr_cmd)
+system(paste("sbatch",paste(out_path,curr_sh_file,sep='')))
+
+# Add frq and PCA
+err_path = paste(out_path,"merge_qctool_pca.err",sep="")
+log_path = paste(out_path,"merge_qctool_pca.log",sep="")
+curr_cmd = paste("plink --bfile",paste(out_path,"merged_data_qctool_bed",sep=''),
+                 "--pca --freq --out",paste(out_path,"merged_data_qctool_bed",sep=''))
+curr_sh_file = "merge_qctool_pca.sh"
+print_sh_file(paste(out_path,curr_sh_file,sep=''),
+              get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,Ncpu=4,mem_size=32000),curr_cmd)
+system(paste("sbatch",paste(out_path,curr_sh_file,sep='')))
+
+
+
+# As a reference we do a simple merge using PLINK
+err_path = paste(out_path,"merge_plink.err",sep="")
+log_path = paste(out_path,"merge_plink.log",sep="")
+curr_cmd = paste("plink --bed",paste(out_path,"new_bed_2.bed",sep=''),
+                 "--bim",paste(out_path,"new_bed_2_alt.bim",sep=''),
+                 "--fam", paste(out_path,"new_bed_2.fam",sep=''),
+                 "--bmerge",paste(out_path,"new_bed_1",sep=''),
+                 "--make-bed --out",paste(out_path,"merged_data_plink",sep=''))
+curr_sh_file = "merge_plink.sh"
+print_sh_file(paste(out_path,curr_sh_file,sep=''),
+              get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,Ncpu=4,mem_size=32000),curr_cmd)
+system(paste("sbatch",paste(out_path,curr_sh_file,sep='')))
+
+# Add frq and PCA
+err_path = paste(out_path,"merge_plink_pca.err",sep="")
+log_path = paste(out_path,"merge_plink_pca.log",sep="")
+curr_cmd = paste("plink --bfile",paste(out_path,"merged_data_plink",sep=''),
+                 "--pca --freq --out",paste(out_path,"merged_data_plink",sep=''))
+curr_sh_file = "merge_plink_pca.sh"
+print_sh_file(paste(out_path,curr_sh_file,sep=''),
+              get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,Ncpu=4,mem_size=32000),curr_cmd)
 system(paste("sbatch",paste(out_path,curr_sh_file,sep='')))
 
 

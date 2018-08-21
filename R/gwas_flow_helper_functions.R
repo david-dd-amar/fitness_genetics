@@ -7,11 +7,11 @@ get_sh_default_prefix<-function(err="",log=""){
     c(
       "#!/bin/bash",
       "#",
-      "#SBATCH --time=12:00:00",
+      "#SBATCH --time=6:00:00",
       "#SBATCH --partition=euan,mrivas,normal,owners",
       "#SBATCH --nodes=1",
       "#SBATCH --cpus-per-task=2",
-      "#SBATCH --mem=32000",
+      "#SBATCH --mem=16000",
       paste("#SBATCH --error",err),
       paste("#SBATCH --out",log),
       "",
@@ -22,7 +22,7 @@ get_sh_default_prefix<-function(err="",log=""){
 }
 
 # plink2: plink/2.0a1
-get_sh_prefix_one_node_specify_cpu_and_mem<-function(err="",log="",plink_pkg = "plink/1.90b5.3",Ncpu,mem_size){
+get_sh_prefix_one_node_specify_cpu_and_mem<-function(err="",log="",plink_pkg = "plink/1.90b5.3",Ncpu,mem_size,time="6:00:00"){
   partition_line = "#SBATCH --partition=euan,mrivas,normal,owners"
   if(mem_size>32000){
     partition_line = "#SBATCH --partition=bigmem,euan,mrivas"
@@ -31,7 +31,7 @@ get_sh_prefix_one_node_specify_cpu_and_mem<-function(err="",log="",plink_pkg = "
     c(
       "#!/bin/bash",
       "#",
-      "#SBATCH --time=6:00:00",
+      paste("#SBATCH --time=",time,sep=""),
       partition_line,
       "#SBATCH --nodes=1",
       paste("#SBATCH -c",Ncpu),
@@ -45,12 +45,12 @@ get_sh_prefix_one_node_specify_cpu_and_mem<-function(err="",log="",plink_pkg = "
   )
 }
 
-get_sh_prefix_bigmem<-function(err="",log="",plink_pkg = "plink/1.90b5.3",Ncpu=1,mem_size){
+get_sh_prefix_bigmem<-function(err="",log="",plink_pkg = "plink/1.90b5.3",Ncpu=1,mem_size,time="6:00:00"){
   return(
     c(
       "#!/bin/bash",
       "#",
-      "#SBATCH --time=6:00:00",
+      paste("#SBATCH --time=",time,sep=""),
       "#SBATCH --partition=bigmem",
       paste("#SBATCH -c",Ncpu),
       paste("#SBATCH --mem=",mem_size,sep=""),

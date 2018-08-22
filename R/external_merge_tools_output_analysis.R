@@ -10,8 +10,15 @@ external_covars_path = "/oak/stanford/groups/euan/projects/fitness_genetics/ukbb
 # this should have our original pca results: important for us
 our_covars_path = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl/three_group_analysis_genepool_controls.phe"
 our_metadata = "/oak/stanford/groups/euan/projects/fitness_genetics/metadata/merged_metadata_file_stanford3k_elite_cooper.txt"
-out_path = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl_fwd_with_ukbb1/gwas/"
+out_path = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl_fwd_with_ukbb1/gwas_10pcs/"
 try({system(paste("mkdir",out_path))})
+external_data_mafs = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl_fwd_with_ukbb1/new_bed_1.frq"
+our_data_mafs = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl_fwd_with_ukbb1/new_bed_2.frq"
+our_data_mafs_by_group = list(
+  "genepool" = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl_fwd_strand/genepool_cohort_freq.frq",
+  "cooper" = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl_fwd_strand/Cooper_cohort_freq.frq",
+  "elite" = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl_fwd_strand/ELITE_cohort_freq.frq"
+)
 
 # The steps of the analysis below
 # 1. Use our dataset to determine "white" subjects
@@ -134,7 +141,7 @@ curr_cmd = paste("plink2",
                  paste("--pheno",covar_file),
                  paste("--pheno-name ExerciseGroup"),
                  paste("--covar",covar_file),
-                 "--covar-name sex,Age,PC1,PC2,PC3,PC4,PC5",
+                 "--covar-name sex,Age,PC1,PC2,PC3,PC4,PC5,PC6,PC7,PC8,PC9,PC10",
                  "--adjust",
                  "--out",paste(out_path,"gwas_three_groups_linear",sep=''))
 curr_sh_file = "gwas_three_groups_linear.sh"
@@ -155,7 +162,7 @@ curr_cmd = paste("plink2",
                  paste("--pheno",covar_file),
                  paste("--pheno-name ExerciseGroup"),
                  paste("--covar",covar_file),
-                 "--covar-name sex,Age,PC1,PC2,PC3,PC4,PC5",
+                 "--covar-name sex,Age,PC1,PC2,PC3,PC4,PC5,PC6,PC7,PC8,PC9,PC10",
                  "--adjust --out",paste(out_path,"ukbb_vs_elite_logistic",sep=''))
 curr_sh_file = "ukbb_vs_elite_logistic.sh"
 print_sh_file(paste(out_path,curr_sh_file,sep=''),
@@ -174,7 +181,7 @@ curr_cmd = paste("plink2",
                  paste("--pheno",covar_file),
                  paste("--pheno-name ExerciseGroup"),
                  paste("--covar",covar_file),
-                 "--covar-name sex,Age,PC1,PC2,PC3,PC4,PC5",
+                 "--covar-name sex,Age,PC1,PC2,PC3,PC4,PC5,PC6,PC7,PC8,PC9,PC10",
                  "--adjust --out",paste(out_path,"ukbb_vs_cooper_logistic",sep=''))
 curr_sh_file = "ukbb_vs_cooper_logistic.sh"
 print_sh_file(paste(out_path,curr_sh_file,sep=''),
@@ -199,7 +206,7 @@ curr_cmd = paste("plink2",
                  paste("--pheno",covar_file),
                  paste("--pheno-name ExerciseGroup"),
                  paste("--covar",covar_file),
-                 "--covar-name sex,PC1,PC2,PC3,PC4,PC5",
+                 "--covar-name sex,PC1,PC2,PC3,PC4,PC5,PC6,PC7,PC8,PC9,PC10",
                  "--adjust --out",paste(out_path,"ukbb_vs_genepool_logistic",sep=''))
 curr_sh_file = "ukbb_vs_genepool_logistic.sh"
 print_sh_file(paste(out_path,curr_sh_file,sep=''),
@@ -218,42 +225,103 @@ write.table(file=covar_file,covars_copy,sep=" ",row.names = F,col.names = T,quot
 err_path = paste(out_path,"ukbb_vs_nonukbb.err",sep="")
 log_path = paste(out_path,"ukbb_vs_nonukbb.log",sep="")
 curr_cmd = paste("plink",
-                 "--bfile",bfile,"--logistic hide-covar firth-fallback --flip-scan",
+                 "--bfile",bfile,"--logistic --flip-scan --allow-no-sex --test-missing",
                  paste("--pheno",covar_file),
                  paste("--pheno-name ExerciseGroup"),
-                 paste("--covar",covar_file),
-                 "--covar-name sex,PC1,PC2,PC3,PC4,PC5",
                  "--adjust --out",paste(out_path,"ukbb_vs_nonukbb_logistic",sep=''))
 curr_sh_file = "ukbb_vs_nonukbb_logistic.sh"
 print_sh_file(paste(out_path,curr_sh_file,sep=''),
               get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,Ncpu=2,mem_size = 10000),curr_cmd)
 system(paste("sbatch",paste(out_path,curr_sh_file,sep='')))
 
-# ####################################################################################################
-# ####################################################################################################
-# ####################################################################################################
-# ####################################################################################################
-# Print all GWAS results in FUMA's format
+####################################################################################################
+####################################################################################################
+####################################################################################################
+####################################################################################################
+# Analysis of the sanity check results
+# mafs
+get_mafs_from_file<-function(path){
+  freqs = read.table(path,header=T,stringsAsFactors = F)
+  rownames(freqs) = freqs[,2]
+  mafs = freqs$MAF;names(mafs)=rownames(freqs)
+  return(mafs)
+}
+combined_mafs = get_mafs_from_file(paste(bfile,".frq",sep=""))
+our_mafs = get_mafs_from_file(our_data_mafs)
+external_mafs = get_mafs_from_file(external_data_mafs)
+names(our_mafs) = names(external_mafs)
+our_group_mafs = lapply(our_data_mafs_by_group,get_mafs_from_file)
+cor(our_group_mafs[[1]],our_group_mafs[[2]])
 
-from_our_sol_to_fuma_res<-function(assoc_file,bim_file,freq_file=NULL,maf = 0.001,p=1){
-  res = read.delim(assoc_file,stringsAsFactors = F)
-  mafs = read.table(freq_file,stringsAsFactors = F,header=F)
-  bim = read.delim(bim_file,stringsAsFactors = F,header=F)
-  rownames(bim) = bim[,2]
-  rownames(mafs) = mafs[,2]
-  rownames(res) = res$ID
-  selected_snps = intersect(
-    rownames(res)[res$UNADJ <= p],
-    rownames(mafs)[mafs[,5] >= maf]
-  )
-  m = cbind(as.character(bim[selected_snps,1]),as.character(bim[selected_snps,4]),res[selected_snps,]$UNADJ)
-  colnames(m) = c("chromosome","position","P-value")
-  return(m)
+# gwas'
+ukbb_vs_gp_res = read.table(
+  paste(out_path,"ukbb_vs_genepool_logistic.ExerciseGroup.glm.logistic.hybrid.adjusted",sep=''),
+  header=F,stringsAsFactors = F,check.names = F)
+rownames(ukbb_vs_gp_res) = ukbb_vs_gp_res[,2]
+colnames(ukbb_vs_gp_res) = ukbb_vs_gp_res[1,]
+ukbb_vs_gp_res = ukbb_vs_gp_res[-1,]
+ukbb_vs_nonukbb_res = read.table(
+  paste(out_path,"ukbb_vs_nonukbb_logistic.missing.adjusted",sep=""),
+  header=F,stringsAsFactors = F
+)
+rownames(ukbb_vs_nonukbb_res) = ukbb_vs_nonukbb_res[,2]
+colnames(ukbb_vs_nonukbb_res) = ukbb_vs_nonukbb_res[1,]
+ukbb_vs_nonukbb_res = ukbb_vs_nonukbb_res[-1,]
+flipscan_res = read.delim2(
+  paste(out_path,"ukbb_vs_nonukbb_logistic.flipscan",sep=""),
+  header=T,stringsAsFactors = F,na.strings = NULL,sep="\t"
+)
+
+# to interpret these results see: http://zzz.bwh.harvard.edu/plink/dataman.shtml#flipscan
+# basically: snps whose num negatives (column 9) is > 0 are problematic
+flipscan_res = apply(flipscan_res,1,function(x)strsplit(x,split="\\s+")[[1]])
+flengths = sapply(flipscan_res,length)
+negs = as.numeric(sapply(flipscan_res,function(x)x[10]))
+table(flengths==12,negs>0)
+flipscan_problematic_snps = sapply(flipscan_res[flengths==12],function(x)x[3])
+
+# Look at the results
+ps_check1 = as.numeric(ukbb_vs_gp_res[,ncol(ukbb_vs_gp_res)])
+names(ps_check1) = rownames(ukbb_vs_gp_res)
+ps_check2 = as.numeric(ukbb_vs_nonukbb_res[,ncol(ukbb_vs_nonukbb_res)])
+names(ps_check2) = rownames(ukbb_vs_nonukbb_res)
+inds = intersect(names(ps_check2),names(ps_check1))
+cor(ps_check1[inds],ps_check2[inds])
+mafs = freqs$MAF;names(mafs)=rownames(freqs)
+check1_snps = names(ps_check1)[ps_check1<0.001]
+check2_snps = names(ps_check2)[ps_check2<0.001] # means that missing values are not random
+cor(our_mafs,external_mafs)
+
+topX=10000
+tokeep = rep(T,length(our_mafs))
+names(tokeep)=names(our_mafs)
+while(sum(tokeep)>100000){
+  x = our_mafs[tokeep]
+  y = external_mafs[tokeep]
+  l = lm(y~x)
+  print(summary(l))
+  r = residuals(l)
+  absr = abs(r)
+  currthr = sort(absr,decreasing = T)[topX]
+  toremove = names(absr)[absr>=currthr]
+  tokeep[toremove] = F
 }
 
+# table(mafs1[check1_snps]<0.01,mafs2[check1_snps]<0.01)
+# length(intersect(flipscan_problematic_snps,check1_snps))
+
+# snps to ignore: 
+snps_to_exclude_from_results = union(flipscan_problematic_snps,names(mafs2)[mafs2<0.005])
+
+####################################################################################################
+####################################################################################################
+####################################################################################################
+####################################################################################################
+# Print all GWAS results in FUMA's format
 create_fuma_files_for_fir(out_path,
-  paste(out_path,"merged_bed_final_for_gwas.bim",sep=""),
-  paste(out_path,"merged_bed_final_for_gwas.afreq",sep=""))
+  paste(bfile,".bim",sep=""),
+  paste(bfile,".frq",sep=""),
+  snps_to_exclude_from_results=snps_to_exclude_from_results)
 
 ####################################################################################################
 ####################################################################################################

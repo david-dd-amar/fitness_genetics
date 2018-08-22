@@ -33,13 +33,6 @@ script_file = "/oak/stanford/groups/euan/projects/fitness_genetics/scripts/fitne
 source(script_file)
 setwd(job_dir)
 
-# TODO:
-# 1. (Later, low pref for now) Adapt the code to handle NULL snp and sample reports.
-#    In these cases we do SNP/Sample filtering using PLINK's algorithms
-# 3. (?) Before the GWAS: exclude samples with either low quality scores after SNP filters or those
-#    that failed the sex check.
-# 5. Define different GWAS flows and get covariates
-
 ####################################################################################################
 ####################################################################################################
 ####################################################################################################
@@ -267,6 +260,26 @@ print_sh_file(paste(job_dir,curr_sh_file,sep=''),
               get_sh_default_prefix(err_path,log_path),curr_cmd)
 system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
 
+####################################################################################################
+####################################################################################################
+####################################################################################################
+# Create a freq file for each cohort
+covariate_matrix = read.table(paste(job_dir,"integrated_sample_metadata_and_covariates.txt",sep=''),sep="\t")
+table(covariate_matrix$Cohort)
+for(cc in unique(covariate_matrix$Cohort)){
+  inds = covariate_matrix$Cohort == cc
+  m = covariate_matrix[inds,c("FID","IID")]
+  write.table(m,sep=" ",file=paste(job_dir,cc,"_subjects.txt",sep=""),row.names = F,quote = F)
+  err_path = paste(job_dir,cc,"_cohort_freq.err",sep="")
+  log_path = paste(job_dir,cc,"_cohort_freq.log",sep="")
+  curr_cmd = paste("plink --bfile",paste(job_dir,"final_dataset_for_analysis",sep=''),
+                   "--keep",paste(job_dir,cc,"_subjects.txt",sep=""),
+                   "--freq --out",paste(job_dir,cc,"_cohort_freq",sep=""))
+  curr_sh_file = paste(cc,"_cohort_freq.sh",sep="")
+  print_sh_file(paste(job_dir,curr_sh_file,sep=''),
+                get_sh_default_prefix(err_path,log_path),curr_cmd)
+  system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
+}
 
 ####################################################################################################
 ####################################################################################################

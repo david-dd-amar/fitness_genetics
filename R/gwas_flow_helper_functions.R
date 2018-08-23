@@ -245,8 +245,8 @@ two_d_plot_visualize_covariate<-function(x1,x2,cov1,cov2=NULL,cuts=5,...){
   if(is.null(cov2)){cov2=cov1}
   n1 = length(unique(cov1))
   n2 = length(unique(cov2))
-  if(is.numeric(cov1) && n1 > 10){cov1=cut(cov1,breaks = cuts)}
-  if(is.numeric(cov2) && n2 > 10){cov1=cut(cov2,breaks = cuts)}
+  if(is.numeric(cov1) && n1 > 50){cov1=cut(cov1,breaks = cuts)}
+  if(is.numeric(cov2) && n2 > 50){cov1=cut(cov2,breaks = cuts)}
   cov1 = as.factor(cov1)
   cov2 = as.factor(cov2)
   cols = rainbow(length(unique(cov1)))

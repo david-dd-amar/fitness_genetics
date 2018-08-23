@@ -260,6 +260,15 @@ print_sh_file(paste(job_dir,curr_sh_file,sep=''),
               get_sh_default_prefix(err_path,log_path),curr_cmd)
 system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
 
+err_path = paste(job_dir,"final_dataset_pca.err",sep="")
+log_path = paste(job_dir,"final_dataset_pca.log",sep="")
+curr_cmd = paste("plink --bfile",paste(job_dir,"final_dataset_for_analysis",sep=''),
+                 "--pca --out",paste(job_dir,"final_dataset_for_analysis",sep=''))
+curr_sh_file = "final_dataset_pca.sh"
+print_sh_file(paste(job_dir,curr_sh_file,sep=''),
+              get_sh_default_prefix(err_path,log_path),curr_cmd)
+system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
+
 ####################################################################################################
 ####################################################################################################
 ####################################################################################################

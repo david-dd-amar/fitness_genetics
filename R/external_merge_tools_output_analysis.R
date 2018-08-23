@@ -10,7 +10,7 @@ external_covars_path = "/oak/stanford/groups/euan/projects/fitness_genetics/ukbb
 # this should have our original pca results: important for us
 our_covars_path = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl/three_group_analysis_genepool_controls.phe"
 our_metadata = "/oak/stanford/groups/euan/projects/fitness_genetics/metadata/merged_metadata_file_stanford3k_elite_cooper.txt"
-out_path = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl_fwd_with_ukbb1/gwas_10pcs/"
+out_path = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl_fwd_with_ukbb1/gwas/"
 try({system(paste("mkdir",out_path))})
 external_data_mafs = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl_fwd_with_ukbb1/new_bed_1.frq"
 our_data_mafs = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl_fwd_with_ukbb1/new_bed_2.frq"
@@ -109,13 +109,27 @@ cohorts = d$CohortName; table(cohorts)
 d2_analysis_ids = paste(d2$SentrixBarcode_A,d2$SentrixPosition_A,sep="_")
 jap_samples = d2_analysis_ids [is_jap]
 alldata_is_jap = is.element(d$IID,set=jap_samples)
-pc_x = as.matrix(d[,c("PC1","PC2","PC3")])
-rownames(pc_x) = d$IID
+names(alldata_is_jap) = d$IID
 set.seed(123)
-kmeans_res <- kmeans(pc_x, 3, nstart = 25)$cluster
+pc_x = as.matrix(d[,paste("PC",1:10,sep="")])
+rownames(pc_x) = d$IID
+
+# kmeans_res <- kmeans(pc_x, 3, nstart = 25)$cluster
+
+run_hclust<-function(pc_x,k,dd=NULL,h=NULL){
+  if(is.null(dd)){dd = dist(pc_x,method="manhattan")}
+  if(is.null(h)){h = hclust(dd,method = "complete")}
+  clust = cutree(h,k)
+  return(clust)
+}
+dd = dist(pc_x,method="manhattan")
+h = hclust(dd,method = "complete")
+kmeans_res <- run_hclust(pc_x, 10, d=d,h=h)
+
 table(kmeans_res)
-table(kmeans_res,d$CohortName)
-table(kmeans_res,alldata_is_jap) # Japanese are well clustered and removed
+table(kmeans_res,d[rownames(pc_x),]$CohortName)
+table(kmeans_res,alldata_is_jap[rownames(pc_x)]) # Japanese are well clustered and removed
+
 # get the largest cluster and take its subjects
 cl_tb = table(kmeans_res)
 cl_fa = names(cl_tb)[cl_tb==max(cl_tb)]
@@ -141,7 +155,7 @@ curr_cmd = paste("plink2",
                  paste("--pheno",covar_file),
                  paste("--pheno-name ExerciseGroup"),
                  paste("--covar",covar_file),
-                 "--covar-name sex,Age,PC1,PC2,PC3,PC4,PC5,PC6,PC7,PC8,PC9,PC10",
+                 paste("--covar-name sex,Age,",paste(paste("PC",1:5,sep=""),collapse=","),sep="")
                  "--adjust",
                  "--out",paste(out_path,"gwas_three_groups_linear",sep=''))
 curr_sh_file = "gwas_three_groups_linear.sh"
@@ -162,7 +176,7 @@ curr_cmd = paste("plink2",
                  paste("--pheno",covar_file),
                  paste("--pheno-name ExerciseGroup"),
                  paste("--covar",covar_file),
-                 "--covar-name sex,Age,PC1,PC2,PC3,PC4,PC5,PC6,PC7,PC8,PC9,PC10",
+                 paste("--covar-name sex,Age,",paste(paste("PC",1:5,sep=""),collapse=","),sep=""),
                  "--adjust --out",paste(out_path,"ukbb_vs_elite_logistic",sep=''))
 curr_sh_file = "ukbb_vs_elite_logistic.sh"
 print_sh_file(paste(out_path,curr_sh_file,sep=''),
@@ -181,7 +195,7 @@ curr_cmd = paste("plink2",
                  paste("--pheno",covar_file),
                  paste("--pheno-name ExerciseGroup"),
                  paste("--covar",covar_file),
-                 "--covar-name sex,Age,PC1,PC2,PC3,PC4,PC5,PC6,PC7,PC8,PC9,PC10",
+                 paste("--covar-name sex,Age,",paste(paste("PC",1:5,sep=""),collapse=","),sep=""),
                  "--adjust --out",paste(out_path,"ukbb_vs_cooper_logistic",sep=''))
 curr_sh_file = "ukbb_vs_cooper_logistic.sh"
 print_sh_file(paste(out_path,curr_sh_file,sep=''),
@@ -190,7 +204,7 @@ system(paste("sbatch",paste(out_path,curr_sh_file,sep='')))
 
 # Sanity check 1 : UKBB vs. Genepool
 load(paste(out_path,"clustering_data.RData",sep=""))
-d = read.table(paste(out_path,"all_cohorts.phe",sep=''),header=T,stringsAsFactors = F)
+d = read.table(paste(out_path,"kmeans_cleaned.phe",sep=''),header=T,stringsAsFactors = F)
 rownames(d) = d$IID
 d = d[selected_subjects_for_gwas,]
 covars_copy = d[d$CohortName!="elite" & d$CohortName!="cooper",]
@@ -214,7 +228,7 @@ print_sh_file(paste(out_path,curr_sh_file,sep=''),
 system(paste("sbatch",paste(out_path,curr_sh_file,sep='')))
 
 # Sanity check 2: UKBB vs. not UKBB: flip scan
-d = read.table(paste(out_path,"all_cohorts.phe",sep=''),header=T,stringsAsFactors = F)
+d = read.table(paste(out_path,"kmeans_cleaned.phe",sep=''),header=T,stringsAsFactors = F)
 rownames(d) = d$IID
 covars_copy = d
 covars_copy$ExerciseGroup[covars_copy$CohortName=="ukbb"]="1"
@@ -285,33 +299,41 @@ ps_check1 = as.numeric(ukbb_vs_gp_res[,ncol(ukbb_vs_gp_res)])
 names(ps_check1) = rownames(ukbb_vs_gp_res)
 ps_check2 = as.numeric(ukbb_vs_nonukbb_res[,ncol(ukbb_vs_nonukbb_res)])
 names(ps_check2) = rownames(ukbb_vs_nonukbb_res)
-inds = intersect(names(ps_check2),names(ps_check1))
-cor(ps_check1[inds],ps_check2[inds])
-mafs = freqs$MAF;names(mafs)=rownames(freqs)
-check1_snps = names(ps_check1)[ps_check1<0.001]
-check2_snps = names(ps_check2)[ps_check2<0.001] # means that missing values are not random
-cor(our_mafs,external_mafs)
+# inds = intersect(names(ps_check2),names(ps_check1))
+# cor(ps_check1[inds],ps_check2[inds])
+check1_snps = names(ps_check1)[ps_check1<0.00001]
+check2_snps = names(ps_check2)[ps_check2<0.00001] # means that missing values are not random
 
-topX=10000
-tokeep = rep(T,length(our_mafs))
-names(tokeep)=names(our_mafs)
-while(sum(tokeep)>100000){
-  x = our_mafs[tokeep]
-  y = external_mafs[tokeep]
-  l = lm(y~x)
-  print(summary(l))
-  r = residuals(l)
-  absr = abs(r)
-  currthr = sort(absr,decreasing = T)[topX]
-  toremove = names(absr)[absr>=currthr]
-  tokeep[toremove] = F
-}
+# topX=10000
+# tokeep = rep(T,length(our_mafs))
+# names(tokeep)=names(our_mafs)
+# while(sum(tokeep)>100000){
+#   x = our_mafs[tokeep]
+#   y = external_mafs[tokeep]
+#   l = lm(y~x)
+#   print(summary(l))
+#   r = residuals(l)
+#   absr = abs(r)
+#   currthr = sort(absr,decreasing = T)[topX]
+#   toremove = names(absr)[absr>=currthr]
+#   tokeep[toremove] = F
+# }
 
 # table(mafs1[check1_snps]<0.01,mafs2[check1_snps]<0.01)
 # length(intersect(flipscan_problematic_snps,check1_snps))
 
-# snps to ignore: 
-snps_to_exclude_from_results = union(flipscan_problematic_snps,names(mafs2)[mafs2<0.005])
+# snps to ignore:
+low_mafs1 = names(our_mafs)[our_mafs < 0.01]
+low_mafs2 = names(external_mafs)[external_mafs<0.01]
+snps_to_exclude_from_results = union(flipscan_problematic_snps,low_mafs1)
+snps_to_exclude_from_results = union(snps_to_exclude_from_results,low_mafs2)
+
+# Are these the zero p-value snps in our initial analysis?
+gwas_res_example = read.table(paste(out_path,"gwas_three_groups_linear.ExerciseGroup.glm.linear.adjusted",sep=""),
+                              stringsAsFactors = F)
+zero_pval_snps = gwas_res_example[gwas_res_example[,ncol(gwas_res_example)] < 1e-50 , 2]
+table(is.element(zero_pval_snps,set=snps_to_exclude_from_results))
+table(is.element(check1_snps,set=snps_to_exclude_from_results))
 
 ####################################################################################################
 ####################################################################################################
@@ -320,7 +342,7 @@ snps_to_exclude_from_results = union(flipscan_problematic_snps,names(mafs2)[mafs
 # Print all GWAS results in FUMA's format
 create_fuma_files_for_fir(out_path,
   paste(bfile,".bim",sep=""),
-  paste(bfile,".frq",sep=""),
+  paste(bfile,".frq",sep=""),p = 1,maf = 0.01,
   snps_to_exclude_from_results=snps_to_exclude_from_results)
 
 ####################################################################################################
@@ -348,7 +370,11 @@ cohorts = d$CohortName; table(cohorts)
 d2_analysis_ids = paste(d2$SentrixBarcode_A,d2$SentrixPosition_A,sep="_")
 jap_samples = d2_analysis_ids [is_jap]
 alldata_is_jap = is.element(d$IID,set=jap_samples)
+names(alldata_is_jap) = d$IID
+our_pca = read_pca_res("../../analysis/maf_filter.eigenvec")
 
+# Examine the PCA results
+library(corrplot)
 read_pca_res<-function(path){
   pca1 = read.table(path)
   r = pca1[,2]
@@ -364,47 +390,85 @@ read_pca_res<-function(path){
 pca1 = read_pca_res("merged_data_plink.eigenvec")
 pca2 = read_pca_res("merged_data_qctool_bed.eigenvec")
 pca2 = pca2[rownames(pca1),]
+our_pca = read_pca_res("../../analysis/maf_filter.eigenvec")
 all(rownames(pca1)==rownames(pca2))
-#pca1 = pca1[d[,2],]
 corrs = cor(pca1,pca2)
-library(corrplot)
 corrplot(corrs)
-diag(corrs)
+pcainds = intersect(rownames(pca1),rownames(our_pca))
+corrs = cor(pca1[pcainds,],our_pca[pcainds,])
+corrplot(corrs)
 
+run_hclust<-function(pc_x,k,dd=NULL,h=NULL){
+  if(is.null(dd)){dd = dist(pc_x,method="manhattan")}
+  if(is.null(h)){h = hclust(dd,method = "complete")}
+  clust = cutree(h,k)
+  return(clust)
+}
 # Cluster by PCs
 # Assumption: use PC 3 and onwards as the first two are
 # batch PCs that separate UKBB from non-UKBB
-pc_x = as.matrix(d[,c("PC1","PC2","PC3")])
+pc_x = as.matrix(d[,paste("PC",1:10,sep="")])
+# pcs_explained_var = read.table("merged_data_qctool_bed.eigenval")[,1]
+# for(j in 1:ncol(pc_x)){pc_x[,j]=pc_x[,j]*sqrt(pcs_explained_var[j])}
+# apply(pc_x,2,sd)
+# pc_x = pc_x[d$CohortName!="ukbb",]
+dd = dist(pc_x,method="manhattan")
+h = hclust(dd,method = "complete")
+# # Examine the number of clusters
+# wss <- sapply(1:10,function(k){kmeans(pc_x, k, nstart=50,iter.max = 15 )$tot.withinss})
+# wss <- sapply(2:10,function(k,d,h,pc_x){run_hclust(pc_x=pc_x, k,d=d,h=h)},pc_x,d,h)
+# plot(1:10, wss,
+#      type="b", pch = 19, frame = FALSE,
+#      xlab="Number of clusters K",
+#      ylab="Total within-clusters sum of squares")
+
 # Cluster subjects and visualize
 set.seed(123)
-kmeans_res <- kmeans(pc_x, 3, nstart = 25)$cluster
+#kmeans_res <- kmeans(pc_x, 5, nstart = 100)$cluster
+kmeans_res <- run_hclust(pc_x, 20, d=d,h=h)
 table(kmeans_res)
-table(kmeans_res,d$CohortName)
-table(kmeans_res,alldata_is_jap) # Japanese are well clustered and removed
-res = two_d_plot_visualize_covariate(d$PC2[inds],
-                                     d$PC1[inds],kmeans_res,kmeans_res,
-                                     main = "All cohorts",xlab="PC2",ylab="PC2")
+write.table(table(kmeans_res,d[rownames(pc_x),]$CohortName))
+table(kmeans_res,alldata_is_jap[rownames(pc_x)]) # Japanese are well clustered and removed
+res = two_d_plot_visualize_covariate(d[rownames(pc_x),]$PC1,
+    d[rownames(pc_x),]$PC2,kmeans_res,kmeans_res,
+    main = "Clustering results: PCs 1 and 2",xlab="PC1",ylab="PC2")
+legend(x="bottomright",names(res[[1]]),fill = res[[1]])
+res = two_d_plot_visualize_covariate(d[rownames(pc_x),]$PC2,
+    d[rownames(pc_x),]$PC3,kmeans_res,kmeans_res,
+    main = "All cohorts",xlab="PC3",ylab="PC2")
+legend(x="bottomright",names(res[[1]]),fill = res[[1]])
+res = two_d_plot_visualize_covariate(d[rownames(pc_x),]$PC4,
+    d[rownames(pc_x),]$PC3,kmeans_res,kmeans_res,
+    main = "Clustering results: PCs 3 and 4",xlab="PC3",ylab="PC4")
+legend(x="bottomright",names(res[[1]]),fill = res[[1]])
+res = two_d_plot_visualize_covariate(d[rownames(pc_x),]$PC4,
+    d[rownames(pc_x),]$PC5,kmeans_res,kmeans_res,
+    main = "All cohorts",xlab="PC4",ylab="PC5")
 legend(x="top",names(res[[1]]),fill = res[[1]])
-
-res = two_d_plot_visualize_covariate(d$PC2[inds],
-                                     d$PC3[inds],kmeans_res,kmeans_res,
-                                     main = "All cohorts",xlab="PC3",ylab="PC2")
-legend(x="top",names(res[[1]]),fill = res[[1]])
+res = two_d_plot_visualize_covariate(d[rownames(pc_x),]$PC6,
+    d[rownames(pc_x),]$PC5,kmeans_res,kmeans_res,
+    main = "Clustering results: PCs 5 and 6",xlab="PC6",ylab="PC5")
+legend(x="bottomright",names(res[[1]]),fill = res[[1]])
 
 # Additional PCA plots
+# All cohorts
+table(d[rownames(pc_x),]$CohortName)
+cexs = rep(1,nrow(d))
+cexs[d[rownames(pc_x),]$CohortName=="ukbb"] = 0.1
+cex[d[rownames(pc_x),]$CohortName == "elite"] = 1.2
 inds = 1:nrow(d)
-res = two_d_plot_visualize_covariate(d$PC1[inds],
-    d$PC2[inds],cohorts[inds],cohorts[inds],
-    main = "UKBB, Cooper, ELITE",xlab="PC1",ylab="PC2")
+res = two_d_plot_visualize_covariate(d[rownames(pc_x),]$PC1[inds],
+    d[rownames(pc_x),]$PC2[inds],cohorts[inds],cohorts[inds],cex=cexs,lwd=2,
+    main = "All four cohors: PCs 1,2",xlab="PC1",ylab="PC2")
 legend(x="bottom",names(res[[1]]),fill = res[[1]])
 
-res = two_d_plot_visualize_covariate(d$PC3[inds],
-    d$PC2[inds],cohorts[inds],cohorts[inds],
-    main = "UKBB, Cooper, ELITE",xlab="PC3",ylab="PC2")
-legend(x="top",names(res[[1]]),fill = res[[1]])
+res = two_d_plot_visualize_covariate(d[rownames(pc_x),]$PC3[inds],
+    d[rownames(pc_x),]$PC2[inds],cohorts[inds],cohorts[inds],cex=cexs,lwd=2,
+    main = "All four cohors: PCs 2,3",xlab="PC3",ylab="PC2")
+legend(x="bottomleft",names(res[[1]]),fill = res[[1]])
 
-res = two_d_plot_visualize_covariate(d$PC3[inds],
-    d$PC4[inds],cohorts[inds],cohorts[inds],
+res = two_d_plot_visualize_covariate(d[rownames(pc_x),]$PC3[inds],
+    d[rownames(pc_x),]$PC4[inds],cohorts[inds],cohorts[inds],
     main = "UKBB, Cooper, ELITE",xlab="PC12",ylab="PC11")
 legend(x="bottomleft",names(res[[1]]),fill = res[[1]])
 
@@ -412,8 +476,11 @@ legend(x="bottomleft",names(res[[1]]),fill = res[[1]])
 cl_tb = table(kmeans_res)
 cl_fa = names(cl_tb)[cl_tb==max(cl_tb)]
 selected_subjects_for_gwas = names(kmeans_res)[kmeans_res==cl_fa]
+length(selected_subjects_for_gwas)
 newd = d[selected_subjects_for_gwas,]
+newd = d
 newd = newd[newd$CohortName!="genepool",]
+newd = newd[newd$CohortName!="ukbb",]
 dim(newd)
 sapply(d,mode)
 # check associations between PCs and exercise
@@ -431,4 +498,30 @@ for(j in 1:12){
 pc_matrix = newd[,grepl("^PC",colnames(newd))]
 vars = apply(pc_matrix,2,var)
 
+# direct selection of controls
+our_samples = d$IID[d$CohortName=="elite" | d$CohortName == "cooper" | d$CohortName == "genepool"]
+pc_x = as.matrix(our_pca[our_samples,paste("PC",1:10,sep="")])
+wss <- sapply(1:20,function(k){kmeans(pc_x, k, nstart=50,iter.max = 15)$tot.withinss})
+plot(1:20, wss,
+     type="b", pch = 19, frame = FALSE,
+     xlab="Number of clusters K",
+     ylab="Total within-clusters sum of squares")
+kmeans_res = kmeans(pc_x,13)$cluster
+table(kmeans_res,d[names(kmeans_res),]$CohortName)
+res = two_d_plot_visualize_covariate(pc_x[,"PC1"],pc_x[,"PC2"],kmeans_res,kmeans_res,
+    main = "Clustering results: PCs 1 and 2",xlab="PC1",ylab="PC2")
+legend(x="bottomright",names(res[[1]]),fill = res[[1]])
+res = two_d_plot_visualize_covariate(pc_x[,"PC3"],pc_x[,"PC4"],kmeans_res,kmeans_res,
+    main = "Clustering results: PCs 3 and 4",xlab="PC3",ylab="PC4")
+legend(x="bottomright",names(res[[1]]),fill = res[[1]])
+res = two_d_plot_visualize_covariate(pc_x[,"PC5"],pc_x[,"PC6"],kmeans_res,kmeans_res,
+    main = "Clustering results: PCs 5 and 6",xlab="PC5",ylab="PC6")
+legend(x="bottomright",names(res[[1]]),fill = res[[1]])
+res = two_d_plot_visualize_covariate(pc_x[,"PC7"],pc_x[,"PC8"],kmeans_res,kmeans_res,
+    main = "Clustering results: PCs 7 and 8",xlab="PC7",ylab="PC8")
+legend(x="bottomright",names(res[[1]]),fill = res[[1]])
+
+
+
+controls = d$IID[d$CohortName=="ukbb"]
 

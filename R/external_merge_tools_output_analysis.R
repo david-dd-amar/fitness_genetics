@@ -371,7 +371,7 @@ d2_analysis_ids = paste(d2$SentrixBarcode_A,d2$SentrixPosition_A,sep="_")
 jap_samples = d2_analysis_ids [is_jap]
 alldata_is_jap = is.element(d$IID,set=jap_samples)
 names(alldata_is_jap) = d$IID
-our_pca = read_pca_res("../../analysis/maf_filter.eigenvec")
+our_pca = read_pca_res("../../analysis/final_dataset_for_analysis.eigenvec")
 
 # Examine the PCA results
 library(corrplot)
@@ -390,7 +390,6 @@ read_pca_res<-function(path){
 pca1 = read_pca_res("merged_data_plink.eigenvec")
 pca2 = read_pca_res("merged_data_qctool_bed.eigenvec")
 pca2 = pca2[rownames(pca1),]
-our_pca = read_pca_res("../../analysis/maf_filter.eigenvec")
 all(rownames(pca1)==rownames(pca2))
 corrs = cor(pca1,pca2)
 corrplot(corrs)
@@ -499,14 +498,18 @@ pc_matrix = newd[,grepl("^PC",colnames(newd))]
 vars = apply(pc_matrix,2,var)
 
 # direct selection of controls
+set.seed(123)
+our_pca = read_pca_res("../../analysis/final_dataset_for_analysis.eigenvec")
+our_vars = read.table("../../analysis/final_dataset_for_analysis.eigenval")[,1]
 our_samples = d$IID[d$CohortName=="elite" | d$CohortName == "cooper" | d$CohortName == "genepool"]
 pc_x = as.matrix(our_pca[our_samples,paste("PC",1:10,sep="")])
+for(j in 1:ncol(pc_x)){pc_x[,j] = pc_x[,j]*sqrt(our_vars[j])}
+kmeans_res = kmeans(pc_x,4)$cluster
 wss <- sapply(1:20,function(k){kmeans(pc_x, k, nstart=50,iter.max = 15)$tot.withinss})
 plot(1:20, wss,
      type="b", pch = 19, frame = FALSE,
      xlab="Number of clusters K",
      ylab="Total within-clusters sum of squares")
-kmeans_res = kmeans(pc_x,13)$cluster
 table(kmeans_res,d[names(kmeans_res),]$CohortName)
 res = two_d_plot_visualize_covariate(pc_x[,"PC1"],pc_x[,"PC2"],kmeans_res,kmeans_res,
     main = "Clustering results: PCs 1 and 2",xlab="PC1",ylab="PC2")
@@ -520,8 +523,6 @@ legend(x="bottomright",names(res[[1]]),fill = res[[1]])
 res = two_d_plot_visualize_covariate(pc_x[,"PC7"],pc_x[,"PC8"],kmeans_res,kmeans_res,
     main = "Clustering results: PCs 7 and 8",xlab="PC7",ylab="PC8")
 legend(x="bottomright",names(res[[1]]),fill = res[[1]])
-
-
 
 controls = d$IID[d$CohortName=="ukbb"]
 

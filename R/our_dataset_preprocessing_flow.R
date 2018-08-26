@@ -14,6 +14,7 @@ snp_max_het_ex = 0.2
 min_maf = 0.005
 run_loacally = F
 num_pca_clusters = 3
+analysis_cohorts = "elite" # If null then use all cohorts
 
 # Define Input parameters
 # Original PLINK files
@@ -22,6 +23,10 @@ num_pca_clusters = 3
 # map_file = "/oak/stanford/groups/euan/projects/fitness_genetics/illu_processed_plink_data/no_reclustering/PLINK_050618_0953/recall_may_2018_without_reclustering.map"
 # New fwd strand files (August 2018)
 job_dir = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl_fwd_strand/"
+# Alternative for elite only: August 2018
+job_dir = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/elite_only/our_prepro/"
+
+
 ped_file = "/oak/stanford/groups/euan/projects/fitness_genetics/illu_processed_plink_data/no_reclustering/PLINK_fwd_strand/recall_may_2018_without_reclustering.ped"
 map_file = "/oak/stanford/groups/euan/projects/fitness_genetics/illu_processed_plink_data/no_reclustering/PLINK_fwd_strand/recall_may_2018_without_reclustering.map"
 
@@ -80,6 +85,39 @@ print_sh_file(paste(job_dir,curr_sh_file,sep=''),
               get_sh_default_prefix(err_path,log_path),curr_cmd)
 system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
 wait_for_job()
+
+####################################################################################################
+####################################################################################################
+####################################################################################################
+# For analysis of specific cohorts
+if(!is.null(analysis_cohorts)){
+  sample_metadata_raw$Cohort = tolower(sample_metadata_raw$Cohort)
+  analysis_cohorts = tolower(analysis_cohorts)
+  curr_samples = rownames(sample_metadata_raw)[is.element(sample_metadata_raw$Cohort,
+                                                          set=analysis_cohorts)]
+  
+  fam_samples = read.table(paste(job_dir,"raw.fam",sep=""),stringsAsFactors = F)
+  iid2fid = fam_samples[,1]
+  names(iid2fid) = fam_samples[,2]
+  curr_samples = intersect(curr_samples,fam_samples[,2])
+  curr_samples = cbind(iid2fid[curr_samples],curr_samples)
+  write.table(curr_samples,file=paste(job_dir,"curr_samples.txt",sep=""),
+              row.names = F,quote = F,col.names = F)
+  
+  err_path = paste(job_dir,"keep_cohort_subjects.err",sep="")
+  log_path = paste(job_dir,"keep_cohort_subjects.log",sep="")
+  curr_cmd = paste("plink --bfile",paste(job_dir,"raw",sep=''),
+                   "--keep",paste(job_dir,"curr_samples.txt",sep=''),
+                   "--make-bed --out",paste(job_dir,"raw",sep=''))
+  curr_sh_file = "keep_cohort_subjects.sh"
+  print_sh_file(paste(job_dir,curr_sh_file,sep=''),
+                get_sh_default_prefix(err_path,log_path),curr_cmd)
+  system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
+  wait_for_job()
+  system(paste("rm ",job_dir,"raw.bed~",sep=""))
+  system(paste("rm ",job_dir,"raw.bim~",sep=""))
+  system(paste("rm ",job_dir,"raw.fam~",sep=""))
+}
 
 ####################################################################################################
 ####################################################################################################
@@ -148,22 +186,38 @@ system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
 ####################################################################################################
 # Exclude low maf snps.
 # Also add freq, pca, and misingness analyses
-maf_snps_to_exclude = snp_data$Name[snp_data$Minor.Freq<min_maf]
-write.table(t(t(as.character(snp_data$Name[maf_snps_to_exclude]))),
-            file=paste(job_dir,"maf_snps_to_exclude.txt",sep=''),
-            row.names = F,col.names = F,quote = F)
-err_path = paste(job_dir,"maf_filter.err",sep="")
-log_path = paste(job_dir,"maf_filter.log",sep="")
-curr_cmd = paste("plink --bfile",paste(job_dir,"chr_filter",sep=''),
-                 "--exclude",paste(job_dir,"maf_snps_to_exclude.txt",sep=''),
-                 "--maf",min_maf,
-                 "--pca --freq --missing",
-                 "--make-bed --out",paste(job_dir,"maf_filter_data",sep=''))
-curr_sh_file = "maf_filter.sh"
-print_sh_file(paste(job_dir,curr_sh_file,sep=''),
-              get_sh_default_prefix(err_path,log_path),curr_cmd)
-system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
-wait_for_job()
+if(is.null(analysis_cohorts)){
+  maf_snps_to_exclude = snp_data$Name[snp_data$Minor.Freq<min_maf]
+  write.table(t(t(as.character(snp_data$Name[maf_snps_to_exclude]))),
+              file=paste(job_dir,"maf_snps_to_exclude.txt",sep=''),
+              row.names = F,col.names = F,quote = F)
+  err_path = paste(job_dir,"maf_filter.err",sep="")
+  log_path = paste(job_dir,"maf_filter.log",sep="")
+  curr_cmd = paste("plink --bfile",paste(job_dir,"chr_filter",sep=''),
+                   "--exclude",paste(job_dir,"maf_snps_to_exclude.txt",sep=''),
+                   "--maf",min_maf,
+                   "--pca --freq --missing",
+                   "--make-bed --out",paste(job_dir,"maf_filter_data",sep=''))
+  curr_sh_file = "maf_filter.sh"
+  print_sh_file(paste(job_dir,curr_sh_file,sep=''),
+                get_sh_default_prefix(err_path,log_path),curr_cmd)
+  system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
+  wait_for_job()
+}
+
+if(!is.null(analysis_cohorts)){
+  err_path = paste(job_dir,"maf_filter.err",sep="")
+  log_path = paste(job_dir,"maf_filter.log",sep="")
+  curr_cmd = paste("plink --bfile",paste(job_dir,"chr_filter",sep=''),
+                   "--maf 0.001",
+                   "--pca --freq --missing",
+                   "--make-bed --out",paste(job_dir,"maf_filter_data",sep=''))
+  curr_sh_file = "maf_filter.sh"
+  print_sh_file(paste(job_dir,curr_sh_file,sep=''),
+                get_sh_default_prefix(err_path,log_path),curr_cmd)
+  system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
+  wait_for_job()
+}
 
 ####################################################################################################
 ####################################################################################################
@@ -224,13 +278,13 @@ all(rownames(pca_res) == names(imputed_sex))
 all(rownames(pca_res) == names(raw_call_rates))
 
 # define the samples to exclude for subsequent analysis, get the bed, bgen, and covariate files
-subjects_for_analysis = intersect(rownames(sample_metadata_raw),
-                                  rownames(covariate_matrix))
+fam_samples = read.table(paste(job_dir,"raw.fam",sep=""),stringsAsFactors = F)
+subjects_for_analysis = intersect(rownames(sample_metadata_raw),fam_samples[,2])
 subjects_for_analysis = setdiff(subjects_for_analysis,low_cr_samples)
 subjects_for_analysis = setdiff(subjects_for_analysis,sex_errs)
 
 # put all covariates in one table
-covariate_matrix = cbind(sample_metadata_raw[subjects_for_analysis,c(6:8,11,12:17,20:23)],
+covariate_matrix = cbind(sample_metadata_raw[rownames(pca_res),c(6:8,11,12:17,20:23)],
                          raw_call_rates,call_rates_after_filters,imputed_sex,
                          pca_res)
 # note that the plink data may have additional samples not in the samples
@@ -254,17 +308,8 @@ err_path = paste(job_dir,"exclude_failed_subjects.err",sep="")
 log_path = paste(job_dir,"exclude_failed_subjects.log",sep="")
 curr_cmd = paste("plink --bfile",paste(job_dir,"maf_filter_data",sep=''),
                  "--keep",paste(job_dir,"subjects_for_analysis.txt",sep=''),
-                 "--freq --missing --make-bed --out",paste(job_dir,"final_dataset_for_analysis",sep=''))
+                 "--pca --freq --missing --make-bed --out",paste(job_dir,"final_dataset_for_analysis",sep=''))
 curr_sh_file = "exclude_failed_subjects.sh"
-print_sh_file(paste(job_dir,curr_sh_file,sep=''),
-              get_sh_default_prefix(err_path,log_path),curr_cmd)
-system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
-
-err_path = paste(job_dir,"final_dataset_pca.err",sep="")
-log_path = paste(job_dir,"final_dataset_pca.log",sep="")
-curr_cmd = paste("plink --bfile",paste(job_dir,"final_dataset_for_analysis",sep=''),
-                 "--pca --out",paste(job_dir,"final_dataset_for_analysis",sep=''))
-curr_sh_file = "final_dataset_pca.sh"
 print_sh_file(paste(job_dir,curr_sh_file,sep=''),
               get_sh_default_prefix(err_path,log_path),curr_cmd)
 system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
@@ -295,6 +340,7 @@ for(cc in unique(covariate_matrix$Cohort)){
 ####################################################################################################
 # Transform the dataset into HRC-based data
 # Run the check_bim analysis
+setwd(job_dir)
 err_path = paste(job_dir,"run_check_bim.err",sep="")
 log_path = paste(job_dir,"run_check_bim.log",sep="")
 system(paste("cp /home/users/davidama/apps/check_bim/HRC-1000G-check-bim-NoReadKey.pl",job_dir))
@@ -307,8 +353,8 @@ curr_sh_file = "run_check_bim.sh"
 print_sh_file(paste(job_dir,curr_sh_file,sep=''),
               get_sh_default_prefix(err_path,log_path),curr_cmd)
 system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
-system(paste("mv /home/users/davidama/apps/check_bim/*final_dataset_for_analysis*",job_dir))
-system(paste("mv /home/users/davidama/apps/check_bim/Run-plink.sh",job_dir))
+# system(paste("mv /home/users/davidama/apps/check_bim/*final_dataset_for_analysis*",job_dir))
+# system(paste("mv /home/users/davidama/apps/check_bim/Run-plink.sh",job_dir))
 system(paste("less ",job_dir,"Run-plink.sh | grep TEMP > ",job_dir,"Run-plink2.sh",sep=""))
 
 err_path = paste(job_dir,"run_check_bim_update.err",sep="")

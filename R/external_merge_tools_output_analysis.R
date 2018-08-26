@@ -501,7 +501,7 @@ vars = apply(pc_matrix,2,var)
 set.seed(123)
 our_pca = read_pca_res("../../analysis/final_dataset_for_analysis.eigenvec")
 our_vars = read.table("../../analysis/final_dataset_for_analysis.eigenval")[,1]
-our_samples = d$IID[d$CohortName=="elite" | d$CohortName == "cooper" | d$CohortName == "genepool"]
+our_samples = d$IID[d$CohortName=="cooper"]
 pc_x = as.matrix(our_pca[our_samples,paste("PC",1:10,sep="")])
 for(j in 1:ncol(pc_x)){pc_x[,j] = pc_x[,j]*sqrt(our_vars[j])}
 kmeans_res = kmeans(pc_x,4)$cluster
@@ -511,6 +511,7 @@ plot(1:20, wss,
      xlab="Number of clusters K",
      ylab="Total within-clusters sum of squares")
 table(kmeans_res,d[names(kmeans_res),]$CohortName)
+table(kmeans_res,alldata_is_jap[names(kmeans_res)])
 res = two_d_plot_visualize_covariate(pc_x[,"PC1"],pc_x[,"PC2"],kmeans_res,kmeans_res,
     main = "Clustering results: PCs 1 and 2",xlab="PC1",ylab="PC2")
 legend(x="bottomright",names(res[[1]]),fill = res[[1]])
@@ -522,6 +523,9 @@ res = two_d_plot_visualize_covariate(pc_x[,"PC5"],pc_x[,"PC6"],kmeans_res,kmeans
 legend(x="bottomright",names(res[[1]]),fill = res[[1]])
 res = two_d_plot_visualize_covariate(pc_x[,"PC7"],pc_x[,"PC8"],kmeans_res,kmeans_res,
     main = "Clustering results: PCs 7 and 8",xlab="PC7",ylab="PC8")
+legend(x="bottomright",names(res[[1]]),fill = res[[1]])
+res = two_d_plot_visualize_covariate(pc_x[,"PC9"],pc_x[,"PC10"],kmeans_res,kmeans_res,
+    main = "Clustering results: PCs 9 and 10",xlab="PC9",ylab="PC10")
 legend(x="bottomright",names(res[[1]]),fill = res[[1]])
 
 controls = d$IID[d$CohortName=="ukbb"]

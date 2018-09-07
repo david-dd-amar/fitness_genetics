@@ -209,7 +209,7 @@ if(!is.null(analysis_cohorts)){
   err_path = paste(job_dir,"maf_filter.err",sep="")
   log_path = paste(job_dir,"maf_filter.log",sep="")
   curr_cmd = paste("plink --bfile",paste(job_dir,"chr_filter",sep=''),
-                   "--maf 0.001",
+                   "--maf 0.01", # for elite, consider changing for other cohorts
                    "--pca --freq --missing",
                    "--make-bed --out",paste(job_dir,"maf_filter_data",sep=''))
   curr_sh_file = "maf_filter.sh"
@@ -355,6 +355,7 @@ print_sh_file(paste(job_dir,curr_sh_file,sep=''),
 system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
 # system(paste("mv /home/users/davidama/apps/check_bim/*final_dataset_for_analysis*",job_dir))
 # system(paste("mv /home/users/davidama/apps/check_bim/Run-plink.sh",job_dir))
+wait_for_job()
 system(paste("less ",job_dir,"Run-plink.sh | grep TEMP > ",job_dir,"Run-plink2.sh",sep=""))
 
 err_path = paste(job_dir,"run_check_bim_update.err",sep="")

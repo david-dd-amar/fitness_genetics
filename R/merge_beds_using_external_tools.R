@@ -8,9 +8,17 @@
 # in file2 to match those in file1. For example if we use ukbb for file1 and Illumina ids for 
 # file2 then non-standard ids such as (examXXX) will be mapped to ids from ukbb.
 
+# Original analysis
 bfile1 = "/oak/stanford/groups/euan/projects/fitness_genetics/ukbb/ukbb_imputed_20k_rand_controls_sex_age/merged_control_geno-updated"
 bfile2 = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl_fwd_strand/final_dataset_for_analysis-updated"
 out_path = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl_fwd_with_ukbb1/"
+
+# Elite only
+bfile1 = "/oak/stanford/groups/euan/projects/fitness_genetics/ukbb/ukbb_imputed_20k_rand_controls_sex_age/merged_control_geno-updated"
+bfile2 = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/elite_only/our_prepro/final_dataset_for_analysis-updated"
+out_path = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/elite_only/with_ukbb/"
+
+try(system(paste("mkdir",out_path)))
 
 check_bim_info = T
 qctool_path = "/home/users/davidama/apps/qctool_v2/build/release/qctool_v2.0.1"
@@ -167,8 +175,6 @@ curr_sh_file = "merge_qctool_pca.sh"
 print_sh_file(paste(out_path,curr_sh_file,sep=''),
               get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,Ncpu=4,mem_size=32000),curr_cmd)
 system(paste("sbatch",paste(out_path,curr_sh_file,sep='')))
-
-
 
 # As a reference we do a simple merge using PLINK
 err_path = paste(out_path,"merge_plink.err",sep="")

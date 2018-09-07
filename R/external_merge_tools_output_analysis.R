@@ -1,19 +1,28 @@
 
 script_file = "/oak/stanford/groups/euan/projects/fitness_genetics/scripts/fitness_genetics/R/gwas_flow_helper_functions.R"
-python_script = "/oak/stanford/groups/euan/projects/fitness_genetics/scripts/fitness_genetics/python_sh/recode_indels.py"
 source(script_file)
 
 # assumption: merged bed has frq and pca results
+# all cohorts together
 bfile = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl_fwd_with_ukbb1/merged_data_qctool_bed"
+external_data_mafs = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl_fwd_with_ukbb1/new_bed_1.frq"
+our_data_mafs = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl_fwd_with_ukbb1/new_bed_2.frq"
+out_path = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl_fwd_with_ukbb1/gwas/"
+
+# elite and ukbb alone
+bfile = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/elite_only/with_ukbb/merged_data_qctool_bed"
+external_data_mafs = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/elite_only/with_ukbb/new_bed_1.frq"
+our_data_mafs = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/elite_only/with_ukbb/new_bed_2.frq"
+out_path = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/elite_only/with_ukbb/gwas/"
+
 external_control_ids = "/oak/stanford/groups/euan/projects/fitness_genetics/ukbb/20k_rand_controls_sex_age.txt"
 external_covars_path = "/oak/stanford/groups/euan/projects/fitness_genetics/ukbb/20k_rand_controls_sex_age_with_info.txt"
 # this should have our original pca results: important for us
 our_covars_path = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl/three_group_analysis_genepool_controls.phe"
 our_metadata = "/oak/stanford/groups/euan/projects/fitness_genetics/metadata/merged_metadata_file_stanford3k_elite_cooper.txt"
-out_path = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl_fwd_with_ukbb1/gwas/"
+
 try({system(paste("mkdir",out_path))})
-external_data_mafs = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl_fwd_with_ukbb1/new_bed_1.frq"
-our_data_mafs = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl_fwd_with_ukbb1/new_bed_2.frq"
+
 our_data_mafs_by_group = list(
   "genepool" = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl_fwd_strand/genepool_cohort_freq.frq",
   "cooper" = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl_fwd_strand/Cooper_cohort_freq.frq",
@@ -67,18 +76,6 @@ covars = rbind(our_covars_wo_pcs,external_covars)
 rownames(covars) = covars[,"IID"]
 
 # Define the PCAs: the combined dataset and ours
-read_pca_res<-function(path){
-  pca1 = read.table(path)
-  r = pca1[,2]
-  rownames(pca1)=r
-  pca1 = pca1[,-c(1:2)]
-  pca1 = as.matrix(pca1)
-  if(!mode(pca1)=="numeric"){
-    print("ERROR: pca matrix is not numeric");return(NULL)
-  }
-  colnames(pca1) = paste("PC",1:ncol(pca1),sep="")
-  return(pca1)
-}
 combined_pcs = read_pca_res(paste(bfile,".eigenvec",sep=""))
 our_dataset_pcs = our_covars[,grepl("^PC",colnames(our_covars))]
 rownames(our_dataset_pcs) = our_covars[,"IID"]
@@ -110,21 +107,29 @@ d2_analysis_ids = paste(d2$SentrixBarcode_A,d2$SentrixPosition_A,sep="_")
 jap_samples = d2_analysis_ids [is_jap]
 alldata_is_jap = is.element(d$IID,set=jap_samples)
 names(alldata_is_jap) = d$IID
+
 set.seed(123)
 pc_x = as.matrix(d[,paste("PC",1:10,sep="")])
 rownames(pc_x) = d$IID
 
-# kmeans_res <- kmeans(pc_x, 3, nstart = 25)$cluster
+## Kmeans-based analysis
+pcs_explained_var = read.table("merged_data_qctool_bed.eigenval")[,1]
+for(j in 1:ncol(pc_x)){pc_x[,j]=pc_x[,j]*sqrt(pcs_explained_var[j])}
+wss <- sapply(1:10,function(k){kmeans(pc_x, k, nstart=50,iter.max = 15 )$tot.withinss})
+wss[2:length(wss)]/wss[1:(length(wss)-1)]
+kmeans_res <- kmeans(pc_x, 4)$cluster # used for elite
+#kmeans_res <- kmeans(pc_x, 5, nstart = 100)$cluster # used on all cohorts
 
-run_hclust<-function(pc_x,k,dd=NULL,h=NULL){
-  if(is.null(dd)){dd = dist(pc_x,method="manhattan")}
-  if(is.null(h)){h = hclust(dd,method = "complete")}
-  clust = cutree(h,k)
-  return(clust)
-}
+table(kmeans_res)
+table(kmeans_res,d[rownames(pc_x),]$CohortName)
+table(kmeans_res,alldata_is_jap[rownames(pc_x)]) # Japanese are well clustered and removed
+
+# hclust-based analysis
 dd = dist(pc_x,method="manhattan")
 h = hclust(dd,method = "complete")
-kmeans_res <- run_hclust(pc_x, 10, d=d,h=h)
+# Results from August 2018 on all cohorts are based on 10 clusters on PCA as-is data
+# (i.e., without reweighting be eigenvalues). Do not forget to set the seed.
+kmeans_res <- run_hclust(pc_x, 10, d=d,h=h) 
 
 table(kmeans_res)
 table(kmeans_res,d[rownames(pc_x),]$CohortName)
@@ -155,7 +160,7 @@ curr_cmd = paste("plink2",
                  paste("--pheno",covar_file),
                  paste("--pheno-name ExerciseGroup"),
                  paste("--covar",covar_file),
-                 paste("--covar-name sex,Age,",paste(paste("PC",1:5,sep=""),collapse=","),sep="")
+                 paste("--covar-name sex,Age,",paste(paste("PC",1:5,sep=""),collapse=","),sep=""),
                  "--adjust",
                  "--out",paste(out_path,"gwas_three_groups_linear",sep=''))
 curr_sh_file = "gwas_three_groups_linear.sh"
@@ -281,11 +286,11 @@ ukbb_vs_nonukbb_res = read.table(
 rownames(ukbb_vs_nonukbb_res) = ukbb_vs_nonukbb_res[,2]
 colnames(ukbb_vs_nonukbb_res) = ukbb_vs_nonukbb_res[1,]
 ukbb_vs_nonukbb_res = ukbb_vs_nonukbb_res[-1,]
+
 flipscan_res = read.delim2(
   paste(out_path,"ukbb_vs_nonukbb_logistic.flipscan",sep=""),
   header=T,stringsAsFactors = F,na.strings = NULL,sep="\t"
 )
-
 # to interpret these results see: http://zzz.bwh.harvard.edu/plink/dataman.shtml#flipscan
 # basically: snps whose num negatives (column 9) is > 0 are problematic
 flipscan_res = apply(flipscan_res,1,function(x)strsplit(x,split="\\s+")[[1]])
@@ -345,6 +350,23 @@ create_fuma_files_for_fir(out_path,
   paste(bfile,".frq",sep=""),p = 1,maf = 0.01,
   snps_to_exclude_from_results=snps_to_exclude_from_results)
 
+# Test: elite vs. ukbb: linear vs. logistic (same analysis basically)
+gwas_res_example1 = read.table(paste(out_path,"gwas_three_groups_linear.ExerciseGroup.glm.linear.adjusted",sep=""),
+                              stringsAsFactors = F)
+gwas_res_example2 = read.table(paste(out_path,"ukbb_vs_elite_logistic.ExerciseGroup.glm.logistic.hybrid.adjusted",sep=""),
+                               stringsAsFactors = F)
+rownames(gwas_res_example1) = gwas_res_example1[,2]
+rownames(gwas_res_example2) = gwas_res_example2[,2]
+setdiff(gwas_res_example1[,2],gwas_res_example2[,2])
+gwas_res_example2 = gwas_res_example2[gwas_res_example1[,2],]
+ps1 = gwas_res_example1[,10];ps2=gwas_res_example2[,10]
+ps1[ps1==0] = 1e-200
+ps2[ps2==0] = 1e-200
+cor(log(ps1),log(ps2))
+table(ps1<1e-50,ps2<1e-8)
+low_ps1_snps = ps1<1e-50
+low_ps2_snps = ps2<1e-8
+
 ####################################################################################################
 ####################################################################################################
 ####################################################################################################
@@ -375,18 +397,6 @@ our_pca = read_pca_res("../../analysis/final_dataset_for_analysis.eigenvec")
 
 # Examine the PCA results
 library(corrplot)
-read_pca_res<-function(path){
-  pca1 = read.table(path)
-  r = pca1[,2]
-  rownames(pca1)=r
-  pca1 = pca1[,-c(1:2)]
-  pca1 = as.matrix(pca1)
-  if(!mode(pca1)=="numeric"){
-    print("ERROR: pca matrix is not numeric");return(NULL)
-  }
-  colnames(pca1) = paste("PC",1:ncol(pca1),sep="")
-  return(pca1)
-}
 pca1 = read_pca_res("merged_data_plink.eigenvec")
 pca2 = read_pca_res("merged_data_qctool_bed.eigenvec")
 pca2 = pca2[rownames(pca1),]
@@ -397,34 +407,31 @@ pcainds = intersect(rownames(pca1),rownames(our_pca))
 corrs = cor(pca1[pcainds,],our_pca[pcainds,])
 corrplot(corrs)
 
-run_hclust<-function(pc_x,k,dd=NULL,h=NULL){
-  if(is.null(dd)){dd = dist(pc_x,method="manhattan")}
-  if(is.null(h)){h = hclust(dd,method = "complete")}
-  clust = cutree(h,k)
-  return(clust)
-}
 # Cluster by PCs
-# Assumption: use PC 3 and onwards as the first two are
-# batch PCs that separate UKBB from non-UKBB
 pc_x = as.matrix(d[,paste("PC",1:10,sep="")])
-# pcs_explained_var = read.table("merged_data_qctool_bed.eigenval")[,1]
-# for(j in 1:ncol(pc_x)){pc_x[,j]=pc_x[,j]*sqrt(pcs_explained_var[j])}
-# apply(pc_x,2,sd)
-# pc_x = pc_x[d$CohortName!="ukbb",]
+pcs_explained_var = read.table("merged_data_qctool_bed.eigenval")[,1]
+for(j in 1:ncol(pc_x)){pc_x[,j]=pc_x[,j]*sqrt(pcs_explained_var[j])}
+apply(pc_x,2,sd)
+
+# All cohorts: example analysis using hclust
 dd = dist(pc_x,method="manhattan")
 h = hclust(dd,method = "complete")
-# # Examine the number of clusters
-# wss <- sapply(1:10,function(k){kmeans(pc_x, k, nstart=50,iter.max = 15 )$tot.withinss})
-# wss <- sapply(2:10,function(k,d,h,pc_x){run_hclust(pc_x=pc_x, k,d=d,h=h)},pc_x,d,h)
-# plot(1:10, wss,
-#      type="b", pch = 19, frame = FALSE,
-#      xlab="Number of clusters K",
-#      ylab="Total within-clusters sum of squares")
+wss <- sapply(2:10,function(k,dd,h,pc_x){run_hclust(pc_x=pc_x, k,dd=dd,h=h)},pc_x,dd,h)
+plot(2:10, wss,
+     type="b", pch = 19, frame = FALSE,
+     xlab="Number of clusters K",
+     ylab="Total within-clusters sum of squares")
 
-# Cluster subjects and visualize
+# All cohorts: example analysis using kmeans
+# Examine the number of clusters
+wss <- sapply(1:10,function(k){kmeans(pc_x, k, nstart=50,iter.max = 15 )$tot.withinss})
+plot(1:10, wss,
+     type="b", pch = 19, frame = FALSE,
+     xlab="Number of clusters K",
+     ylab="Total within-clusters sum of squares")
 set.seed(123)
-#kmeans_res <- kmeans(pc_x, 5, nstart = 100)$cluster
-kmeans_res <- run_hclust(pc_x, 20, d=d,h=h)
+kmeans_res <- kmeans(pc_x, 4, nstart = 100)$cluster
+
 table(kmeans_res)
 write.table(table(kmeans_res,d[rownames(pc_x),]$CohortName))
 table(kmeans_res,alldata_is_jap[rownames(pc_x)]) # Japanese are well clustered and removed

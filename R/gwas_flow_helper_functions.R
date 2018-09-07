@@ -258,3 +258,22 @@ two_d_plot_visualize_covariate<-function(x1,x2,cov1,cov2=NULL,cuts=5,...){
   plot(x1,x2,col=cols[cov1],pch=pchs[cov2],...)
   return(list(cols,pchs))
 }
+run_hclust<-function(pc_x,k,dd=NULL,h=NULL){
+  if(is.null(dd)){dd = dist(pc_x,method="manhattan")}
+  if(is.null(h)){h = hclust(dd,method = "complete")}
+  clust = cutree(h,k)
+  return(clust)
+}
+
+read_pca_res<-function(path){
+  pca1 = read.table(path)
+  r = pca1[,2]
+  rownames(pca1)=r
+  pca1 = pca1[,-c(1:2)]
+  pca1 = as.matrix(pca1)
+  if(!mode(pca1)=="numeric"){
+    print("ERROR: pca matrix is not numeric");return(NULL)
+  }
+  colnames(pca1) = paste("PC",1:ncol(pca1),sep="")
+  return(pca1)
+}

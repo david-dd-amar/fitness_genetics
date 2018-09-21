@@ -61,6 +61,8 @@ sample_metadata_raw = read.delim(sample_metadata,stringsAsFactors = F)
 sample_metadata_raw = correct_dups_in_sample_metadata(sample_metadata_raw)
 # As of September 2018 we do not have genepool's metadata: we ignore this until we get it
 sample_metadata_raw = sample_metadata_raw[sample_metadata_raw$Cohort!="genepool",]
+sample_metadata_raw = sample_metadata_raw[!is.na(sample_metadata_raw[,1]),]
+rownames(sample_metadata_raw) = apply(sample_metadata_raw[,1:2],1,paste,collapse="_")
 
 ####################################################################################################
 ####################################################################################################
@@ -347,71 +349,70 @@ print_sh_file(paste(job_dir,curr_sh_file,sep=''),
               get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,Ncpu=2,mem_size=16000),curr_cmd)
 system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
 
+flipscan_res = readLines(paste(job_dir,"merged_mega_data.flipscan",sep=""))
+arrs = strsplit(flipscan_res[-1],split="\\s+")
+names(arrs) = sapply(arrs,function(x)x[3])
+table(sapply(arrs,length))
+flipscan_failures = sapply(arrs,length) > 11
+flipscan_failures = sapply(arrs[flipscan_failures],function(x)x[3])
+sapply(arrs[flipscan_failures],function(x)x[2])
+bim = read.table(paste(job_dir,"merged_mega_data.bim",sep=""),stringsAsFactors = F)
+snps_to_keep = setdiff(bim[,2],flipscan_failures)
 
-####################################################################################################
-####################################################################################################
-####################################################################################################
-# For analysis of specific cohorts
-if(!is.null(analysis_cohorts)){
-  sample_metadata_raw$Cohort = tolower(sample_metadata_raw$Cohort)
-  analysis_cohorts = tolower(analysis_cohorts)
-  curr_samples = rownames(sample_metadata_raw)[is.element(sample_metadata_raw$Cohort,
-                                                          set=analysis_cohorts)]
-  
-  fam_samples = read.table(paste(job_dir,"merged_mega_data.fam",sep=""),stringsAsFactors = F)
-  iid2fid = fam_samples[,1]
-  names(iid2fid) = fam_samples[,2]
-  curr_samples = intersect(curr_samples,fam_samples[,2])
-  curr_samples = cbind(iid2fid[curr_samples],curr_samples)
-  write.table(curr_samples,file=paste(job_dir,"curr_samples.txt",sep=""),
-              row.names = F,quote = F,col.names = F)
-  
-  err_path = paste(job_dir,"keep_cohort_subjects.err",sep="")
-  log_path = paste(job_dir,"keep_cohort_subjects.log",sep="")
-  curr_cmd = paste("plink --bfile",paste(job_dir,"merged_mega_data",sep=''),
-                   "--keep",paste(job_dir,"curr_samples.txt",sep=''),
-                   "--make-bed --out",paste(job_dir,"merged_mega_data",sep=''))
-  curr_sh_file = "keep_cohort_subjects.sh"
-  print_sh_file(paste(job_dir,curr_sh_file,sep=''),
-                get_sh_default_prefix(err_path,log_path),curr_cmd)
-  system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
-  wait_for_job()
-  system(paste("rm ",job_dir,"merged_mega_data.bed~",sep=""))
-  system(paste("rm ",job_dir,"merged_mega_data.bim~",sep=""))
-  system(paste("rm ",job_dir,"merged_mega_data.fam~",sep=""))
+extract_snps_using_plink(paste(job_dir,"merged_mega_data",sep=""),snps_to_keep,job_dir,
+                         "_final_snps_to_keep_after_flipscan","merged_mega_data",
+                         batch_script_func=get_sh_default_prefix)
+
+# ####################################################################################################
+# ####################################################################################################
+# ####################################################################################################
+# # For analysis of specific cohorts
+# if(!is.null(analysis_cohorts)){
+#   sample_metadata_raw$Cohort = tolower(sample_metadata_raw$Cohort)
+#   analysis_cohorts = tolower(analysis_cohorts)
+#   curr_samples = rownames(sample_metadata_raw)[is.element(sample_metadata_raw$Cohort,
+#                                                           set=analysis_cohorts)]
+#   
+#   fam_samples = read.table(paste(job_dir,"merged_mega_data.fam",sep=""),stringsAsFactors = F)
+#   iid2fid = fam_samples[,1]
+#   names(iid2fid) = fam_samples[,2]
+#   curr_samples = intersect(curr_samples,fam_samples[,2])
+#   curr_samples = cbind(iid2fid[curr_samples],curr_samples)
+#   write.table(curr_samples,file=paste(job_dir,"curr_samples.txt",sep=""),
+#               row.names = F,quote = F,col.names = F)
+#   
+#   err_path = paste(job_dir,"keep_cohort_subjects.err",sep="")
+#   log_path = paste(job_dir,"keep_cohort_subjects.log",sep="")
+#   curr_cmd = paste("plink --bfile",paste(job_dir,"merged_mega_data",sep=''),
+#                    "--keep",paste(job_dir,"curr_samples.txt",sep=''),
+#                    "--make-bed --out",paste(job_dir,"merged_mega_data",sep=''))
+#   curr_sh_file = "keep_cohort_subjects.sh"
+#   print_sh_file(paste(job_dir,curr_sh_file,sep=''),
+#                 get_sh_default_prefix(err_path,log_path),curr_cmd)
+#   system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
+#   wait_for_job()
+#   system(paste("rm ",job_dir,"merged_mega_data.bed~",sep=""))
+#   system(paste("rm ",job_dir,"merged_mega_data.bim~",sep=""))
+#   system(paste("rm ",job_dir,"merged_mega_data.fam~",sep=""))
+# }
+# 
+# ####################################################################################################
+# ####################################################################################################
+# ####################################################################################################
+# impute sex: eahc of the Mega datasets separately
+run_plink_sex_check_x_chrom<-function(bfile,out_path,
+                                      batch_script_func=get_sh_default_prefix,...){
+  err_path = paste(job_dir,"impute_sex.err",sep="")
+  log_path = paste(job_dir,"impute_sex.log",sep="")
+  curr_cmd = paste("plink --bfile",bfile,
+                   "--check-sex --chr 22-24 --out",bfile)
+  curr_sh_file = paste(out_path,"impute_sex.sh",sep="")
+  batch_script_prefix = batch_script_func(err_path,log_path,...)
+  print_sh_file(curr_sh_file,batch_script_prefix,curr_cmd)
+  system(paste("sbatch",curr_sh_file))
 }
-
-####################################################################################################
-####################################################################################################
-####################################################################################################
-# impute sex
-err_path = paste(job_dir,"impute_sex.err",sep="")
-log_path = paste(job_dir,"impute_sex.log",sep="")
-curr_cmd = paste("plink --bfile",paste(job_dir,"merged_mega_data",sep=''),
-                 "--check-sex .3 .9 --chr 23",
-                 "--out",paste(job_dir,"impute_sex",sep=''))
-curr_sh_file = "impute_sex.sh"
-print_sh_file(paste(job_dir,curr_sh_file,sep=''),
-              get_sh_default_prefix(err_path,log_path),curr_cmd)
-system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
-
-# get simple imputation by looking at call rates in Y chromosome
-Y_snps = grepl("^Y$",snp_data1$Chr,ignore.case = T)
-Y_snps = as.character(snp_data1$Name[Y_snps])
-Y_snps = intersect(Y_snps,snps_to_keep)
-write.table(t(t(Y_snps)),
-            file=paste(job_dir,"Y_snps.txt",sep=''),
-            row.names = F,col.names = F,quote = F)
-jobs_before = get_my_jobs()
-err_path = paste(job_dir,"Y_snps_analysis.err",sep="")
-log_path = paste(job_dir,"Y_snps_analysis.log",sep="")
-curr_cmd = paste("plink --bfile",paste(job_dir,"merged_mega_data",sep=''),
-                 "--extract", paste(job_dir,"Y_snps.txt",sep=""),
-                 "--missing --out",paste(job_dir,"Y_snps_analysis",sep=''))
-curr_sh_file = "Y_snps_analysis.sh"
-print_sh_file(paste(job_dir,curr_sh_file,sep=''),
-              get_sh_default_prefix(err_path,log_path),curr_cmd)
-system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
+run_plink_sex_check_x_chrom(input_bfile1,job_dir)
+run_plink_sex_check_x_chrom(input_bfile2,job_dir)
 
 ####################################################################################################
 ####################################################################################################
@@ -485,20 +486,20 @@ system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
 ####################################################################################################
 ####################################################################################################
 ####################################################################################################
-# Here we analyze the results of the jobs above
-# Needed files:
-#   Y-based sex analysis: Y_snps_analysis.imiss
-#   Plink's sex analysis: impute_sex.sexcheck
-# Analyze the sex analysis results
-Y_missing_report = read_plink_table("/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl/Y_snps_analysis.imiss")
-Y_inferred_sex = Y_missing_report[,6] == "nan"
+# Here we analyze the results of some of the jobs above
+
 # compare to known sex from the metadata
 metadata_sex = sample_metadata_raw$Sex_input_data
-names(metadata_sex) = apply(sample_metadata_raw[,1:2],1,paste,collapse="_")
-rownames(sample_metadata_raw) = names(metadata_sex)
-imputed_sex = read_plink_table(paste(job_dir,"impute_sex.sexcheck",sep=''))
-inds = intersect(names(metadata_sex),rownames(imputed_sex))
-x1=imputed_sex[inds,4];x2=metadata_sex[inds];x3 = Y_inferred_sex[inds]
+names(metadata_sex) = rownames(sample_metadata_raw)
+
+imputed_sex1 = read_plink_table(paste(input_bfile1,".sexcheck",sep=''))[,4]
+imputed_sex2 = read_plink_table(paste(input_bfile2,".sexcheck",sep=''))[,4]
+
+inds1 = intersect(names(metadata_sex),names(imputed_sex1))
+table(metadata_sex[inds1],imputed_sex1[inds1])
+inds2 = intersect(names(metadata_sex),names(imputed_sex2))
+table(metadata_sex[inds2],imputed_sex2[inds2])
+
 sex_errs1 = inds[((x1=="1"&x2=="F")|(x1=="2"&x2=="M")) & !is.na(x2)]
 sex_errs2 = inds[((!x3 & x2=="F")|(x3 & x2=="M")) & !is.na(x2)]
 sex_errs = union(sex_errs1,sex_errs2)

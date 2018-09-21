@@ -84,26 +84,10 @@ ord = order(as.numeric(m[,1]),as.numeric(m[,4]))
 final_shared_snps = final_shared_snps[ord,]
 save(intersected_locations,final_shared_snps,file=paste(out_path,"bim_overlap_analysis_results.RData",sep=""))
 
-# Create the reduced files
-reduce_snps_using_plink<-function(bfile,snps,out_path,snpfile,newbedfile,batch_script_func,...){
-  # create the snps file
-  write.table(t(t(as.character(snps))),
-              file=paste(out_path,snpfile,".txt",sep=''),
-              row.names = F,col.names = F,quote = F)
-  err_path = paste(out_path,"reduce_snps",snpfile,".err",sep="")
-  log_path = paste(out_path,"reduce_snps",snpfile,".log",sep="")
-  curr_cmd = paste("plink --bfile",bfile,
-                   "--extract",paste(out_path,snpfile,".txt",sep=''),
-                   "--freq --make-bed --out",paste(out_path,newbedfile,sep=''))
-  curr_sh_file = paste(out_path,"reduce_snps",snpfile,".sh",sep="")
-  batch_script_prefix = batch_script_func(err_path,log_path,...)
-  print_sh_file(curr_sh_file,batch_script_prefix,curr_cmd)
-  system(paste("sbatch",curr_sh_file))
-}
 load(paste(out_path,"bim_overlap_analysis_results.RData",sep=""))
-reduce_snps_using_plink(bfile2,final_shared_snps[,2],out_path,"file2_shared_snps","new_bed_2",
+extract_snps_using_plink(bfile2,final_shared_snps[,2],out_path,"file2_shared_snps","new_bed_2",
                         get_sh_default_prefix)
-reduce_snps_using_plink(bfile1,final_shared_snps[,1],out_path,"file1_shared_snps","new_bed_1",
+extract_snps_using_plink(bfile1,final_shared_snps[,1],out_path,"file1_shared_snps","new_bed_1",
                         get_sh_default_prefix)
 
 # Print the new bed file for file 2

@@ -79,7 +79,7 @@ get_my_jobs<-function(){
   jobs = jobs[jobs[,1]!="bash",]
   system(paste("rm",tmp))
   new_jobs = rownames(jobs)[jobs[,5]=="RUNNING" | jobs[,5]=="PENDING"]
-  return(jobs)
+  return(jobs[new_jobs,])
 }
 get_job_id<-function(x){return(x[1])}
 wait_for_job<-function(jobs_before=NULL,waittime=6,max_wait=6000){
@@ -277,3 +277,56 @@ read_pca_res<-function(path){
   colnames(pca1) = paste("PC",1:ncol(pca1),sep="")
   return(pca1)
 }
+
+
+################################################################################
+# Sept 2018
+# Create the reduced files
+extract_snps_using_plink<-function(bfile,snps,out_path,snpfile,newbedfile,
+                                  batch_script_func=get_sh_default_prefix,...){
+  # create the snps file
+  write.table(t(t(as.character(snps))),
+              file=paste(out_path,snpfile,".txt",sep=''),
+              row.names = F,col.names = F,quote = F)
+  err_path = paste(out_path,"reduce_snps",snpfile,".err",sep="")
+  log_path = paste(out_path,"reduce_snps",snpfile,".log",sep="")
+  curr_cmd = paste("plink --bfile",bfile,
+                   "--extract",paste(out_path,snpfile,".txt",sep=''),
+                   "--freq --make-bed --out",paste(out_path,newbedfile,sep=''))
+  curr_sh_file = paste(out_path,"reduce_snps",snpfile,".sh",sep="")
+  batch_script_prefix = batch_script_func(err_path,log_path,...)
+  print_sh_file(curr_sh_file,batch_script_prefix,curr_cmd)
+  system(paste("sbatch",curr_sh_file))
+}
+remove_subjects_using_plink<-function(bfile,subjs,out_path,subjfile,newbedfile,
+                                      batch_script_func=get_sh_default_prefix,...){
+  # create the subjects file
+  write.table(subjs,file=paste(out_path,subjfile,".txt",sep=''),
+              row.names = F,col.names = F,quote = F,sep="\t")
+  err_path = paste(out_path,"reduce_subjs",subjfile,".err",sep="")
+  log_path = paste(out_path,"reduce_subjs",subjfile,".log",sep="")
+  curr_cmd = paste("plink --bfile",bfile,
+                   "--remove",paste(out_path,subjfile,".txt",sep=''),
+                   "--freq --make-bed --out",paste(out_path,newbedfile,sep=''))
+  curr_sh_file = paste(out_path,"reduce_subjs",subjfile,".sh",sep="")
+  batch_script_prefix = batch_script_func(err_path,log_path,...)
+  print_sh_file(curr_sh_file,batch_script_prefix,curr_cmd)
+  system(paste("sbatch",curr_sh_file))
+}
+flip_snps_using_plink<-function(bfile,snps,out_path,snpfile,newbedfile,
+                                   batch_script_func=get_sh_default_prefix,...){
+  # create the snps file
+  write.table(t(t(as.character(snps))),
+              file=paste(out_path,snpfile,".txt",sep=''),
+              row.names = F,col.names = F,quote = F)
+  err_path = paste(out_path,"reduce_snps",snpfile,".err",sep="")
+  log_path = paste(out_path,"reduce_snps",snpfile,".log",sep="")
+  curr_cmd = paste("plink --bfile",bfile,
+                   "--flip",paste(out_path,snpfile,".txt",sep=''),
+                   "--make-bed --out",paste(out_path,newbedfile,sep=''))
+  curr_sh_file = paste(out_path,"reduce_snps",snpfile,".sh",sep="")
+  batch_script_prefix = batch_script_func(err_path,log_path,...)
+  print_sh_file(curr_sh_file,batch_script_prefix,curr_cmd)
+  system(paste("sbatch",curr_sh_file))
+}
+

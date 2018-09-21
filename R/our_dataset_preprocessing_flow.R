@@ -5,16 +5,25 @@
 ####################################################################################################
 ####################################################################################################
 
-# Define analysis parameters
+# Define analysis parameters for the Illumina reports
 autosomal_chrs = T
-snp_min_clustersep_thr = 0.5
+snp_min_clustersep_thr = 0.3
 snp_min_call_rate = 0.95
-snp_min_het_ex = -0.3
-snp_max_het_ex = 0.2
-min_maf = 0.005
+snp_min_het_ex = -0.4
+snp_max_het_ex = 0.4
+min_maf = 0.001
 run_loacally = F
 num_pca_clusters = 3
-analysis_cohorts = "elite" # If null then use all cohorts
+# analysis_cohorts = "elite" # If null then use all cohorts
+# analysis_cohorts = NULL # If null then use all cohorts
+
+# Define analysis parameters for the Illumina reports
+initial_subj_min_call_rate = 0.95
+final_subj_min_call_rate = 0.98
+snp_het_p = 1e-4
+
+script_file = "/home/users/davidama/repos/fitness_genetics/R/gwas_flow_helper_functions.R"
+source(script_file)
 
 # Define Input parameters
 # Original PLINK files
@@ -22,69 +31,322 @@ analysis_cohorts = "elite" # If null then use all cohorts
 # ped_file = "/oak/stanford/groups/euan/projects/fitness_genetics/illu_processed_plink_data/no_reclustering/PLINK_050618_0953/recall_may_2018_without_reclustering.ped"
 # map_file = "/oak/stanford/groups/euan/projects/fitness_genetics/illu_processed_plink_data/no_reclustering/PLINK_050618_0953/recall_may_2018_without_reclustering.map"
 # New fwd strand files (August 2018)
-job_dir = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl_fwd_strand/"
+# job_dir = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl_fwd_strand/"
 # Alternative for elite only: August 2018
-job_dir = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/elite_only/our_prepro/"
-
-
-ped_file = "/oak/stanford/groups/euan/projects/fitness_genetics/illu_processed_plink_data/no_reclustering/PLINK_fwd_strand/recall_may_2018_without_reclustering.ped"
-map_file = "/oak/stanford/groups/euan/projects/fitness_genetics/illu_processed_plink_data/no_reclustering/PLINK_fwd_strand/recall_may_2018_without_reclustering.map"
-
-snp_report_file = "/oak/stanford/groups/euan/projects/fitness_genetics/illu_processed_plink_data/no_reclustering/reports/no_reclustering_SNP_Table.txt"
-sample_report_file = "/oak/stanford/groups/euan/projects/fitness_genetics/illu_processed_plink_data/no_reclustering/reports/no_reclustering_Samples_Table.txt"
-sample_metadata = "/oak/stanford/groups/euan/projects/fitness_genetics/metadata/merged_metadata_file_stanford3k_elite_cooper.txt"
-script_file = "/home/users/davidama/repos/fitness_genetics/R/gwas_flow_helper_functions.R"
-script_file = "/oak/stanford/groups/euan/projects/fitness_genetics/scripts/fitness_genetics/R/gwas_flow_helper_functions.R"
-source(script_file)
+# job_dir = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/elite_only/our_prepro/"
+# September 2018
+job_dir = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl_mega_separate_recalls/"
+# set the job's directory
+try({system(paste("mkdir",job_dir),wait = T)})
 setwd(job_dir)
 
-####################################################################################################
-####################################################################################################
-####################################################################################################
-# read reports and metadata
-snp_data = read.delim(snp_report_file)
-sample_data = read.delim(sample_report_file,stringsAsFactors = F)
-rownames(sample_data) = sample_data$Sample.ID
+# Each recalling has a set of parameters
+ped_file1 = "/oak/stanford/groups/euan/projects/fitness_genetics/illu_processed_plink_data/no_reclustering/PLINK_fwd_strand/recall_may_2018_without_reclustering.ped"
+map_file1 = "/oak/stanford/groups/euan/projects/fitness_genetics/illu_processed_plink_data/no_reclustering/PLINK_fwd_strand/recall_may_2018_without_reclustering.map"
+input_bfile1 = "/oak/stanford/groups/euan/projects/fitness_genetics/illu_processed_plink_data/no_reclustering/PLINK_fwd_strand/recall_may_2018_without_reclustering"
+snp_report_file1 = "/oak/stanford/groups/euan/projects/fitness_genetics/illu_processed_plink_data/no_reclustering/reports/no_reclustering_SNP_Table.txt"
+sample_report_file1 = "/oak/stanford/groups/euan/projects/fitness_genetics/illu_processed_plink_data/no_reclustering/reports/no_reclustering_Samples_Table.txt"
+
+ped_file2 = "/oak/stanford/groups/euan/projects/fitness_genetics/illu_processed_plink_data/no_reclustering/MEGA_Consortium_recall/plink_test_mega_consortium_data.ped"
+map_file2 = "/oak/stanford/groups/euan/projects/fitness_genetics/illu_processed_plink_data/no_reclustering/MEGA_Consortium_recall/plink_test_mega_consortium_data.map"
+input_bfile2 = "/oak/stanford/groups/euan/projects/fitness_genetics/illu_processed_plink_data/no_reclustering/MEGA_Consortium_recall/plink_test_mega_consortium_data"
+snp_report_file2 = "/oak/stanford/groups/euan/projects/fitness_genetics/illu_processed_plink_data/no_reclustering/MEGA_Consortium_recall/SNP_Table.txt"
+sample_report_file2 = "/oak/stanford/groups/euan/projects/fitness_genetics/illu_processed_plink_data/no_reclustering/MEGA_Consortium_recall/Samples_Table.txt"
+
+bad_snps_file = "/scratch/groups/euan/projects/stanford3k/plink/config/remove_snps.txt"
+
+# Our metadata
+sample_metadata = "/oak/stanford/groups/euan/projects/fitness_genetics/metadata/merged_metadata_file_stanford3k_elite_cooper.txt"
 sample_metadata_raw = read.delim(sample_metadata,stringsAsFactors = F)
 sample_metadata_raw = correct_dups_in_sample_metadata(sample_metadata_raw)
+# As of September 2018 we do not have genepool's metadata: we ignore this until we get it
+sample_metadata_raw = sample_metadata_raw[sample_metadata_raw$Cohort!="genepool",]
+
+####################################################################################################
+####################################################################################################
+####################################################################################################
+# We need to merge the two MEGA sub datasets that were called separately
+# Read the reports and compare
+snp_data1 = read.delim(snp_report_file1)
+sample_data1 = read.delim(sample_report_file1,stringsAsFactors = F)
+rownames(sample_data1) = sample_data1$Sample.ID
+
+snp_data2 = read.delim(snp_report_file2)
+sample_data2 = read.delim(sample_report_file2,stringsAsFactors = F)
+rownames(sample_data2) = sample_data2$Sample.ID
+
+# Compare some stats
+rownames(snp_data1) = snp_data1$Name
+rownames(snp_data2) = snp_data2$Name
+inds = intersect(rownames(snp_data1),rownames(snp_data2))
+snp_samp = sample(inds)[1:200000]
+cor(snp_data1[snp_samp,]$Call.Freq,snp_data2[snp_samp,]$Call.Freq,method="spearman")
+cor(snp_data1[snp_samp,]$Het.Excess,snp_data2[snp_samp,]$Het.Excess,method="spearman")
+snp_samp = snp_samp[!is.na(snp_data2[snp_samp,]$MEGA_Consortium_v2_15070954_A2.bpm.Cluster.Sep)]
+cor(snp_data1[snp_samp,]$Multi.EthnicGlobal_D1.bpm.Cluster.Sep,snp_data2[snp_samp,]$MEGA_Consortium_v2_15070954_A2.bpm.Cluster.Sep,method="spearman")
+table(snp_data2[snp_samp,]$MEGA_Consortium_v2_15070954_A2.bpm.Cluster.Sep>0.3,snp_data1[snp_samp,]$Multi.EthnicGlobal_D1.bpm.Cluster.Sep>0.3)
 
 # some preprocessing of metadata
-snp_data_autosomal_rows = grepl("^\\d+$",snp_data$Chr)
-snps_to_exclude =  snp_data$Call.Freq < snp_min_call_rate |
-     snp_data$Multi.EthnicGlobal_D1.bpm.Cluster.Sep < snp_min_clustersep_thr |
-     snp_data$Het.Excess < snp_min_het_ex |
-     snp_data$Het.Excess > snp_max_het_ex
-if(autosomal_chrs){
-  snps_to_exclude = snps_to_exclude & snp_data_autosomal_rows
+analyze_snp_report_get_snps_to_exclude<-function(snp_data,autosomal_chrs,snp_min_call_rate,
+                                                 snp_min_clustersep_thr,snp_min_het_ex,snp_max_het_ex,
+                                                 clust_sep_col_name = "Multi.EthnicGlobal_D1.bpm.Cluster.Sep"){
+  snp_data_autosomal_rows = grepl("^\\d+$",snp_data$Chr)
+  snps_to_exclude =  snp_data$Call.Freq < snp_min_call_rate |
+    snp_data[[clust_sep_col_name]] < snp_min_clustersep_thr |
+    snp_data$Het.Excess < snp_min_het_ex |
+    snp_data$Het.Excess > snp_max_het_ex
+  if(autosomal_chrs){
+    snps_to_exclude = snps_to_exclude & snp_data_autosomal_rows
+  }
+  if(!autosomal_chrs){
+    snps_to_exclude = snps_to_exclude & !snp_data_autosomal_rows
+  }
+  return(snp_data$Name[snps_to_exclude])
 }
-if(!autosomal_chrs){
-  snps_to_exclude = snps_to_exclude & !snp_data_autosomal_rows
-}
-table(snps_to_exclude)
-write.table(t(t(as.character(snp_data$Name[snps_to_exclude]))),
-            file=paste(job_dir,"snps_to_exclude.txt",sep=''),
-            row.names = F,col.names = F,quote = F)
+excl1 = analyze_snp_report_get_snps_to_exclude(snp_data1,autosomal_chrs,snp_min_call_rate,
+      snp_min_clustersep_thr,snp_min_het_ex,snp_max_het_ex,
+      clust_sep_col_name = "Multi.EthnicGlobal_D1.bpm.Cluster.Sep")
+excl2 = analyze_snp_report_get_snps_to_exclude(snp_data2,autosomal_chrs,snp_min_call_rate,
+      snp_min_clustersep_thr,snp_min_het_ex,snp_max_het_ex,
+      clust_sep_col_name = "MEGA_Consortium_v2_15070954_A2.bpm.Cluster.Sep")
+excl3 = read.table(bad_snps_file,stringsAsFactors = F)[,1]
 
-####################################################################################################
-####################################################################################################
-####################################################################################################
-# set the job's directory
-system(paste("mkdir",job_dir),wait = T)
-system(paste("cp",ped_file,paste(job_dir,"raw.ped",sep='')),wait = T)
-system(paste("cp",map_file,paste(job_dir,"raw.map",sep='')),wait = T)
-list.files(job_dir)
+# Final snp set for subsequent analyses
+snp_set = intersect(rownames(snp_data1),rownames(snp_data2))
+snp_set = setdiff(snp_set,excl1)
+snp_set = setdiff(snp_set,excl2)
+snp_set = setdiff(snp_set,excl3)
+write.table(t(t(snp_set)),paste(job_dir,"snp_set.txt",sep=""), row.names = F,col.names = F,quote = F)
 
-# Create bed file
-jobs_before = get_my_jobs()
-err_path = paste(job_dir,"raw_to_bed.err",sep="")
-log_path = paste(job_dir,"raw_to_bed.log",sep="")
-curr_cmd = paste("plink --file",paste(job_dir,"raw",sep=''),
-                 "--make-bed --out",paste(job_dir,"raw",sep=''))
-curr_sh_file = "raw_bed.sh"
+# take care of the FIDs
+fam1 = read.table(paste(input_bfile1,".fam",sep=""),stringsAsFactors = F)
+update_ids1 = cbind(fam1[,1:2],paste("file1_",fam1[,1],sep=""),fam1[,2])
+write.table(file=paste(job_dir,"update_ids1.txt",sep=""),update_ids1,sep="\t",row.names = F,col.names = F,quote = F)
+fam2 = read.table(paste(input_bfile2,".fam",sep=""),stringsAsFactors = F)
+# for file 1 we want to remove samples that appear in file 2
+inds = !is.element(fam1[,2],set=fam2[,2])
+inds = inds & is.element(fam1[,2],set=rownames(sample_metadata_raw))
+file1_samples_to_keep = fam1[inds,]
+write.table(file=paste(job_dir,"file1_samples_to_keep.txt",sep=""),file1_samples_to_keep,sep="\t",row.names = F,col.names = F,quote = F)
+write.table(file=paste(job_dir,"update_ids1.txt",sep=""),update_ids1[inds,],sep="\t",row.names = F,col.names = F,quote = F)
+
+inds2 = is.element(fam2[,2],set=rownames(sample_metadata_raw))
+file2_samples_to_keep = fam2[inds2,]
+write.table(file=paste(job_dir,"file2_samples_to_keep.txt",sep=""),file2_samples_to_keep,sep="\t",row.names = F,col.names = F,quote = F)
+
+# Correct File 1 before merge
+# Remove samples that appear in file 2 (the consortium file)
+err_path = paste(job_dir,"prepare_bfile1.err",sep="")
+log_path = paste(job_dir,"prepare_bfile1.log",sep="")
+curr_cmd = paste("plink --bfile",input_bfile1,
+                 "--keep",paste(job_dir,"file1_samples_to_keep.txt",sep=""),
+                 "--extract",paste(job_dir,"snp_set.txt",sep=""),
+                 "--make-bed --out",paste(job_dir,"bfile1",sep=''))
+curr_sh_file = "prepare_bfile1.sh"
 print_sh_file(paste(job_dir,curr_sh_file,sep=''),
               get_sh_default_prefix(err_path,log_path),curr_cmd)
 system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
 wait_for_job()
+
+err_path = paste(job_dir,"update_ids_bfile1.err",sep="")
+log_path = paste(job_dir,"update_ids_bfile1.log",sep="")
+curr_cmd = paste("plink --bfile",paste(job_dir,"bfile1",sep=''),
+                 "--update-ids",paste(job_dir,"update_ids1.txt",sep=""),
+                 "--make-bed --out",paste(job_dir,"bfile1",sep=''))
+curr_sh_file = "update_ids_bfile1.sh"
+print_sh_file(paste(job_dir,curr_sh_file,sep=''),
+              get_sh_default_prefix(err_path,log_path),curr_cmd)
+system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
+wait_for_job()
+
+# Correct File 2 before merge
+# Remove samples that are not in the metadata
+err_path = paste(job_dir,"prepare_bfile2.err",sep="")
+log_path = paste(job_dir,"prepare_bfile2.log",sep="")
+curr_cmd = paste("plink --bfile",input_bfile2,
+                 "--keep",paste(job_dir,"file2_samples_to_keep.txt",sep=""),
+                 "--extract",paste(job_dir,"snp_set.txt",sep=""),
+                 "--make-bed --out",paste(job_dir,"bfile2",sep=''))
+curr_sh_file = "prepare_bfile2.sh"
+print_sh_file(paste(job_dir,curr_sh_file,sep=''),
+              get_sh_default_prefix(err_path,log_path),curr_cmd)
+system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
+wait_for_job()
+
+# Subject QC:
+# File 1
+err_path = paste(job_dir,"subj_qc_bfile1.err",sep="")
+log_path = paste(job_dir,"subj_qc_bfile1.log",sep="")
+curr_cmd = paste("plink --bfile",paste(job_dir,"bfile1",sep=''),
+                 "--missing --het",
+                 "--out",paste(job_dir,"bfile1",sep=''))
+curr_sh_file = "subj_qc_bfile1.sh"
+print_sh_file(paste(job_dir,curr_sh_file,sep=''),
+              get_sh_default_prefix(err_path,log_path),curr_cmd)
+system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
+wait_for_job()
+
+# File 2
+err_path = paste(job_dir,"subj_qc_bfile2.err",sep="")
+log_path = paste(job_dir,"subj_qc_bfile2.log",sep="")
+curr_cmd = paste("plink --bfile",paste(job_dir,"bfile2",sep=''),
+                 "--missing --het",
+                 "--out",paste(job_dir,"bfile2",sep=''))
+curr_sh_file = "subj_qc_bfile2.sh"
+print_sh_file(paste(job_dir,curr_sh_file,sep=''),
+              get_sh_default_prefix(err_path,log_path),curr_cmd)
+system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
+wait_for_job()
+
+# Analyze the results
+# Subject call rates:
+miss1 = read.table(paste(job_dir,"bfile1.imiss",sep=""),stringsAsFactors = F,header=T)
+miss2 = read.table(paste(job_dir,"bfile2.imiss",sep=""),stringsAsFactors = F,header=T)
+crs1 = 1-miss1$F_MISS;crs2 = 1-miss2$F_MISS
+quantile(crs1)
+quantile(crs2)
+table(crs1<initial_subj_min_call_rate)
+table(crs2<initial_subj_min_call_rate)
+het1 = read.table(paste(job_dir,"bfile1.het",sep=""),stringsAsFactors = F,header=T)
+het2 = read.table(paste(job_dir,"bfile2.het",sep=""),stringsAsFactors = F,header=T)
+quantile(het1$F)
+quantile(het2$F)
+table(het2$F < -1,crs2<initial_subj_min_call_rate)
+# September 2018: we observed outlier subjects in file 2 only
+to_rem = miss2[crs2<initial_subj_min_call_rate,1:2]
+remove_subjects_using_plink(paste(job_dir,"bfile2",sep=""),to_rem,job_dir,"file2_initial_subj_qc","bfile2",
+                                      batch_script_func=get_sh_default_prefix)
+
+# SNP QC: Get missingness, het, call rates etc for each file
+# File 1
+err_path = paste(job_dir,"snp_c_bfile1.err",sep="")
+log_path = paste(job_dir,"snp_c_bfile1.log",sep="")
+curr_cmd = paste("plink --bfile",paste(job_dir,"bfile1",sep=''),
+                 "--freq 	--hardy --missing",
+                 "--out",paste(job_dir,"bfile1",sep=''))
+curr_sh_file = "snp_c_bfile1.sh"
+print_sh_file(paste(job_dir,curr_sh_file,sep=''),
+              get_sh_default_prefix(err_path,log_path),curr_cmd)
+system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
+wait_for_job()
+
+# File 2
+err_path = paste(job_dir,"snp_c_bfile2.err",sep="")
+log_path = paste(job_dir,"snp_c_bfile2.log",sep="")
+curr_cmd = paste("plink --bfile",paste(job_dir,"bfile2",sep=''),
+                 "--freq 	--hardy --missing",
+                 "--out",paste(job_dir,"bfile2",sep=''))
+curr_sh_file = "snp_c_bfile2.sh"
+print_sh_file(paste(job_dir,curr_sh_file,sep=''),
+              get_sh_default_prefix(err_path,log_path),curr_cmd)
+system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
+wait_for_job()
+
+# Analyze the SNP QC results
+miss1 = read.table(paste(job_dir,"bfile1.lmiss",sep=""),stringsAsFactors = F,header=T)
+miss2 = read.table(paste(job_dir,"bfile2.lmiss",sep=""),stringsAsFactors = F,header=T)
+
+frq1 = read.table(paste(job_dir,"bfile1.frq",sep=""),stringsAsFactors = F,header=T)
+frq2 = read.table(paste(job_dir,"bfile2.frq",sep=""),stringsAsFactors = F,header=T)
+
+het1 = read.table(paste(job_dir,"bfile1.hwe",sep=""),stringsAsFactors = F,header=T)
+het2 = read.table(paste(job_dir,"bfile2.hwe",sep=""),stringsAsFactors = F,header=T)
+
+to_rem_file1 = union(miss1$SNP[1-miss1$F_MISS<snp_min_call_rate],
+                     frq1$SNP[frq1$MAF < min_maf])
+to_rem_file1 = union(to_rem_file1,het1$SNP[het1$P < snp_het_p])
+
+to_rem_file2 = union(miss2$SNP[1-miss2$F_MISS<snp_min_call_rate],
+                     frq2$SNP[frq2$MAF < min_maf])
+to_rem_file2 = union(to_rem_file2,het2$SNP[het2$P < snp_het_p])
+
+to_rem_files_union = union(to_rem_file1,to_rem_file2)
+bim1 = read.table(paste(job_dir,"bfile1.bim",sep=""),stringsAsFactors = F)
+snps_to_keep = setdiff(bim1[,2],to_rem_files_union)
+
+# Reduce the datasets before the merge
+extract_snps_using_plink(paste(job_dir,"bfile1",sep=""),snps_to_keep,job_dir,"final_snps_to_keep","bfile1",
+    batch_script_func=get_sh_default_prefix)
+extract_snps_using_plink(paste(job_dir,"bfile2",sep=""),snps_to_keep,job_dir,"final_snps_to_keep","bfile2",
+                         batch_script_func=get_sh_default_prefix)
+wait_for_job()
+
+# Read the bim files: we may need to flip some snps
+bim1 = read.table(paste(job_dir,"bfile1.bim",sep=""),stringsAsFactors = F)
+bim2 = read.table(paste(job_dir,"bfile2.bim",sep=""),stringsAsFactors = F)
+rownames(bim1) = bim1[,2];rownames(bim2) = bim2[,2]
+bim1 = bim1[rownames(bim2),]
+
+get_num_alleles<-function(x){
+  return(length(setdiff(unique(x),"0")))
+}
+xx = cbind(bim1[,5:6],bim2[,5:6])
+all_num_alleles = apply(xx,1,get_num_alleles)
+one_allele_appears_as_two<-function(x){
+  return(get_num_alleles(x)==2 & sum(x=="0")==2)
+}
+is_one_allele_appears_as_two = apply(xx,1,one_allele_appears_as_two)
+snps_to_flip = rownames(bim1)[is_one_allele_appears_as_two | all_num_alleles>2]
+length(snps_to_flip)
+bim1[snps_to_flip,][1:10,]
+
+flip_nuc<-function(x){
+  if(x=="T"){return("A")}
+  if(x=="A"){return("T")}
+  if(x=="G"){return("C")}
+  if(x=="C"){return("G")}
+  if(x=="0"){return("0")}
+}
+flip_snp_info<-function(x){
+  return(sapply(x,flip_nuc))
+}
+repl = apply(xx[snps_to_flip,1:2],1,flip_snp_info)
+xx[snps_to_flip,1] = repl[1,]
+xx[snps_to_flip,2] = repl[2,]
+all_num_alleles2 = apply(xx,1,get_num_alleles)
+table(all_num_alleles2)
+bim1[all_num_alleles2==0,][1:10,] # should be all NAs because there are no such snps
+
+flip_snps_using_plink(paste(job_dir,"bfile1",sep=""),snps_to_flip,job_dir,"final_snps_to_flip","bfile1",
+                         batch_script_func=get_sh_default_prefix)
+
+# Merge
+err_path = paste(job_dir,"merge_plink.err",sep="")
+log_path = paste(job_dir,"merge_plink.log",sep="")
+curr_cmd = paste("plink --bfile",paste(job_dir,"bfile1",sep=''),
+                 "--bmerge",paste(job_dir,"bfile2",sep=''),
+                 "--make-bed --out",paste(job_dir,"merged_mega_data",sep=''))
+curr_sh_file = "merge_plink.sh"
+print_sh_file(paste(job_dir,curr_sh_file,sep=''),
+              get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,Ncpu=2,mem_size=16000),curr_cmd)
+system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
+
+# Check flipscan
+# create a phe file
+fam1 = as.matrix(read.table(paste(job_dir,"bfile1.fam",sep=""),stringsAsFactors = F))
+fam2 = as.matrix(read.table(paste(job_dir,"bfile2.fam",sep=""),stringsAsFactors = F))
+fam1 = cbind(fam1,rep("1",nrow(fam1)))
+fam2 = cbind(fam2,rep("2",nrow(fam2)))
+rownames(fam1)=NULL;colnames(fam1)=NULL
+rownames(fam2)=NULL;colnames(fam2)=NULL
+phe = rbind(fam1,fam2)
+phe = phe[,c(1:2,7)]
+colnames(phe) = c("FID","IID","mega")
+write.table(phe,file=paste(job_dir,"flipscan_mega_type.txt",sep=""),
+            sep=" ",quote=F,row.names = F,col.names = T)
+# Run flipscan
+err_path = paste(job_dir,"mega_flipscan.err",sep="")
+log_path = paste(job_dir,"mega_flipscan.log",sep="")
+curr_cmd = paste("plink --bfile",paste(job_dir,"merged_mega_data",sep=''),
+                 "--flip-scan --allow-no-sex",
+                 "--pheno",paste(job_dir,"flipscan_mega_type.txt",sep=""),
+                 "--pheno-name mega",
+                 "--out",paste(job_dir,"merged_mega_data",sep=''))
+curr_sh_file = "mega_flipscan.sh"
+print_sh_file(paste(job_dir,curr_sh_file,sep=''),
+              get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,Ncpu=2,mem_size=16000),curr_cmd)
+system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
+
 
 ####################################################################################################
 ####################################################################################################
@@ -96,7 +358,7 @@ if(!is.null(analysis_cohorts)){
   curr_samples = rownames(sample_metadata_raw)[is.element(sample_metadata_raw$Cohort,
                                                           set=analysis_cohorts)]
   
-  fam_samples = read.table(paste(job_dir,"raw.fam",sep=""),stringsAsFactors = F)
+  fam_samples = read.table(paste(job_dir,"merged_mega_data.fam",sep=""),stringsAsFactors = F)
   iid2fid = fam_samples[,1]
   names(iid2fid) = fam_samples[,2]
   curr_samples = intersect(curr_samples,fam_samples[,2])
@@ -106,17 +368,17 @@ if(!is.null(analysis_cohorts)){
   
   err_path = paste(job_dir,"keep_cohort_subjects.err",sep="")
   log_path = paste(job_dir,"keep_cohort_subjects.log",sep="")
-  curr_cmd = paste("plink --bfile",paste(job_dir,"raw",sep=''),
+  curr_cmd = paste("plink --bfile",paste(job_dir,"merged_mega_data",sep=''),
                    "--keep",paste(job_dir,"curr_samples.txt",sep=''),
-                   "--make-bed --out",paste(job_dir,"raw",sep=''))
+                   "--make-bed --out",paste(job_dir,"merged_mega_data",sep=''))
   curr_sh_file = "keep_cohort_subjects.sh"
   print_sh_file(paste(job_dir,curr_sh_file,sep=''),
                 get_sh_default_prefix(err_path,log_path),curr_cmd)
   system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
   wait_for_job()
-  system(paste("rm ",job_dir,"raw.bed~",sep=""))
-  system(paste("rm ",job_dir,"raw.bim~",sep=""))
-  system(paste("rm ",job_dir,"raw.fam~",sep=""))
+  system(paste("rm ",job_dir,"merged_mega_data.bed~",sep=""))
+  system(paste("rm ",job_dir,"merged_mega_data.bim~",sep=""))
+  system(paste("rm ",job_dir,"merged_mega_data.fam~",sep=""))
 }
 
 ####################################################################################################
@@ -125,7 +387,7 @@ if(!is.null(analysis_cohorts)){
 # impute sex
 err_path = paste(job_dir,"impute_sex.err",sep="")
 log_path = paste(job_dir,"impute_sex.log",sep="")
-curr_cmd = paste("plink --bfile",paste(job_dir,"raw",sep=''),
+curr_cmd = paste("plink --bfile",paste(job_dir,"merged_mega_data",sep=''),
                  "--check-sex .3 .9 --chr 23",
                  "--out",paste(job_dir,"impute_sex",sep=''))
 curr_sh_file = "impute_sex.sh"
@@ -134,14 +396,16 @@ print_sh_file(paste(job_dir,curr_sh_file,sep=''),
 system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
 
 # get simple imputation by looking at call rates in Y chromosome
-Y_snps = grepl("^Y$",snp_data$Chr,ignore.case = T)
-write.table(t(t(as.character(snp_data$Name[Y_snps]))),
+Y_snps = grepl("^Y$",snp_data1$Chr,ignore.case = T)
+Y_snps = as.character(snp_data1$Name[Y_snps])
+Y_snps = intersect(Y_snps,snps_to_keep)
+write.table(t(t(Y_snps)),
             file=paste(job_dir,"Y_snps.txt",sep=''),
             row.names = F,col.names = F,quote = F)
 jobs_before = get_my_jobs()
 err_path = paste(job_dir,"Y_snps_analysis.err",sep="")
 log_path = paste(job_dir,"Y_snps_analysis.log",sep="")
-curr_cmd = paste("plink --bfile",paste(job_dir,"raw",sep=''),
+curr_cmd = paste("plink --bfile",paste(job_dir,"merged_mega_data",sep=''),
                  "--extract", paste(job_dir,"Y_snps.txt",sep=""),
                  "--missing --out",paste(job_dir,"Y_snps_analysis",sep=''))
 curr_sh_file = "Y_snps_analysis.sh"
@@ -163,10 +427,9 @@ chr_filter = "--chr 0-22"
 if(!autosomal_chrs){
   chr_filter = "--no-chr 0-22"
 }
-curr_cmd = paste("plink --bfile",paste(job_dir,"raw",sep=''),
+curr_cmd = paste("plink --bfile",paste(job_dir,"merged_mega_data",sep=''),
                  chr_filter,
-                 "--exclude",paste(job_dir,"snps_to_exclude.txt",sep=''),
-                 "--make-bed --out",paste(job_dir,"chr_filter",sep=''))
+                 "--make-bed --out",paste(job_dir,"merged_mega_data_autosomal",sep=''))
 curr_sh_file = "chr_filter.sh"
 print_sh_file(paste(job_dir,curr_sh_file,sep=''),
               get_sh_default_prefix(err_path,log_path),curr_cmd)
@@ -184,40 +447,40 @@ system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
 ####################################################################################################
 ####################################################################################################
 ####################################################################################################
-# Exclude low maf snps.
-# Also add freq, pca, and misingness analyses
-if(is.null(analysis_cohorts)){
-  maf_snps_to_exclude = snp_data$Name[snp_data$Minor.Freq<min_maf]
-  write.table(t(t(as.character(snp_data$Name[maf_snps_to_exclude]))),
-              file=paste(job_dir,"maf_snps_to_exclude.txt",sep=''),
-              row.names = F,col.names = F,quote = F)
-  err_path = paste(job_dir,"maf_filter.err",sep="")
-  log_path = paste(job_dir,"maf_filter.log",sep="")
-  curr_cmd = paste("plink --bfile",paste(job_dir,"chr_filter",sep=''),
-                   "--exclude",paste(job_dir,"maf_snps_to_exclude.txt",sep=''),
-                   "--maf",min_maf,
-                   "--pca --freq --missing",
-                   "--make-bed --out",paste(job_dir,"maf_filter_data",sep=''))
-  curr_sh_file = "maf_filter.sh"
-  print_sh_file(paste(job_dir,curr_sh_file,sep=''),
-                get_sh_default_prefix(err_path,log_path),curr_cmd)
-  system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
-  wait_for_job()
-}
+# # Exclude low maf snps.
+# # Also add freq, pca, and misingness analyses
+# if(is.null(analysis_cohorts)){
+#   maf_snps_to_exclude = snp_data$Name[snp_data$Minor.Freq<min_maf]
+#   write.table(t(t(as.character(snp_data$Name[maf_snps_to_exclude]))),
+#               file=paste(job_dir,"maf_snps_to_exclude.txt",sep=''),
+#               row.names = F,col.names = F,quote = F)
+#   err_path = paste(job_dir,"maf_filter.err",sep="")
+#   log_path = paste(job_dir,"maf_filter.log",sep="")
+#   curr_cmd = paste("plink --bfile",paste(job_dir,"chr_filter",sep=''),
+#                    "--exclude",paste(job_dir,"maf_snps_to_exclude.txt",sep=''),
+#                    "--maf",min_maf,
+#                    "--pca --freq --missing",
+#                    "--make-bed --out",paste(job_dir,"maf_filter_data",sep=''))
+#   curr_sh_file = "maf_filter.sh"
+#   print_sh_file(paste(job_dir,curr_sh_file,sep=''),
+#                 get_sh_default_prefix(err_path,log_path),curr_cmd)
+#   system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
+#   wait_for_job()
+# }
 
-if(!is.null(analysis_cohorts)){
-  err_path = paste(job_dir,"maf_filter.err",sep="")
-  log_path = paste(job_dir,"maf_filter.log",sep="")
-  curr_cmd = paste("plink --bfile",paste(job_dir,"chr_filter",sep=''),
-                   "--maf 0.01", # for elite, consider changing for other cohorts
-                   "--pca --freq --missing",
-                   "--make-bed --out",paste(job_dir,"maf_filter_data",sep=''))
-  curr_sh_file = "maf_filter.sh"
-  print_sh_file(paste(job_dir,curr_sh_file,sep=''),
-                get_sh_default_prefix(err_path,log_path),curr_cmd)
-  system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
-  wait_for_job()
-}
+# if(!is.null(analysis_cohorts)){
+#   err_path = paste(job_dir,"maf_filter.err",sep="")
+#   log_path = paste(job_dir,"maf_filter.log",sep="")
+#   curr_cmd = paste("plink --bfile",paste(job_dir,"chr_filter",sep=''),
+#                    "--maf 0.01", # for elite, consider changing for other cohorts
+#                    "--pca --freq --missing",
+#                    "--make-bed --out",paste(job_dir,"maf_filter_data",sep=''))
+#   curr_sh_file = "maf_filter.sh"
+#   print_sh_file(paste(job_dir,curr_sh_file,sep=''),
+#                 get_sh_default_prefix(err_path,log_path),curr_cmd)
+#   system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
+#   wait_for_job()
+# }
 
 ####################################################################################################
 ####################################################################################################

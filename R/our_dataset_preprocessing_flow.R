@@ -430,7 +430,7 @@ if(!autosomal_chrs){
 }
 curr_cmd = paste("plink --bfile",paste(job_dir,"merged_mega_data",sep=''),
                  chr_filter,
-                 "--make-bed --out",paste(job_dir,"merged_mega_data_autosomal",sep=''))
+                 "--missing --freq --pca --make-bed --out",paste(job_dir,"merged_mega_data_autosomal",sep=''))
 curr_sh_file = "chr_filter.sh"
 print_sh_file(paste(job_dir,curr_sh_file,sep=''),
               get_sh_default_prefix(err_path,log_path),curr_cmd)
@@ -486,7 +486,8 @@ system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
 ####################################################################################################
 ####################################################################################################
 ####################################################################################################
-# Here we analyze the results of some of the jobs above
+# Here we analyze the results of some of the jobs above to determine the final set of subjects
+# for the analysis. We basically exclude sex check failures and low call rate samples.
 
 # compare to known sex from the metadata
 metadata_sex = sample_metadata_raw$Sex_input_data
@@ -500,83 +501,105 @@ table(metadata_sex[inds1],imputed_sex1[inds1])
 inds2 = intersect(names(metadata_sex),names(imputed_sex2))
 table(metadata_sex[inds2],imputed_sex2[inds2])
 
-sex_errs1 = inds[((x1=="1"&x2=="F")|(x1=="2"&x2=="M")) & !is.na(x2)]
-sex_errs2 = inds[((!x3 & x2=="F")|(x3 & x2=="M")) & !is.na(x2)]
+sex_errs1 = inds1[((imputed_sex1[inds1] !="2" & metadata_sex[inds1]=="F") | (imputed_sex1[inds1] !="1"& metadata_sex[inds1]=="M"))]
+sex_errs2 = inds2[((imputed_sex2[inds2] !="2" & metadata_sex[inds2]=="F") | (imputed_sex2[inds2] !="1"& metadata_sex[inds2]=="M"))]
 sex_errs = union(sex_errs1,sex_errs2)
+table(is.element(sex_errs,set=sex_errs1),is.element(sex_errs,set=sex_errs2))
+table(is.element(sex_errs,set=intersect(inds1,inds2)))
+sex_errs[is.element(sex_errs,set=intersect(inds1,inds2))]
 # Check the ids and compare to the exome data
 # Create a report with the sex errors
 m = sample_metadata_raw[sex_errs,]$Cohort
-# look at call rates of the samples with error in sex imputation
-m = cbind(m,sample_data[sex_errs,]$Call.Rate)
-m = cbind(x2[sex_errs],x1[sex_errs],x3[sex_errs],m)
 m = cbind(sample_metadata_raw[sex_errs,"Sample_ID"],m)
 rownames(m) = sex_errs
-colnames(m) = c("Sample_ID","Sex_metadata","Sex_plink_impute(1_is_male)","Sex_y_inf(is_female)","Cohort","Raw_call_rate")
+colnames(m) = c("Sample_ID","Cohort")
 write.table(m,file=paste(job_dir,"sex_impute_analysis_report.txt",sep=''),sep="\t",quote=F)
 
 # Missigness report after quality and maf filtering
-# look at the results, compare to Illumina's 
-missinigness_report = read_plink_table(paste(job_dir,"maf_filter_data.imiss",sep=''))
+# look at the results, compare to Illumina's
+missinigness_report = read_plink_table(paste(job_dir,"merged_mega_data_autosomal.imiss",sep=''))
 call_rates_after_filters = 1-as.numeric(missinigness_report[,6])
 names(call_rates_after_filters) = rownames(missinigness_report)
-low_cr_samples = missinigness_report[call_rates_after_filters<0.98,2]
-raw_call_rates = sample_data[rownames(missinigness_report),"Call.Rate"]
+low_cr_samples = missinigness_report[call_rates_after_filters<final_subj_min_call_rate,2]
+# raw_call_rates = sample_data[rownames(missinigness_report),"Call.Rate"]
+
+curr_fam = read.table(paste(job_dir,"merged_mega_data_autosomal.fam",sep=""),stringsAsFactors = F)
+final_subject_qc_excluded_samples = union(sex_errs,low_cr_samples)
+curr_fam = curr_fam[is.element(curr_fam[,2],set=final_subject_qc_excluded_samples),]
+remove_subjects_using_plink(paste(job_dir,"merged_mega_data_autosomal",sep=""),
+                            curr_fam,
+                            job_dir,"final_subj_qc","merged_mega_data_autosomal",
+                            batch_script_func=get_sh_default_prefix)
+
 
 # Report low call rate samples
 m = sample_metadata_raw[low_cr_samples,]$Cohort
 # look at call rates of the samples with error in sex imputation
-m = cbind(m,sample_data[low_cr_samples,]$Call.Rate)
 m = cbind(m,call_rates_after_filters[low_cr_samples])
 m = cbind(sample_metadata_raw[low_cr_samples,"Sample_ID"],m)
-colnames(m) = c("Sample_ID","Cohort","Raw_call_rate","Call_rate_qc_maf_filters")
+colnames(m) = c("Sample_ID","Cohort","Call_rate_qc_maf_filters")
 write.table(m,file=paste(job_dir,"missigness_analysis_report.txt",sep=''),sep="\t",quote=F)
 
-# Analyze the PCA results
-pca_res = read_plink_table(paste(job_dir,"maf_filter_data.eigenvec",sep=''),F)
-pca_res = pca_res[,-c(1:2)]
-colnames(pca_res) = paste("PC",1:ncol(pca_res),sep='')
-
-# some sanity checks before printing the output report
-all(rownames(pca_res) == names(call_rates_after_filters))
-all(rownames(pca_res) == names(imputed_sex))
-all(rownames(pca_res) == names(raw_call_rates))
-
-# define the samples to exclude for subsequent analysis, get the bed, bgen, and covariate files
-fam_samples = read.table(paste(job_dir,"raw.fam",sep=""),stringsAsFactors = F)
-subjects_for_analysis = intersect(rownames(sample_metadata_raw),fam_samples[,2])
-subjects_for_analysis = setdiff(subjects_for_analysis,low_cr_samples)
-subjects_for_analysis = setdiff(subjects_for_analysis,sex_errs)
-
-# put all covariates in one table
-covariate_matrix = cbind(sample_metadata_raw[rownames(pca_res),c(6:8,11,12:17,20:23)],
-                         raw_call_rates,call_rates_after_filters,imputed_sex,
-                         pca_res)
-# note that the plink data may have additional samples not in the samples
-# we wish to analyze in this specific project.
-# We therefore have to make sure we proceed only with subjects in the metadata
-# file.
-covariate_matrix = covariate_matrix[subjects_for_analysis,]
-length(intersect(sex_errs,rownames(covariate_matrix)))
-write.table(covariate_matrix,file=
-              paste(job_dir,"integrated_sample_metadata_and_covariates.txt",sep=''),
-            sep="\t",quote=F)
-
 ####################################################################################################
 ####################################################################################################
 ####################################################################################################
 
-write.table(covariate_matrix[,c("FID","IID")],file=
-              paste(job_dir,"subjects_for_analysis.txt",sep=''),
-            sep="\t",quote=F,row.names = F)
-err_path = paste(job_dir,"exclude_failed_subjects.err",sep="")
-log_path = paste(job_dir,"exclude_failed_subjects.log",sep="")
-curr_cmd = paste("plink --bfile",paste(job_dir,"maf_filter_data",sep=''),
-                 "--keep",paste(job_dir,"subjects_for_analysis.txt",sep=''),
-                 "--pca --freq --missing --make-bed --out",paste(job_dir,"final_dataset_for_analysis",sep=''))
-curr_sh_file = "exclude_failed_subjects.sh"
+err_path = paste(job_dir,"final_data_pca.err",sep="")
+log_path = paste(job_dir,"final_data_pca.log",sep="")
+curr_cmd = paste("plink --bfile",paste(job_dir,"merged_mega_data_autosomal",sep=''),
+                 "--freq --pca --out",paste(job_dir,"merged_mega_data_autosomal",sep=''))
+curr_sh_file = "final_data_pca.sh"
 print_sh_file(paste(job_dir,curr_sh_file,sep=''),
               get_sh_default_prefix(err_path,log_path),curr_cmd)
 system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
+wait_for_job()
+
+# define the samples to exclude for subsequent analysis, get the bed, bgen, and covariate files
+fam_samples = read.table(paste(job_dir,"merged_mega_data_autosomal.fam",sep=""),stringsAsFactors = F)
+pca_res = read_pca_res(paste(job_dir,"merged_mega_data_autosomal.eigenvec",sep=""))
+all(is.element(fam_samples[,2],set=rownames(sample_metadata_raw))) # this should be TRUE
+all(rownames(pca_res) == fam_samples[,2]) # this should be true as well
+subjects_for_analysis = fam_samples[,2]
+is_mega_consortium = !grepl(fam_samples[,1],pattern="^file")
+imputed_sex = c(
+  imputed_sex1[is.element(names(imputed_sex1),set=subjects_for_analysis[!is_mega_consortium])],
+  imputed_sex2[is.element(names(imputed_sex2),set=subjects_for_analysis[is_mega_consortium])]
+)
+length(intersect(names(imputed_sex),subjects_for_analysis)) == length(subjects_for_analysis) # must be TRUE
+imputed_sex = imputed_sex[subjects_for_analysis]
+
+# put all covariates in one table
+covariate_matrix = cbind(fam_samples[,1:2],sample_metadata_raw[subjects_for_analysis,],
+                         call_rates_after_filters[subjects_for_analysis],imputed_sex,is_mega_consortium,
+                         pca_res)
+
+# Correct some columns to make them easier to work with plink
+covariate_matrix[covariate_matrix==""] = NA
+covariate_matrix$Shipment.date[is.na(covariate_matrix$Shipment.date)] = "uknown"
+covariate_matrix$Cohort[covariate_matrix$Cohort=="ELITE"] = "2"
+covariate_matrix$Cohort[covariate_matrix$Cohort=="Cooper"] = "1"
+covariate_matrix[,"Shipment.date"] = cov_phe_col_to_plink_numeric_format(covariate_matrix[,"Shipment.date"])
+colnames(covariate_matrix)[colnames(covariate_matrix)=="Age..at.test."] = "age"
+colnames(covariate_matrix)[colnames(covariate_matrix)=="imputed_sex"] = "sex"
+colnames(covariate_matrix)[colnames(covariate_matrix)=="Shipment.date"] = "batch"
+colnames(covariate_matrix)[1:2] = c("FID","IID")
+covariate_matrix$batch = paste("batch",covariate_matrix$batch,sep="")
+for(j in 1:ncol(covariate_matrix)){
+  if(class(covariate_matrix[[j]]) == "character"){
+    covariate_matrix[[j]] = gsub(pattern = " ",replacement = "_",x = covariate_matrix[[j]])
+  }
+}
+
+write.table(covariate_matrix,file=
+              paste(job_dir,"integrated_sample_metadata_and_covariates.txt",sep=''),
+            sep="\t",quote=F,row.names = F)
+write.table(covariate_matrix,file=
+              paste(job_dir,"integrated_sample_metadata_and_covariates.phe",sep=''),
+            sep=" ",quote=F,row.names = F)
+
+# Some stats
+table(covariate_matrix[,"Cohort"])
+table(covariate_matrix[,"Cohort"],covariate_matrix[,"batch"])
 
 ####################################################################################################
 ####################################################################################################
@@ -586,11 +609,11 @@ covariate_matrix = read.table(paste(job_dir,"integrated_sample_metadata_and_cova
 table(covariate_matrix$Cohort)
 for(cc in unique(covariate_matrix$Cohort)){
   inds = covariate_matrix$Cohort == cc
-  m = covariate_matrix[inds,c("FID","IID")]
+  m = covariate_matrix[inds,1:2]
   write.table(m,sep=" ",file=paste(job_dir,cc,"_subjects.txt",sep=""),row.names = F,quote = F)
   err_path = paste(job_dir,cc,"_cohort_freq.err",sep="")
   log_path = paste(job_dir,cc,"_cohort_freq.log",sep="")
-  curr_cmd = paste("plink --bfile",paste(job_dir,"final_dataset_for_analysis",sep=''),
+  curr_cmd = paste("plink --bfile",paste(job_dir,"merged_mega_data_autosomal",sep=''),
                    "--keep",paste(job_dir,cc,"_subjects.txt",sep=""),
                    "--freq --out",paste(job_dir,cc,"_cohort_freq",sep=""))
   curr_sh_file = paste(cc,"_cohort_freq.sh",sep="")
@@ -608,20 +631,41 @@ setwd(job_dir)
 err_path = paste(job_dir,"run_check_bim.err",sep="")
 log_path = paste(job_dir,"run_check_bim.log",sep="")
 system(paste("cp /home/users/davidama/apps/check_bim/HRC-1000G-check-bim-NoReadKey.pl",job_dir))
+# For 1000G-based analysis
 curr_cmd = paste("perl", paste(job_dir, "HRC-1000G-check-bim-NoReadKey.pl",sep=""),
-                 "-b", paste(job_dir,"final_dataset_for_analysis.bim",sep=''),
-                 "-f", paste(job_dir,"final_dataset_for_analysis.frq",sep=''),
-                 "-hrc -p EUR -r",
+                 "-b", paste(job_dir,"merged_mega_data_autosomal.bim",sep=''),
+                 "-f", paste(job_dir,"merged_mega_data_autosomal.frq",sep=''),
+                 "-1000g -t 0.3 -r ",
+                 "/home/users/davidama/apps/check_bim/1000GP_Phase3_combined.legend")
+curr_sh_file = "run_check_bim.sh"
+print_sh_file(paste(job_dir,curr_sh_file,sep=''),
+              get_sh_prefix_bigmem(err_path,log_path,mem_size = 256000,time="6:00:00"),curr_cmd)
+system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
+wait_for_job()
+system(paste("less ",job_dir,"Run-plink.sh | grep TEMP > ",job_dir,"Run-plink2.sh",sep=""))
+err_path = paste(job_dir,"run_check_bim_update.err",sep="")
+log_path = paste(job_dir,"run_check_bim_update.log",sep="")
+plink_commands = readLines(paste(job_dir,"Run-plink2.sh",sep=""))
+curr_sh_file = "run_check_bim_update.sh"
+print_sh_file(paste(job_dir,curr_sh_file,sep=''),
+              get_sh_default_prefix(err_path,log_path),plink_commands)
+system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
+# For HRC-based analysis
+curr_cmd = paste("perl", paste(job_dir, "HRC-1000G-check-bim-NoReadKey.pl",sep=""),
+                 "-b", paste(job_dir,"merged_mega_data_autosomal.bim",sep=''),
+                 "-f", paste(job_dir,"merged_mega_data_autosomal.frq",sep=''),
+                 "-hrc -p ALL -t 0.3 -r",
                  "/home/users/davidama/apps/check_bim/HRC.r1-1.GRCh37.wgs.mac5.sites.tab")
 curr_sh_file = "run_check_bim.sh"
 print_sh_file(paste(job_dir,curr_sh_file,sep=''),
-              get_sh_default_prefix(err_path,log_path),curr_cmd)
+              get_sh_prefix_bigmem(err_path,log_path,mem_size = 256000,time="6:00:00"),curr_cmd)
 system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
-# system(paste("mv /home/users/davidama/apps/check_bim/*final_dataset_for_analysis*",job_dir))
-# system(paste("mv /home/users/davidama/apps/check_bim/Run-plink.sh",job_dir))
 wait_for_job()
 system(paste("less ",job_dir,"Run-plink.sh | grep TEMP > ",job_dir,"Run-plink2.sh",sep=""))
-
+run_sh_lines = readLines(paste(job_dir,"Run-plink2.sh",sep=""))
+run_sh_lines = sapply(run_sh_lines,gsub,pattern = "-updated",replacement = "-hrc_updated")
+write.table(file=paste(job_dir,"Run-plink2.sh",sep=""),t(t(run_sh_lines)),
+            quote=F,row.names = F,col.names = F)
 err_path = paste(job_dir,"run_check_bim_update.err",sep="")
 log_path = paste(job_dir,"run_check_bim_update.log",sep="")
 plink_commands = readLines(paste(job_dir,"Run-plink2.sh",sep=""))
@@ -645,6 +689,91 @@ system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
 # mkdir ~/apps/wrayner_strand/
 # cd ~/apps/wrayner_strand
 # wget http://www.well.ox.ac.uk/~wrayner/strand/update_build.sh
+
+####################################################################################################
+####################################################################################################
+####################################################################################################
+# Quick GWAS runs between elite and genepool
+covariate_matrix = read.delim(paste(job_dir,"integrated_sample_metadata_and_covariates.txt",sep=''),stringsAsFactors = F)
+
+# read our fam file
+fam_info = read_plink_table(paste(job_dir,"merged_mega_data_autosomal.fam",sep=""),has_header = F)
+iid_to_fid = fam_info[,1]
+
+# PC vs cohort p-values
+pc_ps = c()
+for(j in 1:20){
+  pc_ps[j] = compute_pc_vs_binary_variable_association_p(
+    covariate_matrix[,paste("PC",j,sep="")],
+    covariate_matrix[,"Cohort"]
+  )
+}
+pc_ps = p.adjust(pc_ps)
+pc_ind = max(which(pc_ps>0.01))
+
+# Logistic: Cooper vs. Elite
+# September 2018: three tests:
+#   1. With batch and 19 PCs
+#   2. Without batch (perfectly separates the groups) and with 19 PCs
+#   3. Without batch but with 10 PCs
+pheno_file = paste(job_dir,"integrated_sample_metadata_and_covariates.phe",sep='')
+err_path = paste(job_dir,"cooper_vs_elite.err",sep="")
+log_path = paste(job_dir,"cooper_vs_elite.log",sep="")
+curr_cmd = paste("plink2",
+                 "--bfile",paste(job_dir,"merged_mega_data_autosomal",sep=''),
+                 "--logistic hide-covar firth-fallback",
+                 paste("--pheno",pheno_file),
+                 paste("--pheno-name Cohort"),
+                 paste("--covar",pheno_file),
+                 paste("--covar-name sex,age,batch,",paste(paste("PC",1:(pc_ind-1),sep=""),collapse=","),sep=""),
+                 "--adjust",
+                 "--out",paste(job_dir,"cooper_vs_elite",sep=''))
+curr_sh_file = "cooper_vs_elite.sh"
+print_sh_file(paste(job_dir,curr_sh_file,sep=''),
+              get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,"plink/2.0a1",2,10000),curr_cmd)
+system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
+wait_for_job()
+
+err_path = paste(job_dir,"cooper_vs_elite2.err",sep="")
+log_path = paste(job_dir,"cooper_vs_elite2.log",sep="")
+curr_cmd = paste("plink2",
+                 "--bfile",paste(job_dir,"merged_mega_data_autosomal",sep=''),
+                 "--logistic hide-covar firth-fallback",
+                 paste("--pheno",pheno_file),
+                 paste("--pheno-name Cohort"),
+                 paste("--covar",pheno_file),
+                 paste("--covar-name sex,age,",paste(paste("PC",1:(pc_ind-1),sep=""),collapse=","),sep=""),
+                 "--adjust",
+                 "--out",paste(job_dir,"cooper_vs_elite_without_batch",sep=''))
+curr_sh_file = "cooper_vs_elite2.sh"
+print_sh_file(paste(job_dir,curr_sh_file,sep=''),
+              get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,"plink/2.0a1",2,10000),curr_cmd)
+system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
+wait_for_job()
+
+err_path = paste(job_dir,"cooper_vs_elite3.err",sep="")
+log_path = paste(job_dir,"cooper_vs_elite3.log",sep="")
+curr_cmd = paste("plink2",
+                 "--bfile",paste(job_dir,"merged_mega_data_autosomal",sep=''),
+                 "--logistic hide-covar firth-fallback",
+                 paste("--pheno",pheno_file),
+                 paste("--pheno-name Cohort"),
+                 paste("--covar",pheno_file),
+                 paste("--covar-name sex,age,",paste(paste("PC",1:10,sep=""),collapse=","),sep=""),
+                 "--adjust",
+                 "--out",paste(job_dir,"cooper_vs_elite_without_batch_10PCs",sep=''))
+curr_sh_file = "cooper_vs_elite3.sh"
+print_sh_file(paste(job_dir,curr_sh_file,sep=''),
+              get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,"plink/2.0a1",2,10000),curr_cmd)
+system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
+wait_for_job()
+
+####################################################################################################
+####################################################################################################
+####################################################################################################
+# Quick GWAS runs between elite and genepool with subject clustering
+covariate_matrix = read.delim(paste(job_dir,"integrated_sample_metadata_and_covariates.txt",sep=''),stringsAsFactors = F)
+
 
 # # ####################################################################################################
 # # ####################################################################################################

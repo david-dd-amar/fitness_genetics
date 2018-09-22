@@ -773,7 +773,59 @@ wait_for_job()
 ####################################################################################################
 # Quick GWAS runs between elite and genepool with subject clustering
 covariate_matrix = read.delim(paste(job_dir,"integrated_sample_metadata_and_covariates.txt",sep=''),stringsAsFactors = F)
+d = covariate_matrix
+d2 = sample_metadata_raw
+samp_id = d2$Sample_ID
+altsamp_id = d2$alt_sample_id
+names(samp_id) = rownames(sample_metadata_raw)
+names(altsamp_id) = rownames(sample_metadata_raw)
+is_jap = grepl(altsamp_id,pattern="JA"); names(is_jap) = rownames(sample_metadata_raw)
 
+# Cluster by the first two PCs
+pc_x = as.matrix(d[,paste("PC",1:5,sep="")])
+pc_x_kmeans = kmeans(pc_x,5)
+table(pc_x_kmeans$cluster)
+table(pc_x_kmeans$cluster,d$Cohort)
+table(pc_x_kmeans$cluster,is_jap[names(pc_x_kmeans$cluster)])
+kmeans_res = pc_x_kmeans$cluster
+
+# Select subjects from the largest cluster
+clustable = table(kmeans_res)
+selected_cluster = names(which(clustable == max(clustable)))
+selected_subjects = names(which(kmeans_res == selected_cluster))
+
+# We now basically rerun the GWAS with the selected subjects
+d = d[selected_subjects,]
+# PC vs cohort p-values
+pc_ps = c()
+for(j in 1:20){
+  pc_ps[j] = compute_pc_vs_binary_variable_association_p(
+    d[,paste("PC",j,sep="")],
+    d[,"Cohort"]
+  )
+}
+pc_ps = p.adjust(pc_ps)
+pc_ind = max(which(pc_ps>0.01))
+
+# Logistic: Cooper vs. Elite (no batch)
+pheno_file = paste(job_dir,"EU_integrated_sample_metadata_and_covariates.phe",sep='')
+write.table(d,file= pheno_file,sep=" ",quote=F,row.names = F)
+err_path = paste(job_dir,"cooper_vs_elite4.err",sep="")
+log_path = paste(job_dir,"cooper_vs_elite4.log",sep="")
+curr_cmd = paste("plink2",
+                 "--bfile",paste(job_dir,"merged_mega_data_autosomal",sep=''),
+                 "--logistic hide-covar firth-fallback",
+                 paste("--pheno",pheno_file),
+                 paste("--pheno-name Cohort"),
+                 paste("--covar",pheno_file),
+                 paste("--covar-name sex,age,",paste(paste("PC",1:(pc_ind-1),sep=""),collapse=","),sep=""),
+                 "--adjust",
+                 "--out",paste(job_dir,"cooper_vs_elite_largest_cluster",sep=''))
+curr_sh_file = "cooper_vs_elite4.sh"
+print_sh_file(paste(job_dir,curr_sh_file,sep=''),
+              get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,"plink/2.0a1",2,10000),curr_cmd)
+system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
+wait_for_job()
 
 # # ####################################################################################################
 # # ####################################################################################################

@@ -695,6 +695,7 @@ system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
 ####################################################################################################
 # Quick GWAS runs between elite and genepool
 covariate_matrix = read.delim(paste(job_dir,"integrated_sample_metadata_and_covariates.txt",sep=''),stringsAsFactors = F)
+rownames(covariate_matrix) = covariate_matrix$IID
 
 # read our fam file
 fam_info = read_plink_table(paste(job_dir,"merged_mega_data_autosomal.fam",sep=""),has_header = F)
@@ -773,6 +774,7 @@ wait_for_job()
 ####################################################################################################
 # Quick GWAS runs between elite and genepool with subject clustering
 covariate_matrix = read.delim(paste(job_dir,"integrated_sample_metadata_and_covariates.txt",sep=''),stringsAsFactors = F)
+rownames(covariate_matrix) = covariate_matrix$IID
 d = covariate_matrix
 d2 = sample_metadata_raw
 samp_id = d2$Sample_ID
@@ -781,7 +783,8 @@ names(samp_id) = rownames(sample_metadata_raw)
 names(altsamp_id) = rownames(sample_metadata_raw)
 is_jap = grepl(altsamp_id,pattern="JA"); names(is_jap) = rownames(sample_metadata_raw)
 
-# Cluster by the first two PCs
+# Cluster by the first PCs
+set.seed(123)
 pc_x = as.matrix(d[,paste("PC",1:5,sep="")])
 pc_x_kmeans = kmeans(pc_x,5)
 table(pc_x_kmeans$cluster)
@@ -797,15 +800,17 @@ selected_subjects = names(which(kmeans_res == selected_cluster))
 # We now basically rerun the GWAS with the selected subjects
 d = d[selected_subjects,]
 # PC vs cohort p-values
-pc_ps = c()
+pc_ps = c(); pc_sd = c()
 for(j in 1:20){
   pc_ps[j] = compute_pc_vs_binary_variable_association_p(
     d[,paste("PC",j,sep="")],
     d[,"Cohort"]
   )
+  pc_sd[j] = sd(d[,paste("PC",j,sep="")])
 }
 pc_ps = p.adjust(pc_ps)
-pc_ind = max(which(pc_ps>0.01))
+pc_inds = 1:(max(which(pc_ps>0.01))-1)
+pc_inds = setdiff(pc_inds,8)
 
 # Logistic: Cooper vs. Elite (no batch)
 pheno_file = paste(job_dir,"EU_integrated_sample_metadata_and_covariates.phe",sep='')
@@ -818,7 +823,7 @@ curr_cmd = paste("plink2",
                  paste("--pheno",pheno_file),
                  paste("--pheno-name Cohort"),
                  paste("--covar",pheno_file),
-                 paste("--covar-name sex,age,",paste(paste("PC",1:(pc_ind-1),sep=""),collapse=","),sep=""),
+                 paste("--covar-name sex,age,",paste(paste("PC",pc_inds,sep=""),collapse=","),sep=""),
                  "--adjust",
                  "--out",paste(job_dir,"cooper_vs_elite_largest_cluster",sep=''))
 curr_sh_file = "cooper_vs_elite4.sh"

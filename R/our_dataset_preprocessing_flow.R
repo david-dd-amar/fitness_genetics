@@ -651,12 +651,14 @@ print_sh_file(paste(job_dir,curr_sh_file,sep=''),
               get_sh_default_prefix(err_path,log_path),plink_commands)
 system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
 # For HRC-based analysis
+err_path = paste(job_dir,"run_check_bim2.err",sep="")
+log_path = paste(job_dir,"run_check_bim2.log",sep="")
 curr_cmd = paste("perl", paste(job_dir, "HRC-1000G-check-bim-NoReadKey.pl",sep=""),
                  "-b", paste(job_dir,"merged_mega_data_autosomal.bim",sep=''),
                  "-f", paste(job_dir,"merged_mega_data_autosomal.frq",sep=''),
                  "-hrc -p ALL -t 0.3 -r",
                  "/home/users/davidama/apps/check_bim/HRC.r1-1.GRCh37.wgs.mac5.sites.tab")
-curr_sh_file = "run_check_bim.sh"
+curr_sh_file = "run_check_bim2.sh"
 print_sh_file(paste(job_dir,curr_sh_file,sep=''),
               get_sh_prefix_bigmem(err_path,log_path,mem_size = 256000,time="6:00:00"),curr_cmd)
 system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
@@ -831,6 +833,64 @@ print_sh_file(paste(job_dir,curr_sh_file,sep=''),
               get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,"plink/2.0a1",2,10000),curr_cmd)
 system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
 wait_for_job()
+
+####################################################################################################
+####################################################################################################
+####################################################################################################
+# Run cooper running times GWAS
+cooper_metadata = read.delim("/oak/stanford/groups/euan/projects/fitness_genetics/metadata/cooper_metadata.txt",
+                             stringsAsFactors = F,sep="\t")
+covariate_matrix = read.delim(paste(job_dir,"integrated_sample_metadata_and_covariates.txt",sep=''),stringsAsFactors = F)
+
+# Create the pheno file for the analysis
+# 1. Parse the treadmill times
+xt = cooper_metadata$Treadmill.time
+new_xt = c()
+for(x in xt){
+  arr = strsplit(x,split=":")[[1]]
+  if(length(arr)>2){arr = arr[-3]}
+  new_xt = c(new_xt,
+             as.numeric(arr[1])+as.numeric(arr[2])/60)
+}
+names(new_xt) = as.character(cooper_metadata[,1])
+
+# 2. Cut the cov matrix to have cooper samples only
+inds = is.element(covariate_matrix$Sample_ID,set=as.character(cooper_metadata[,1]))
+covariate_matrix = covariate_matrix[inds,]
+covariate_matrix[,"Treadmill.time"] = new_xt[as.character(covariate_matrix$Sample_ID)]
+table(is.na(covariate_matrix[,"Treadmill.time"]))
+
+# 3. PC vs. time correlations
+pc_ps = c()
+for(j in 1:20){
+  x1 = covariate_matrix[,paste("PC",j,sep="")]
+  x2 = covariate_matrix[,"Treadmill.time"]
+  pc_ps[j] = cor.test(x1,x2,method="spearman")$p.value
+}
+
+write.table(covariate_matrix,file=
+              paste(job_dir,"cooper_metadata_and_covariates.phe",sep=''),
+            sep=" ",quote=F,row.names = F)
+
+# Run the GWAS
+pheno_file = paste(job_dir,"cooper_metadata_and_covariates.phe",sep='')
+err_path = paste(job_dir,"cooper_treadmill_times.err",sep="")
+log_path = paste(job_dir,"cooper_treadmill_times.log",sep="")
+curr_cmd = paste("plink2",
+                 "--bfile",paste(job_dir,"merged_mega_data_autosomal",sep=''),
+                 "--linear hide-covar",
+                 paste("--pheno",pheno_file),
+                 paste("--pheno-name Treadmill.time"),
+                 paste("--covar",pheno_file),
+                 paste("--covar-name sex,age,",paste(paste("PC",1:5,sep=""),collapse=","),sep=""),
+                 "--adjust",
+                 "--out",paste(job_dir,"cooper_treadmill_times",sep=''))
+curr_sh_file = "cooper_treadmill_times.sh"
+print_sh_file(paste(job_dir,curr_sh_file,sep=''),
+              get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,"plink/2.0a1",2,10000),curr_cmd)
+system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
+wait_for_job()
+
 
 # # ####################################################################################################
 # # ####################################################################################################

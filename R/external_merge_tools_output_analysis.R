@@ -1,32 +1,39 @@
 
-script_file = "/oak/stanford/groups/euan/projects/fitness_genetics/scripts/fitness_genetics/R/gwas_flow_helper_functions.R"
+script_file = "~/repos/fitness_genetics/R/gwas_flow_helper_functions.R"
 source(script_file)
 
 # assumption: merged bed has frq and pca results
-# all cohorts together
-bfile = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl_fwd_with_ukbb1/merged_data_qctool_bed"
-external_data_mafs = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl_fwd_with_ukbb1/new_bed_1.frq"
-our_data_mafs = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl_fwd_with_ukbb1/new_bed_2.frq"
-out_path = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl_fwd_with_ukbb1/gwas/"
+# # all cohorts together
+# bfile = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl_fwd_with_ukbb1/merged_data_qctool_bed"
+# external_data_mafs = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl_fwd_with_ukbb1/new_bed_1.frq"
+# our_data_mafs = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl_fwd_with_ukbb1/new_bed_2.frq"
+# out_path = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl_fwd_with_ukbb1/gwas/"
+# 
+# # elite and ukbb alone
+# bfile = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/elite_only/with_ukbb/merged_data_qctool_bed"
+# external_data_mafs = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/elite_only/with_ukbb/new_bed_1.frq"
+# our_data_mafs = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/elite_only/with_ukbb/new_bed_2.frq"
+# out_path = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/elite_only/with_ukbb/gwas/"
 
-# elite and ukbb alone
-bfile = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/elite_only/with_ukbb/merged_data_qctool_bed"
-external_data_mafs = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/elite_only/with_ukbb/new_bed_1.frq"
-our_data_mafs = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/elite_only/with_ukbb/new_bed_2.frq"
-out_path = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/elite_only/with_ukbb/gwas/"
+# September 2018: new MEGA analysis, HRC as the panel
+bfile = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl_mega_separate_recalls/with_ukbb_hrc/merged_data_qctool_bed"
+alt_bfile = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl_mega_separate_recalls/with_ukbb_hrc/merged_data_plink"
+external_data_mafs = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl_mega_separate_recalls/with_ukbb_hrc/new_bed_1.frq"
+our_data_mafs = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl_mega_separate_recalls/with_ukbb_hrc/new_bed_2.frq"
+out_path = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl_mega_separate_recalls/with_ukbb_hrc/gwas/"
 
 external_control_ids = "/oak/stanford/groups/euan/projects/fitness_genetics/ukbb/20k_rand_controls_sex_age.txt"
 external_covars_path = "/oak/stanford/groups/euan/projects/fitness_genetics/ukbb/20k_rand_controls_sex_age_with_info.txt"
 # this should have our original pca results: important for us
-our_covars_path = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl/three_group_analysis_genepool_controls.phe"
+our_covars_path = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl_mega_separate_recalls/integrated_sample_metadata_and_covariates.phe"
 our_metadata = "/oak/stanford/groups/euan/projects/fitness_genetics/metadata/merged_metadata_file_stanford3k_elite_cooper.txt"
 
 try({system(paste("mkdir",out_path))})
 
 our_data_mafs_by_group = list(
-  "genepool" = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl_fwd_strand/genepool_cohort_freq.frq",
-  "cooper" = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl_fwd_strand/Cooper_cohort_freq.frq",
-  "elite" = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl_fwd_strand/ELITE_cohort_freq.frq"
+  "genepool" = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl_mega_separate_recalls/genepool_cohort_freq.frq",
+  "cooper" = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl_mega_separate_recalls/Cooper_cohort_freq.frq",
+  "elite" = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl_mega_separate_recalls/ELITE_cohort_freq.frq"
 )
 
 # The steps of the analysis below
@@ -48,12 +55,10 @@ our_data_mafs_by_group = list(
 # This file is one of the results of the gwas_flow.R script, the gwas run
 # part of this file should be revised (June 2018)
 our_covars = read.table(our_covars_path,header=T,stringsAsFactors = F)
-our_phe = as.character(our_covars[,4])
+our_phe = as.character(our_covars[,"Cohort"])
 table(our_covars[,4])
-cohorts = rep("genepool",nrow(our_covars))
-cohorts[our_covars[,4]=="0"] = "cooper"
-cohorts[our_covars[,4]=="1"] = "elite"
-our_covars[,4] = as.numeric(our_covars[,4]) + 2
+cohorts = as.character(our_covars[,"Cohort"])
+our_covars[,"Cohort"] = our_covars[,"Cohort"] + 1
 
 # Read external DB info
 external_covars = read.table(external_covars_path,stringsAsFactors = F)
@@ -70,16 +75,30 @@ external_covars = cbind(external_covars,rep("1",nrow(external_covars)),rep("ukbb
 colnames(external_covars) = c("FID","IID","sex","Batch","Age","ExerciseGroup","CohortName")
 
 # Define the final covariance matrix (with the ExerciseGroup column), without the PCs
-our_covars_wo_pcs = cbind(our_covars[,c(1,2,3,5,6,4)],cohorts)
+our_covars_wo_pcs = cbind(our_covars[,c("FID","IID","sex","batch","age","Cohort")],cohorts)
 colnames(our_covars_wo_pcs) = colnames(external_covars)
-covars = rbind(our_covars_wo_pcs,external_covars)
+covars = as.matrix(rbind(our_covars_wo_pcs,external_covars))
 rownames(covars) = covars[,"IID"]
+covars[covars[,7]=="2",7] = "elite"
+covars[covars[,7]=="1",7] = "cooper"
 
 # Define the PCAs: the combined dataset and ours
 combined_pcs = read_pca_res(paste(bfile,".eigenvec",sep=""))
 our_dataset_pcs = our_covars[,grepl("^PC",colnames(our_covars))]
 rownames(our_dataset_pcs) = our_covars[,"IID"]
 pcs_explained_var = read.table(paste(bfile,".eigenval",sep=""))
+
+# Compare the pcs of the bed and the alternative bed
+combined_pcs = read_pca_res(paste(bfile,".eigenvec",sep=""))
+combined_pcs2 = read_pca_res(paste(alt_bfile,".eigenvec",sep=""))
+length(intersect(rownames(combined_pcs),rownames(combined_pcs2))) == nrow(combined_pcs)
+combined_pcs2 = combined_pcs2[rownames(combined_pcs),1:20]
+pc_corrs = cor(combined_pcs,combined_pcs2)
+apply(abs(pc_corrs),1,max)
+apply(abs(pc_corrs),2,max)
+pc_corrs2 = cor(combined_pcs[rownames(our_dataset_pcs),],our_dataset_pcs)
+apply(abs(pc_corrs2),1,max)
+apply(abs(pc_corrs2),2,max)
 
 subjects_for_analysis = intersect(covars[,"IID"],rownames(combined_pcs))
 covars = cbind(covars[subjects_for_analysis,],combined_pcs[subjects_for_analysis,])
@@ -109,31 +128,31 @@ alldata_is_jap = is.element(d$IID,set=jap_samples)
 names(alldata_is_jap) = d$IID
 
 set.seed(123)
-pc_x = as.matrix(d[,paste("PC",1:10,sep="")])
+pc_x = as.matrix(d[d$CohortName!="ukbb",paste("PC",1:5,sep="")])
+pc_x = as.matrix(our_dataset_pcs[,1:5])
 rownames(pc_x) = d$IID
+pc_x = as.matrix(d[,paste("PC",1:3,sep="")])
 
 ## Kmeans-based analysis
-pcs_explained_var = read.table("merged_data_qctool_bed.eigenval")[,1]
+nonukbb_vars = apply(d[d$CohortName!="ukbb",paste("PC",1:20,sep="")],2,sd)
+pcs_explained_var = read.table(paste(bfile,".eigenval",sep=""))[,1]
 for(j in 1:ncol(pc_x)){pc_x[,j]=pc_x[,j]*sqrt(pcs_explained_var[j])}
-wss <- sapply(1:10,function(k){kmeans(pc_x, k, nstart=50,iter.max = 15 )$tot.withinss})
-wss[2:length(wss)]/wss[1:(length(wss)-1)]
-kmeans_res <- kmeans(pc_x, 4)$cluster # used for elite
-#kmeans_res <- kmeans(pc_x, 5, nstart = 100)$cluster # used on all cohorts
-
+#wss <- sapply(1:10,function(k){kmeans(pc_x, k, nstart=50,iter.max = 15 )$tot.withinss})
+#wss[2:length(wss)]/wss[1:(length(wss)-1)]
+kmeans_res <- kmeans(pc_x, 5)$cluster
 table(kmeans_res)
 table(kmeans_res,d[rownames(pc_x),]$CohortName)
 table(kmeans_res,alldata_is_jap[rownames(pc_x)]) # Japanese are well clustered and removed
 
-# hclust-based analysis
-dd = dist(pc_x,method="manhattan")
-h = hclust(dd,method = "complete")
-# Results from August 2018 on all cohorts are based on 10 clusters on PCA as-is data
-# (i.e., without reweighting be eigenvalues). Do not forget to set the seed.
-kmeans_res <- run_hclust(pc_x, 10, d=d,h=h) 
-
-table(kmeans_res)
-table(kmeans_res,d[rownames(pc_x),]$CohortName)
-table(kmeans_res,alldata_is_jap[rownames(pc_x)]) # Japanese are well clustered and removed
+# # hclust-based analysis
+# dd = dist(pc_x,method="manhattan")
+# h = hclust(dd,method = "complete")
+# # Results from August 2018 on all cohorts are based on 10 clusters on PCA as-is data
+# # (i.e., without reweighting be eigenvalues). Do not forget to set the seed.
+# kmeans_res <- run_hclust(pc_x, 10, d=d,h=h) 
+# table(kmeans_res)
+# table(kmeans_res,d[rownames(pc_x),]$CohortName)
+# table(kmeans_res,alldata_is_jap[rownames(pc_x)]) # Japanese are well clustered and removed
 
 # get the largest cluster and take its subjects
 cl_tb = table(kmeans_res)
@@ -160,7 +179,7 @@ curr_cmd = paste("plink2",
                  paste("--pheno",covar_file),
                  paste("--pheno-name ExerciseGroup"),
                  paste("--covar",covar_file),
-                 paste("--covar-name sex,Age,",paste(paste("PC",1:5,sep=""),collapse=","),sep=""),
+                 paste("--covar-name sex,Age,",paste(paste("PC",1:20,sep=""),collapse=","),sep=""),
                  "--adjust",
                  "--out",paste(out_path,"gwas_three_groups_linear",sep=''))
 curr_sh_file = "gwas_three_groups_linear.sh"
@@ -348,7 +367,7 @@ table(is.element(check1_snps,set=snps_to_exclude_from_results))
 create_fuma_files_for_fir(out_path,
   paste(bfile,".bim",sep=""),
   paste(bfile,".frq",sep=""),p = 1,maf = 0.01,
-  snps_to_exclude_from_results=snps_to_exclude_from_results)
+  snps_to_exclude_from_results=NULL)
 
 # Test: elite vs. ukbb: linear vs. logistic (same analysis basically)
 gwas_res_example1 = read.table(paste(out_path,"gwas_three_groups_linear.ExerciseGroup.glm.linear.adjusted",sep=""),

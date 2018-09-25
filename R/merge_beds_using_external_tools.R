@@ -182,7 +182,7 @@ system(paste("sbatch",paste(out_path,curr_sh_file,sep='')))
 err_path = paste(out_path,"merge_plink_pca.err",sep="")
 log_path = paste(out_path,"merge_plink_pca.log",sep="")
 curr_cmd = paste("plink --bfile",paste(out_path,"merged_data_plink",sep=''),
-                 "--pca --freq --out",paste(out_path,"merged_data_plink",sep=''))
+                 "--pca 40 --freq --out",paste(out_path,"merged_data_plink",sep=''))
 curr_sh_file = "merge_plink_pca.sh"
 print_sh_file(paste(out_path,curr_sh_file,sep=''),
               get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,Ncpu=4,mem_size=32000),curr_cmd)

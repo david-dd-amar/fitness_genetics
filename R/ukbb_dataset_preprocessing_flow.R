@@ -86,21 +86,51 @@ system(paste("cp /home/users/davidama/apps/check_bim/HRC-1000G-check-bim-NoReadK
 curr_cmd = paste("perl", paste(out_path, "HRC-1000G-check-bim-NoReadKey.pl",sep=""),
                  "-b", paste(out_path,"merged_control_geno.bim",sep=''),
                  "-f", paste(out_path,"merged_control_geno.frq",sep=''),
-                 "-hrc -p EUR -r",
+                 "-hrc -p ALL -t 0.3 -r",
                  "/home/users/davidama/apps/check_bim/HRC.r1-1.GRCh37.wgs.mac5.sites.tab")
 curr_sh_file = "run_check_bim.sh"
 print_sh_file(paste(out_path,curr_sh_file,sep=''),
               get_sh_prefix_bigmem(err_path,log_path,Ncpu=1,mem_size=256000),curr_cmd)
 system(paste("sbatch",paste(out_path,curr_sh_file,sep='')))
-# system(paste("mv /home/users/davidama/apps/check_bim/*merged_control_geno*",out_path))
-# system(paste("mv /home/users/davidama/apps/check_bim/Run-plink.sh",out_path))
-system(paste("less ",out_path,"Run-plink.sh | grep TEMP > ",out_path,"Run-plink2.sh",sep=""))
-
+system(paste("less ",out_path,"Run-plink.sh | grep TEMP > ",out_path,"Run-plink_hrc.sh",sep=""))
+run_sh_lines = readLines(paste(out_path,"Run-plink_hrc.sh",sep=""))
+run_sh_lines = sapply(run_sh_lines,gsub,pattern = "-updated",replacement = "-hrc_updated")
+write.table(file=paste(out_path,"Run-plink_hrc.sh",sep=""),t(t(run_sh_lines)),
+            quote=F,row.names = F,col.names = F)
+# Run check-bim's output script
 err_path = paste(out_path,"run_check_bim_update.err",sep="")
 log_path = paste(out_path,"run_check_bim_update.log",sep="")
-plink_commands = readLines(paste(out_path,"Run-plink2.sh",sep=""))
+plink_commands = readLines(paste(out_path,"Run-plink_hrc.sh",sep=""))
 curr_sh_file = "run_check_bim_update.sh"
 print_sh_file(paste(out_path,curr_sh_file,sep=''),
               get_sh_prefix_bigmem(err_path,log_path,Ncpu=1,mem_size=256000),plink_commands)
 system(paste("sbatch",paste(out_path,curr_sh_file,sep='')))
 
+# Use 1000G instead of HRC
+setwd(out_path)
+# Run the check_bim analysis
+err_path = paste(out_path,"run_check_bim2.err",sep="")
+log_path = paste(out_path,"run_check_bim2.log",sep="")
+system(paste("cp /home/users/davidama/apps/check_bim/HRC-1000G-check-bim-NoReadKey.pl",out_path))
+curr_cmd = paste("perl", paste(out_path, "HRC-1000G-check-bim-NoReadKey.pl",sep=""),
+                 "-b", paste(out_path,"merged_control_geno.bim",sep=''),
+                 "-f", paste(out_path,"merged_control_geno.frq",sep=''),
+                 "-1000g -t 0.3 -r ",
+                 "/home/users/davidama/apps/check_bim/1000GP_Phase3_combined.legend")
+urr_sh_file = "run_check_bim2.sh"
+print_sh_file(paste(out_path,curr_sh_file,sep=''),
+              get_sh_prefix_bigmem(err_path,log_path,Ncpu=1,mem_size=256000),curr_cmd)
+system(paste("sbatch",paste(out_path,curr_sh_file,sep='')))
+system(paste("less ",out_path,"Run-plink.sh | grep TEMP > ",out_path,"Run-plink_1000g.sh",sep=""))
+run_sh_lines = readLines(paste(out_path,"Run-plink_1000g.sh",sep=""))
+run_sh_lines = sapply(run_sh_lines,gsub,pattern = "-updated",replacement = "-1000g_updated")
+write.table(file=paste(out_path,"Run-plink_1000g.sh",sep=""),t(t(run_sh_lines)),
+            quote=F,row.names = F,col.names = F)
+# Run check-bim's output script
+err_path = paste(out_path,"run_check_bim_update.err",sep="")
+log_path = paste(out_path,"run_check_bim_update.log",sep="")
+plink_commands = readLines(paste(out_path,"Run-plink_1000g.sh",sep=""))
+curr_sh_file = "run_check_bim_update.sh"
+print_sh_file(paste(out_path,curr_sh_file,sep=''),
+              get_sh_prefix_bigmem(err_path,log_path,Ncpu=1,mem_size=256000),plink_commands)
+system(paste("sbatch",paste(out_path,curr_sh_file,sep='')))

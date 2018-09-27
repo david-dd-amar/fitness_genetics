@@ -79,12 +79,16 @@ get_my_jobs<-function(){
   jobs = jobs[jobs[,1]!="bash",]
   system(paste("rm",tmp))
   new_jobs = rownames(jobs)[jobs[,5]=="RUNNING" | jobs[,5]=="PENDING"]
+  if(length(new_jobs)==1){
+    return(matrix(jobs[new_jobs,],nrow=1))
+  }
   return(jobs[new_jobs,])
 }
 get_job_id<-function(x){return(x[1])}
 wait_for_job<-function(jobs_before=NULL,waittime=6,max_wait=6000){
   Sys.sleep(waittime)
   curr_jobs = get_my_jobs()
+  if(length(curr_jobs)==0){return(NULL)}
   new_jobs = rownames(curr_jobs)[curr_jobs[,5]=="RUNNING" | curr_jobs[,5]=="PENDING"]
   if(length(new_jobs)==0){return(matrix(NA,0,0))}
   print(paste("new added jobs are: ",new_jobs))
@@ -92,6 +96,7 @@ wait_for_job<-function(jobs_before=NULL,waittime=6,max_wait=6000){
   while(T){
     Sys.sleep(waittime)
     curr_jobs = get_my_jobs()
+    if(length(curr_jobs)==0){return(NULL)}
     new_jobs = rownames(curr_jobs)[curr_jobs[,5]=="RUNNING" | curr_jobs[,5]=="PENDING"]
     if(length(new_jobs)==0){return(matrix(NA,0,0))}
     i=i+1
@@ -250,12 +255,12 @@ two_d_plot_visualize_covariate<-function(x1,x2,cov1,cov2=NULL,cuts=5,...){
   cov1 = as.factor(cov1)
   cov2 = as.factor(cov2)
   cols = rainbow(length(unique(cov1)))
-  names(cols) = unique(cov1)
+  names(cols) = as.character(unique(cov1))
   cols = cols[!is.na(names(cols))]
   pchs = 1:length(unique(cov2))
-  names(pchs) = unique(cov2)
+  names(pchs) = as.character(unique(cov2))
   pchs = pchs[!is.na(names(pchs))]
-  plot(x1,x2,col=cols[cov1],pch=pchs[cov2],...)
+  plot(x1,x2,col=cols[as.character(cov1)],pch=pchs[as.character(cov2)],...)
   return(list(cols,pchs))
 }
 run_hclust<-function(pc_x,k,dd=NULL,h=NULL){
@@ -319,12 +324,12 @@ flip_snps_using_plink<-function(bfile,snps,out_path,snpfile,newbedfile,
   write.table(t(t(as.character(snps))),
               file=paste(out_path,snpfile,".txt",sep=''),
               row.names = F,col.names = F,quote = F)
-  err_path = paste(out_path,"reduce_snps",snpfile,".err",sep="")
-  log_path = paste(out_path,"reduce_snps",snpfile,".log",sep="")
+  err_path = paste(out_path,"flip_snps_",snpfile,".err",sep="")
+  log_path = paste(out_path,"flip_snps_",snpfile,".log",sep="")
   curr_cmd = paste("plink --bfile",bfile,
                    "--flip",paste(out_path,snpfile,".txt",sep=''),
                    "--make-bed --out",paste(out_path,newbedfile,sep=''))
-  curr_sh_file = paste(out_path,"reduce_snps",snpfile,".sh",sep="")
+  curr_sh_file = paste(out_path,"flip_snps_",snpfile,".sh",sep="")
   batch_script_prefix = batch_script_func(err_path,log_path,...)
   print_sh_file(curr_sh_file,batch_script_prefix,curr_cmd)
   system(paste("sbatch",curr_sh_file))
@@ -334,6 +339,10 @@ compute_pc_vs_binary_variable_association_p<-function(pc,y){
   x1 = pc[y==y[1]]
   x2 = pc[y!=y[1]]
   return(wilcox.test(x1,x2)$p.value)
+}
+
+compute_pc_vs_discrete_variable_association_p<-function(pc,y){
+  return(kruskal.test(pc,g=as.factor(y))$p.value)
 }
 
 

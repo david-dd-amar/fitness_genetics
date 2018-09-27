@@ -18,10 +18,15 @@
 # bfile2 = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/elite_only/our_prepro/final_dataset_for_analysis-updated"
 # out_path = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/elite_only/with_ukbb/"
 
-# September 2018: new MEGA analysis, HRC as the panel
-bfile1 = "/oak/stanford/groups/euan/projects/fitness_genetics/ukbb/ukbb_imputed_20k_rand_controls_sex_age/merged_control_geno-updated"
+# September 2018 1: new MEGA analysis, HRC as the panel
+bfile1 = "/oak/stanford/groups/euan/projects/fitness_genetics/ukbb/ukbb_imputed_20k_rand_controls_sex_age/merged_control_geno-hrc_updated"
 bfile2 = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl_mega_separate_recalls/merged_mega_data_autosomal-hrc_updated"
 out_path = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl_mega_separate_recalls/with_ukbb_hrc/"
+
+# September 2018 2: new MEGA analysis, 1000 genomes as the panel
+bfile1 = "/oak/stanford/groups/euan/projects/fitness_genetics/ukbb/ukbb_imputed_20k_rand_controls_sex_age/merged_control_geno-1000g_updated"
+bfile2 = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl_mega_separate_recalls/merged_mega_data_autosomal-updated"
+out_path = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl_mega_separate_recalls/with_ukbb_1000g/"
 
 try(system(paste("mkdir",out_path)))
 
@@ -156,16 +161,50 @@ print_sh_file(paste(out_path,curr_sh_file,sep=''),
 system(paste("sbatch",paste(out_path,curr_sh_file,sep='')))
 
 # Add frq and PCA
+# Snp prune
+analysis_name = "qctool_prune"
+err_path = paste(out_path,analysis_name,"_ld_report.err",sep="")
+log_path = paste(out_path,analysis_name,"_ld_report.log",sep="")
+curr_cmd = paste("plink --bfile",paste(out_path,"merged_data_qctool_bed",sep=''),
+                 "--indep-pairwise 250 10",0.1,
+                 "--out",paste(out_path,analysis_name,sep=""))
+curr_sh_file = paste(analysis_name,"_ld_report.sh",sep="")
+print_sh_file(paste(out_path,curr_sh_file,sep=''),
+              get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,Ncpu=2,mem_size=16000),curr_cmd)
+system(paste("sbatch",paste(out_path,curr_sh_file,sep='')))
+# Run PCA
 err_path = paste(out_path,"merge_qctool_pca.err",sep="")
 log_path = paste(out_path,"merge_qctool_pca.log",sep="")
 curr_cmd = paste("plink --bfile",paste(out_path,"merged_data_qctool_bed",sep=''),
-                 "--pca --freq --out",paste(out_path,"merged_data_qctool_bed",sep=''))
+                 "--extract", paste(out_path,analysis_name,".prune.in",sep=""),
+                 "--pca 40 --freq --out",paste(out_path,"merged_data_qctool_bed",sep=''))
 curr_sh_file = "merge_qctool_pca.sh"
 print_sh_file(paste(out_path,curr_sh_file,sep=''),
               get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,Ncpu=4,mem_size=32000),curr_cmd)
 system(paste("sbatch",paste(out_path,curr_sh_file,sep='')))
+# Run relatedness
+err_path = paste(out_path,"merge_qctool_relatedness.err",sep="")
+log_path = paste(out_path,"merge_qctool_relatedness.log",sep="")
+curr_cmd = paste("plink --bfile",paste(out_path,"merged_data_qctool_bed",sep=''),
+                 "--extract", paste(out_path,analysis_name,".prune.in",sep=""),
+                 "--genome --min 0.2 --out",paste(out_path,"merged_data_qctool_bed",sep=''))
+curr_sh_file = "merge_qctool_relatedness.sh"
+print_sh_file(paste(out_path,curr_sh_file,sep=''),
+              get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,Ncpu=4,mem_size=32000),curr_cmd)
+system(paste("sbatch",paste(out_path,curr_sh_file,sep='')))
+# Add freq on all SNPs
+err_path = paste(out_path,"merge_qctool_frq.err",sep="")
+log_path = paste(out_path,"merge_qctool_frq.log",sep="")
+curr_cmd = paste("plink --bfile",paste(out_path,"merged_data_qctool_bed",sep=''),
+                 "--freq --out",paste(out_path,"merged_data_qctool_bed",sep=''))
+curr_sh_file = "merge_qctool_frq.sh"
+print_sh_file(paste(out_path,curr_sh_file,sep=''),
+              get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,Ncpu=4,mem_size=32000),curr_cmd)
+system(paste("sbatch",paste(out_path,curr_sh_file,sep='')))
 
-# As a reference we do a simple merge using PLINK
+###############################
+# As a reference we do a simple merge using PLINK, the results should be similar
+###############################
 err_path = paste(out_path,"merge_plink.err",sep="")
 log_path = paste(out_path,"merge_plink.log",sep="")
 curr_cmd = paste("plink --bed",paste(out_path,"new_bed_2.bed",sep=''),
@@ -178,12 +217,34 @@ print_sh_file(paste(out_path,curr_sh_file,sep=''),
               get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,Ncpu=4,mem_size=32000),curr_cmd)
 system(paste("sbatch",paste(out_path,curr_sh_file,sep='')))
 
-# Add frq and PCA
+# Snp prune
+analysis_name = "plink_prune"
+err_path = paste(out_path,analysis_name,"_ld_report.err",sep="")
+log_path = paste(out_path,analysis_name,"_ld_report.log",sep="")
+curr_cmd = paste("plink --bfile",paste(out_path,"merged_data_plink",sep=''),
+                 "--indep-pairwise 250 10",0.1,
+                 "--out",paste(out_path,analysis_name,sep=""))
+curr_sh_file = paste(analysis_name,"_ld_report.sh",sep="")
+print_sh_file(paste(out_path,curr_sh_file,sep=''),
+              get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,Ncpu=2,mem_size=16000),curr_cmd)
+system(paste("sbatch",paste(out_path,curr_sh_file,sep='')))
+# Run PCA
 err_path = paste(out_path,"merge_plink_pca.err",sep="")
 log_path = paste(out_path,"merge_plink_pca.log",sep="")
 curr_cmd = paste("plink --bfile",paste(out_path,"merged_data_plink",sep=''),
+                 "--extract", paste(out_path,analysis_name,".prune.in",sep=""),
                  "--pca 40 --freq --out",paste(out_path,"merged_data_plink",sep=''))
 curr_sh_file = "merge_plink_pca.sh"
+print_sh_file(paste(out_path,curr_sh_file,sep=''),
+              get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,Ncpu=4,mem_size=32000),curr_cmd)
+system(paste("sbatch",paste(out_path,curr_sh_file,sep='')))
+# Run relatedness
+err_path = paste(out_path,"merge_plink_relatedness.err",sep="")
+log_path = paste(out_path,"merge_plink_relatedness.log",sep="")
+curr_cmd = paste("plink --bfile",paste(out_path,"merged_data_plink",sep=''),
+                 "--extract", paste(out_path,analysis_name,".prune.in",sep=""),
+                 "--genome --min 0.2 --out",paste(out_path,"merged_data_plink",sep=''))
+curr_sh_file = "merge_plink_relatedness.sh"
 print_sh_file(paste(out_path,curr_sh_file,sep=''),
               get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,Ncpu=4,mem_size=32000),curr_cmd)
 system(paste("sbatch",paste(out_path,curr_sh_file,sep='')))

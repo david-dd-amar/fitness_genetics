@@ -22,6 +22,13 @@ external_data_mafs = "/oak/stanford/groups/euan/projects/fitness_genetics/analys
 our_data_mafs = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl_mega_separate_recalls/with_ukbb_hrc/new_bed_2.frq"
 out_path = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl_mega_separate_recalls/with_ukbb_hrc/gwas/"
 
+# September 2018: new MEGA analysis, 1000g as the panel
+bfile = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl_mega_separate_recalls/with_ukbb_1000g/merged_data_qctool_bed"
+alt_bfile = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl_mega_separate_recalls/with_ukbb_1000g/merged_data_plink"
+external_data_mafs = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl_mega_separate_recalls/with_ukbb_1000g/new_bed_1.frq"
+our_data_mafs = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl_mega_separate_recalls/with_ukbb_1000g/new_bed_2.frq"
+out_path = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl_mega_separate_recalls/with_ukbb_1000g/gwas/"
+
 external_control_ids = "/oak/stanford/groups/euan/projects/fitness_genetics/ukbb/20k_rand_controls_sex_age.txt"
 external_covars_path = "/oak/stanford/groups/euan/projects/fitness_genetics/ukbb/20k_rand_controls_sex_age_with_info.txt"
 # this should have our original pca results: important for us
@@ -110,9 +117,24 @@ for(j in 1:ncol(covars)){
 write.table(file=paste(out_path,"all_cohorts.phe",sep=''),
             covars,sep=" ",row.names = F,col.names = T,quote=F)
 
+
 ####################################################################################################
 ####################################################################################################
 ####################################################################################################
+# Preprocessing the subject set: relatedness and clustering
+
+# Analyze the relatedness report
+library("igraph",lib.loc = "~/R/packages")
+rl_data = read.table(paste(bfile,".genome",sep=""),header=T,stringsAsFactors = F)
+rl_edges = as.matrix(rl_data[,c("IID1","IID2")])
+rl_g = igraph::graph_from_edgelist(rl_edges,directed = F)
+rl_clusters = clusters(rl_g)[[1]]
+rl_subjects_to_remove = c()
+for(cl in unique(rl_clusters)){
+  curr_subjects = names(rl_clusters)[rl_clusters==cl]
+  rl_subjects_to_remove = c(rl_subjects_to_remove,curr_subjects[-1])
+}
+
 # Cluster the data, take the largest cluster and continue for the analysis
 d = read.table(paste(out_path,"all_cohorts.phe",sep=''),header=T,stringsAsFactors = F)
 rownames(d) = d$IID
@@ -130,29 +152,30 @@ names(alldata_is_jap) = d$IID
 set.seed(123)
 pc_x = as.matrix(d[d$CohortName!="ukbb",paste("PC",1:5,sep="")])
 pc_x = as.matrix(our_dataset_pcs[,1:5])
+
+pc_x = as.matrix(d[,paste("PC",1:2,sep="")])
 rownames(pc_x) = d$IID
-pc_x = as.matrix(d[,paste("PC",1:3,sep="")])
 
 ## Kmeans-based analysis
-nonukbb_vars = apply(d[d$CohortName!="ukbb",paste("PC",1:20,sep="")],2,sd)
-pcs_explained_var = read.table(paste(bfile,".eigenval",sep=""))[,1]
-for(j in 1:ncol(pc_x)){pc_x[,j]=pc_x[,j]*sqrt(pcs_explained_var[j])}
-#wss <- sapply(1:10,function(k){kmeans(pc_x, k, nstart=50,iter.max = 15 )$tot.withinss})
-#wss[2:length(wss)]/wss[1:(length(wss)-1)]
-kmeans_res <- kmeans(pc_x, 5)$cluster
+# nonukbb_vars = apply(d[d$CohortName!="ukbb",paste("PC",1:20,sep="")],2,sd)
+# pcs_explained_var = read.table(paste(bfile,".eigenval",sep=""))[,1]
+# for(j in 1:ncol(pc_x)){pc_x[,j]=pc_x[,j]*sqrt(pcs_explained_var[j])}
+# wss <- sapply(1:10,function(k){kmeans(pc_x, k, nstart=50,iter.max = 15 )$tot.withinss})
+# wss[2:length(wss)]/wss[1:(length(wss)-1)]
+kmeans_res <- kmeans(pc_x, 3)$cluster
 table(kmeans_res)
 table(kmeans_res,d[rownames(pc_x),]$CohortName)
 table(kmeans_res,alldata_is_jap[rownames(pc_x)]) # Japanese are well clustered and removed
 
-# # hclust-based analysis
-# dd = dist(pc_x,method="manhattan")
-# h = hclust(dd,method = "complete")
-# # Results from August 2018 on all cohorts are based on 10 clusters on PCA as-is data
-# # (i.e., without reweighting be eigenvalues). Do not forget to set the seed.
-# kmeans_res <- run_hclust(pc_x, 10, d=d,h=h) 
-# table(kmeans_res)
-# table(kmeans_res,d[rownames(pc_x),]$CohortName)
-# table(kmeans_res,alldata_is_jap[rownames(pc_x)]) # Japanese are well clustered and removed
+pc_ps = c()
+for(j in 1:40){
+  pc_ps[j] = compute_pc_vs_discrete_variable_association_p(
+    pc = d[,paste("PC",j,sep="")],
+    y = d[,"CohortName"]
+  )
+}
+pc_ps = p.adjust(pc_ps)
+pc_inds = which(pc_ps < 0.01) # 15 As of September 2018
 
 # get the largest cluster and take its subjects
 cl_tb = table(kmeans_res)
@@ -179,7 +202,7 @@ curr_cmd = paste("plink2",
                  paste("--pheno",covar_file),
                  paste("--pheno-name ExerciseGroup"),
                  paste("--covar",covar_file),
-                 paste("--covar-name sex,Age,",paste(paste("PC",1:20,sep=""),collapse=","),sep=""),
+                 paste("--covar-name sex,Age,",paste(paste("PC",1:15,sep=""),collapse=","),sep=""),
                  "--adjust",
                  "--out",paste(out_path,"gwas_three_groups_linear",sep=''))
 curr_sh_file = "gwas_three_groups_linear.sh"
@@ -200,7 +223,7 @@ curr_cmd = paste("plink2",
                  paste("--pheno",covar_file),
                  paste("--pheno-name ExerciseGroup"),
                  paste("--covar",covar_file),
-                 paste("--covar-name sex,Age,",paste(paste("PC",1:5,sep=""),collapse=","),sep=""),
+                 paste("--covar-name sex,Age,",paste(paste("PC",1:15,sep=""),collapse=","),sep=""),
                  "--adjust --out",paste(out_path,"ukbb_vs_elite_logistic",sep=''))
 curr_sh_file = "ukbb_vs_elite_logistic.sh"
 print_sh_file(paste(out_path,curr_sh_file,sep=''),
@@ -219,37 +242,37 @@ curr_cmd = paste("plink2",
                  paste("--pheno",covar_file),
                  paste("--pheno-name ExerciseGroup"),
                  paste("--covar",covar_file),
-                 paste("--covar-name sex,Age,",paste(paste("PC",1:5,sep=""),collapse=","),sep=""),
+                 paste("--covar-name sex,Age,",paste(paste("PC",1:15,sep=""),collapse=","),sep=""),
                  "--adjust --out",paste(out_path,"ukbb_vs_cooper_logistic",sep=''))
 curr_sh_file = "ukbb_vs_cooper_logistic.sh"
 print_sh_file(paste(out_path,curr_sh_file,sep=''),
               get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,"plink/2.0a1",2,10000),curr_cmd)
 system(paste("sbatch",paste(out_path,curr_sh_file,sep='')))
 
-# Sanity check 1 : UKBB vs. Genepool
-load(paste(out_path,"clustering_data.RData",sep=""))
-d = read.table(paste(out_path,"kmeans_cleaned.phe",sep=''),header=T,stringsAsFactors = F)
-rownames(d) = d$IID
-d = d[selected_subjects_for_gwas,]
-covars_copy = d[d$CohortName!="elite" & d$CohortName!="cooper",]
-covars_copy$ExerciseGroup[covars_copy$CohortName=="ukbb"]="1"
-covars_copy$ExerciseGroup[covars_copy$CohortName=="genepool"]="2"
-table(covars_copy$ExerciseGroup)
-covar_file = paste(out_path,"ukbb_vs_genepool.phe",sep='')
-write.table(file=covar_file,covars_copy,sep=" ",row.names = F,col.names = T,quote=F)
-err_path = paste(out_path,"ukbb_vs_genepool.err",sep="")
-log_path = paste(out_path,"ukbb_vs_genepool.log",sep="")
-curr_cmd = paste("plink2",
-                 "--bfile",bfile,"--logistic hide-covar firth-fallback",
-                 paste("--pheno",covar_file),
-                 paste("--pheno-name ExerciseGroup"),
-                 paste("--covar",covar_file),
-                 "--covar-name sex,PC1,PC2,PC3,PC4,PC5,PC6,PC7,PC8,PC9,PC10",
-                 "--adjust --out",paste(out_path,"ukbb_vs_genepool_logistic",sep=''))
-curr_sh_file = "ukbb_vs_genepool_logistic.sh"
-print_sh_file(paste(out_path,curr_sh_file,sep=''),
-              get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,"plink/2.0a1",2,10000),curr_cmd)
-system(paste("sbatch",paste(out_path,curr_sh_file,sep='')))
+# # Sanity check 1 : UKBB vs. Genepool
+# load(paste(out_path,"clustering_data.RData",sep=""))
+# d = read.table(paste(out_path,"kmeans_cleaned.phe",sep=''),header=T,stringsAsFactors = F)
+# rownames(d) = d$IID
+# d = d[selected_subjects_for_gwas,]
+# covars_copy = d[d$CohortName!="elite" & d$CohortName!="cooper",]
+# covars_copy$ExerciseGroup[covars_copy$CohortName=="ukbb"]="1"
+# covars_copy$ExerciseGroup[covars_copy$CohortName=="genepool"]="2"
+# table(covars_copy$ExerciseGroup)
+# covar_file = paste(out_path,"ukbb_vs_genepool.phe",sep='')
+# write.table(file=covar_file,covars_copy,sep=" ",row.names = F,col.names = T,quote=F)
+# err_path = paste(out_path,"ukbb_vs_genepool.err",sep="")
+# log_path = paste(out_path,"ukbb_vs_genepool.log",sep="")
+# curr_cmd = paste("plink2",
+#                  "--bfile",bfile,"--logistic hide-covar firth-fallback",
+#                  paste("--pheno",covar_file),
+#                  paste("--pheno-name ExerciseGroup"),
+#                  paste("--covar",covar_file),
+#                  "--covar-name sex,PC1,PC2,PC3,PC4,PC5,PC6,PC7,PC8,PC9,PC10",
+#                  "--adjust --out",paste(out_path,"ukbb_vs_genepool_logistic",sep=''))
+# curr_sh_file = "ukbb_vs_genepool_logistic.sh"
+# print_sh_file(paste(out_path,curr_sh_file,sep=''),
+#               get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,"plink/2.0a1",2,10000),curr_cmd)
+# system(paste("sbatch",paste(out_path,curr_sh_file,sep='')))
 
 # Sanity check 2: UKBB vs. not UKBB: flip scan
 d = read.table(paste(out_path,"kmeans_cleaned.phe",sep=''),header=T,stringsAsFactors = F)
@@ -275,36 +298,69 @@ system(paste("sbatch",paste(out_path,curr_sh_file,sep='')))
 ####################################################################################################
 ####################################################################################################
 ####################################################################################################
+# Run GWAS for each PC
+covar_file = paste(out_path,"kmeans_cleaned.phe",sep='')
+for (j in 1:20){
+  err_path = paste(out_path,"gwas_PC",j,".err",sep="")
+  log_path = paste(out_path,"gwas_PC",j,".log",sep="")
+  curr_cmd = paste("plink2",
+                   "--bfile",bfile,"--linear hide-covar",
+                   paste("--pheno-name",paste("PC",j,sep="")),
+                   paste("--pheno",covar_file),
+                   paste("--covar",covar_file),
+                   "--covar-name sex,Age",
+                   "--adjust",
+                   "--out",paste(out_path,"gwas_PC",j,"",sep=''))
+  curr_sh_file = paste("gwas_PC",j,".sh",sep="")
+  print_sh_file(paste(out_path,curr_sh_file,sep=''),
+                get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,"plink/2.0a1",2,10000),curr_cmd)
+  system(paste("sbatch",paste(out_path,curr_sh_file,sep='')))
+}
+
+####################################################################################################
+####################################################################################################
+####################################################################################################
+# output all gwas results into a new dir with input files for fuma interpretation
+
+create_fuma_files_for_fir(out_path,
+                          paste(bfile,".bim",sep=""),
+                          paste(bfile,".frq",sep=""),p = 1,maf = 0.01,
+                          snps_to_exclude_from_results=NULL)
+
+####################################################################################################
+####################################################################################################
+####################################################################################################
 ####################################################################################################
 # Analysis of the sanity check results
-# mafs
-get_mafs_from_file<-function(path){
-  freqs = read.table(path,header=T,stringsAsFactors = F)
-  rownames(freqs) = freqs[,2]
-  mafs = freqs$MAF;names(mafs)=rownames(freqs)
-  return(mafs)
-}
-combined_mafs = get_mafs_from_file(paste(bfile,".frq",sep=""))
-our_mafs = get_mafs_from_file(our_data_mafs)
-external_mafs = get_mafs_from_file(external_data_mafs)
-names(our_mafs) = names(external_mafs)
-our_group_mafs = lapply(our_data_mafs_by_group,get_mafs_from_file)
-cor(our_group_mafs[[1]],our_group_mafs[[2]])
 
-# gwas'
-ukbb_vs_gp_res = read.table(
-  paste(out_path,"ukbb_vs_genepool_logistic.ExerciseGroup.glm.logistic.hybrid.adjusted",sep=''),
-  header=F,stringsAsFactors = F,check.names = F)
-rownames(ukbb_vs_gp_res) = ukbb_vs_gp_res[,2]
-colnames(ukbb_vs_gp_res) = ukbb_vs_gp_res[1,]
-ukbb_vs_gp_res = ukbb_vs_gp_res[-1,]
-ukbb_vs_nonukbb_res = read.table(
-  paste(out_path,"ukbb_vs_nonukbb_logistic.missing.adjusted",sep=""),
-  header=F,stringsAsFactors = F
-)
-rownames(ukbb_vs_nonukbb_res) = ukbb_vs_nonukbb_res[,2]
-colnames(ukbb_vs_nonukbb_res) = ukbb_vs_nonukbb_res[1,]
-ukbb_vs_nonukbb_res = ukbb_vs_nonukbb_res[-1,]
+# # mafs
+# get_mafs_from_file<-function(path){
+#   freqs = read.table(path,header=T,stringsAsFactors = F)
+#   rownames(freqs) = freqs[,2]
+#   mafs = freqs$MAF;names(mafs)=rownames(freqs)
+#   return(mafs)
+# }
+# combined_mafs = get_mafs_from_file(paste(bfile,".frq",sep=""))
+# our_mafs = get_mafs_from_file(our_data_mafs)
+# external_mafs = get_mafs_from_file(external_data_mafs)
+# names(our_mafs) = names(external_mafs)
+# our_group_mafs = lapply(our_data_mafs_by_group,get_mafs_from_file)
+# cor(our_group_mafs[[1]],our_group_mafs[[2]])
+# 
+# # gwas'
+# ukbb_vs_gp_res = read.table(
+#   paste(out_path,"ukbb_vs_genepool_logistic.ExerciseGroup.glm.logistic.hybrid.adjusted",sep=''),
+#   header=F,stringsAsFactors = F,check.names = F)
+# rownames(ukbb_vs_gp_res) = ukbb_vs_gp_res[,2]
+# colnames(ukbb_vs_gp_res) = ukbb_vs_gp_res[1,]
+# ukbb_vs_gp_res = ukbb_vs_gp_res[-1,]
+# ukbb_vs_nonukbb_res = read.table(
+#   paste(out_path,"ukbb_vs_nonukbb_logistic.missing.adjusted",sep=""),
+#   header=F,stringsAsFactors = F
+# )
+# rownames(ukbb_vs_nonukbb_res) = ukbb_vs_nonukbb_res[,2]
+# colnames(ukbb_vs_nonukbb_res) = ukbb_vs_nonukbb_res[1,]
+# ukbb_vs_nonukbb_res = ukbb_vs_nonukbb_res[-1,]
 
 flipscan_res = read.delim2(
   paste(out_path,"ukbb_vs_nonukbb_logistic.flipscan",sep=""),

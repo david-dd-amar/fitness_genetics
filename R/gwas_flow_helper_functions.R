@@ -345,7 +345,12 @@ compute_pc_vs_discrete_variable_association_p<-function(pc,y){
   return(kruskal.test(pc,g=as.factor(y))$p.value)
 }
 
-
+check_if_bim_is_sorted<-function(bimfile){
+  d = read.table(bimfile,stringsAsFactors = F)
+  d = d[d[,1]!="0",]
+  ord = order(d[,1],d[,4])
+  return(cor(1:length(ord),ord)>0.95)
+}
 
 
 

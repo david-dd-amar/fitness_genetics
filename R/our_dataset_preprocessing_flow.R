@@ -817,7 +817,6 @@ system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
 err_path = paste(job_dir,"final_data_frq2.err",sep="")
 log_path = paste(job_dir,"final_data_frq2.log",sep="")
 curr_cmd = paste("plink --bfile",paste(job_dir,"merged_mega_data_autosomal_after_pca",sep=''),
-                 "--extract", paste(job_dir,analysis_name,"_after_pca.prune.in",sep=""),
                  "--freq --out",paste(job_dir,"merged_mega_data_autosomal_after_pca",sep=''))
 curr_sh_file = "final_data_frq2.sh"
 print_sh_file(paste(job_dir,curr_sh_file,sep=''),
@@ -839,10 +838,12 @@ write.table(covariate_matrix,file=
 ####################################################################################################
 ####################################################################################################
 ####################################################################################################
-# Transform the dataset into HRC-based data
+# Transform the dataset into HRC-based or 1000G-based data
+
 # Run the check_bim analysis
 setwd(job_dir)
 curr_bfile = "merged_mega_data_autosomal_after_pca"
+check_if_bim_is_sorted(paste(paste(job_dir,curr_bfile,".bim",sep='')))
 err_path = paste(job_dir,"run_check_bim.err",sep="")
 log_path = paste(job_dir,"run_check_bim.log",sep="")
 system(paste("cp /home/users/davidama/apps/check_bim/HRC-1000G-check-bim-NoReadKey.pl",job_dir))
@@ -850,21 +851,27 @@ system(paste("cp /home/users/davidama/apps/check_bim/HRC-1000G-check-bim-NoReadK
 curr_cmd = paste("perl", paste(job_dir, "HRC-1000G-check-bim-NoReadKey.pl",sep=""),
                  "-b", paste(job_dir,curr_bfile,".bim",sep=''),
                  "-f", paste(job_dir,curr_bfile,".frq",sep=''),
-                 "-1000g -t 0.3 -r ",
+                 "-1000g -t 0.4 -r ",
                  "/home/users/davidama/apps/check_bim/1000GP_Phase3_combined.legend")
 curr_sh_file = "run_check_bim.sh"
 print_sh_file(paste(job_dir,curr_sh_file,sep=''),
               get_sh_prefix_bigmem(err_path,log_path,mem_size = 256000,time="6:00:00"),curr_cmd)
 system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
 wait_for_job()
-system(paste("less ",job_dir,"Run-plink.sh | grep TEMP > ",job_dir,"Run-plink2.sh",sep=""))
+system(paste("less ",job_dir,"Run-plink.sh | grep TEMP > ",job_dir,"Run-plink_1000g.sh",sep=""))
+run_sh_lines = readLines(paste(job_dir,"Run-plink_1000g.sh",sep=""))
+run_sh_lines = sapply(run_sh_lines,gsub,pattern = "-updated",replacement = "-1000g_updated")
+write.table(file=paste(job_dir,"Run-plink_1000g.sh",sep=""),t(t(run_sh_lines)),
+            quote=F,row.names = F,col.names = F)
 err_path = paste(job_dir,"run_check_bim_update.err",sep="")
 log_path = paste(job_dir,"run_check_bim_update.log",sep="")
-plink_commands = readLines(paste(job_dir,"Run-plink2.sh",sep=""))
+plink_commands = readLines(paste(job_dir,"Run-plink_1000g.sh",sep=""))
 curr_sh_file = "run_check_bim_update.sh"
 print_sh_file(paste(job_dir,curr_sh_file,sep=''),
               get_sh_default_prefix(err_path,log_path),plink_commands)
 system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
+check_if_bim_is_sorted(paste(paste(job_dir,curr_bfile,"-1000g_updated.bim",sep='')))
+
 # For HRC-based analysis
 err_path = paste(job_dir,"run_check_bim2.err",sep="")
 log_path = paste(job_dir,"run_check_bim2.log",sep="")
@@ -1103,7 +1110,7 @@ wait_for_job()
 ####################################################################################################
 # output all gwas results into a new dir with input files for fuma interpretation
 
-curr_bfile = paste(job_dir,curr_bfile,sep='')
+curr_bfile = paste(job_dir,"merged_mega_data_autosomal_after_pca",sep='')
 create_fuma_files_for_fir(job_dir,
                           paste(curr_bfile,".bim",sep=""),
                           paste(curr_bfile,".frq",sep=""),p = 1,maf = 0.01,

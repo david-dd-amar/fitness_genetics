@@ -331,9 +331,6 @@ bim2 = read.table(paste(job_dir,"bfile2.bim",sep=""),stringsAsFactors = F)
 rownames(bim1) = bim1[,2];rownames(bim2) = bim2[,2]
 bim1 = bim1[rownames(bim2),]
 
-get_num_alleles<-function(x){
-  return(length(setdiff(unique(x),"0")))
-}
 xx = cbind(bim1[,5:6],bim2[,5:6])
 all_num_alleles = apply(xx,1,get_num_alleles)
 one_allele_appears_as_two<-function(x){
@@ -343,16 +340,6 @@ is_one_allele_appears_as_two = apply(xx,1,one_allele_appears_as_two)
 snps_to_flip = rownames(bim1)[is_one_allele_appears_as_two | all_num_alleles>2]
 print(paste("comparing the two bim files, these should be flipped:",length(snps_to_flip)))
 
-flip_nuc<-function(x){
-  if(x=="T"){return("A")}
-  if(x=="A"){return("T")}
-  if(x=="G"){return("C")}
-  if(x=="C"){return("G")}
-  if(x=="0"){return("0")}
-}
-flip_snp_info<-function(x){
-  return(sapply(x,flip_nuc))
-}
 repl = apply(xx[snps_to_flip,1:2],1,flip_snp_info)
 xx[snps_to_flip,1] = repl[1,]
 xx[snps_to_flip,2] = repl[2,]
@@ -839,64 +826,65 @@ write.table(covariate_matrix,file=
 ####################################################################################################
 ####################################################################################################
 # Transform the dataset into HRC-based or 1000G-based data
-
 # Run the check_bim analysis
-setwd(job_dir)
+
+curr_dir = paste(job_dir,"1000g/",sep="")
+system(paste("mkdir",curr_dir))
+setwd(curr_dir)
 curr_bfile = "merged_mega_data_autosomal_after_pca"
 check_if_bim_is_sorted(paste(paste(job_dir,curr_bfile,".bim",sep='')))
-err_path = paste(job_dir,"run_check_bim.err",sep="")
-log_path = paste(job_dir,"run_check_bim.log",sep="")
-system(paste("cp /home/users/davidama/apps/check_bim/HRC-1000G-check-bim-NoReadKey.pl",job_dir))
+err_path = paste(curr_dir,"run_check_bim.err",sep="")
+log_path = paste(curr_dir,"run_check_bim.log",sep="")
+system(paste("cp /home/users/davidama/apps/check_bim/HRC-1000G-check-bim-NoReadKey.pl",curr_dir))
 # For 1000G-based analysis
-curr_cmd = paste("perl", paste(job_dir, "HRC-1000G-check-bim-NoReadKey.pl",sep=""),
+curr_cmd = paste("perl", paste(curr_dir, "HRC-1000G-check-bim-NoReadKey.pl",sep=""),
                  "-b", paste(job_dir,curr_bfile,".bim",sep=''),
                  "-f", paste(job_dir,curr_bfile,".frq",sep=''),
-                 "-1000g -t 0.4 -r ",
+                 "-1000g -t 0.2 -r ",
                  "/home/users/davidama/apps/check_bim/1000GP_Phase3_combined.legend")
 curr_sh_file = "run_check_bim.sh"
-print_sh_file(paste(job_dir,curr_sh_file,sep=''),
+print_sh_file(paste(curr_dir,curr_sh_file,sep=''),
               get_sh_prefix_bigmem(err_path,log_path,mem_size = 256000,time="6:00:00"),curr_cmd)
-system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
+system(paste("sbatch",paste(curr_dir,curr_sh_file,sep='')))
 wait_for_job()
-system(paste("less ",job_dir,"Run-plink.sh | grep TEMP > ",job_dir,"Run-plink_1000g.sh",sep=""))
-run_sh_lines = readLines(paste(job_dir,"Run-plink_1000g.sh",sep=""))
-run_sh_lines = sapply(run_sh_lines,gsub,pattern = "-updated",replacement = "-1000g_updated")
-write.table(file=paste(job_dir,"Run-plink_1000g.sh",sep=""),t(t(run_sh_lines)),
-            quote=F,row.names = F,col.names = F)
-err_path = paste(job_dir,"run_check_bim_update.err",sep="")
-log_path = paste(job_dir,"run_check_bim_update.log",sep="")
-plink_commands = readLines(paste(job_dir,"Run-plink_1000g.sh",sep=""))
+system(paste("less ",curr_dir,"Run-plink.sh | grep TEMP > ",curr_dir,"Run-plink_1000g.sh",sep=""))
+run_sh_lines = readLines(paste(curr_dir,"Run-plink_1000g.sh",sep=""))
+run_sh_lines[1] = gsub(paste("plink --bfile",curr_bfile),paste("plink --bfile ",job_dir,curr_bfile,sep=""),run_sh_lines[1])
+run_sh_lines = sapply(run_sh_lines,gsub,pattern = "-updated",replacement = "")
+err_path = paste(curr_dir,"run_check_bim_update.err",sep="")
+log_path = paste(curr_dir,"run_check_bim_update.log",sep="")
 curr_sh_file = "run_check_bim_update.sh"
-print_sh_file(paste(job_dir,curr_sh_file,sep=''),
-              get_sh_default_prefix(err_path,log_path),plink_commands)
-system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
-check_if_bim_is_sorted(paste(paste(job_dir,curr_bfile,"-1000g_updated.bim",sep='')))
+print_sh_file(paste(curr_dir,curr_sh_file,sep=''),
+              get_sh_default_prefix(err_path,log_path),run_sh_lines)
+system(paste("sbatch",paste(curr_dir,curr_sh_file,sep='')))
 
 # For HRC-based analysis
-err_path = paste(job_dir,"run_check_bim2.err",sep="")
-log_path = paste(job_dir,"run_check_bim2.log",sep="")
-curr_cmd = paste("perl", paste(job_dir, "HRC-1000G-check-bim-NoReadKey.pl",sep=""),
+curr_dir = paste(job_dir,"hrc/",sep="")
+system(paste("mkdir",curr_dir))
+setwd(curr_dir)
+system(paste("cp /home/users/davidama/apps/check_bim/HRC-1000G-check-bim-NoReadKey.pl",curr_dir))
+err_path = paste(curr_dir,"run_check_bim2.err",sep="")
+log_path = paste(curr_dir,"run_check_bim2.log",sep="")
+curr_cmd = paste("perl", paste(curr_dir, "HRC-1000G-check-bim-NoReadKey.pl",sep=""),
                  "-b", paste(job_dir,curr_bfile,".bim",sep=''),
                  "-f", paste(job_dir,curr_bfile,".frq",sep=''),
-                 "-hrc -p ALL -t 0.3 -r",
+                 "-hrc -p EU -t 0.2 -r",
                  "/home/users/davidama/apps/check_bim/HRC.r1-1.GRCh37.wgs.mac5.sites.tab")
 curr_sh_file = "run_check_bim2.sh"
-print_sh_file(paste(job_dir,curr_sh_file,sep=''),
+print_sh_file(paste(curr_dir,curr_sh_file,sep=''),
               get_sh_prefix_bigmem(err_path,log_path,mem_size = 256000,time="6:00:00"),curr_cmd)
-system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
+system(paste("sbatch",paste(curr_dir,curr_sh_file,sep='')))
 wait_for_job()
-system(paste("less ",job_dir,"Run-plink.sh | grep TEMP > ",job_dir,"Run-plink2.sh",sep=""))
-run_sh_lines = readLines(paste(job_dir,"Run-plink2.sh",sep=""))
-run_sh_lines = sapply(run_sh_lines,gsub,pattern = "-updated",replacement = "-hrc_updated")
-write.table(file=paste(job_dir,"Run-plink2.sh",sep=""),t(t(run_sh_lines)),
-            quote=F,row.names = F,col.names = F)
-err_path = paste(job_dir,"run_check_bim_update.err",sep="")
-log_path = paste(job_dir,"run_check_bim_update.log",sep="")
-plink_commands = readLines(paste(job_dir,"Run-plink2.sh",sep=""))
+system(paste("less ",curr_dir,"Run-plink.sh | grep TEMP > ",curr_dir,"Run-plink_hrc.sh",sep=""))
+run_sh_lines[1] = gsub(paste("plink --bfile",curr_bfile),paste("plink --bfile ",job_dir,curr_bfile,sep=""),run_sh_lines[1])
+run_sh_lines = readLines(paste(curr_dir,"Run-plink_hrc.sh",sep=""))
+run_sh_lines = sapply(run_sh_lines,gsub,pattern = "-updated",replacement = "")
+err_path = paste(curr_dir,"run_check_bim_update.err",sep="")
+log_path = paste(curr_dir,"run_check_bim_update.log",sep="")
 curr_sh_file = "run_check_bim_update.sh"
-print_sh_file(paste(job_dir,curr_sh_file,sep=''),
-              get_sh_default_prefix(err_path,log_path),plink_commands)
-system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
+print_sh_file(paste(curr_dir,curr_sh_file,sep=''),
+              get_sh_default_prefix(err_path,log_path),run_sh_lines)
+system(paste("sbatch",paste(curr_dir,curr_sh_file,sep='')))
 
 # To download and install the tools on the cluster
 # 1. Check bim:
@@ -1115,6 +1103,101 @@ create_fuma_files_for_fir(job_dir,
                           paste(curr_bfile,".bim",sep=""),
                           paste(curr_bfile,".frq",sep=""),p = 1,maf = 0.01,
                           snps_to_exclude_from_results=NULL)
+
+####################################################################################################
+####################################################################################################
+####################################################################################################
+# QC steps: compare our datasets with other datasets
+
+# for cohort specific mafs see _cohort_freq as regex
+
+# 1. MAFs: ours vs. the ukbb
+our_mafs = read.table(paste(job_dir,"merged_mega_data_autosomal_after_pca.frq",sep=""),
+                      header=T,stringsAsFactors = F)
+ukbb_mafs = read.table("/oak/stanford/groups/euan/projects/fitness_genetics/ukbb/ukbb_imputed_20k_rand_controls_sex_age/merged_control_geno.frq",
+                       header=T,stringsAsFactors = F)
+rownames(our_mafs) = our_mafs$SNP
+rownames(ukbb_mafs) = ukbb_mafs$SNP
+curr_snps = intersect(our_mafs$SNP,ukbb_mafs$SNP)
+x1 = our_mafs[curr_snps,"MAF"]
+x2 = ukbb_mafs[curr_snps,"MAF"]
+cor(x1,x2,method="spearman") # Spearman correlation: 0.997
+# > table(abs(x1-x2)>0.1)
+# FALSE   TRUE 
+# 441961    146 
+# > table(abs(x1-x2)>0.2)
+# FALSE   TRUE 
+# 442034     73 
+
+# 2. MAFs: ours vs. the ukbb after 1000g as ref
+our_mafs = read.table(paste(job_dir,"merged_mega_data_autosomal_after_pca.frq",sep=""),
+                      header=T,stringsAsFactors = F)
+ukbb_mafs = read.table("/oak/stanford/groups/euan/projects/fitness_genetics/ukbb/ukbb_imputed_20k_rand_controls_sex_age/merged_control_geno-1000g_updated.frq",
+                       header=T,stringsAsFactors = F)
+rownames(our_mafs) = our_mafs$SNP
+rownames(ukbb_mafs) = ukbb_mafs$SNP
+curr_snps = intersect(our_mafs$SNP,ukbb_mafs$SNP)
+x1 = our_mafs[curr_snps,"MAF"]
+x2 = ukbb_mafs[curr_snps,"MAF"]
+cor(x1,x2,method="spearman") # Spearman correlation: 0.997
+# > table(abs(x1-x2)>0.1)
+# FALSE   TRUE 
+# 437340     85 
+# > table(abs(x1-x2)>0.2)
+# FALSE   TRUE 
+# 437395     30
+y1 = our_mafs[curr_snps,c("A1","A2")]
+y1_flipped = t(apply(y1,1,flip_snp_info))
+y2 = ukbb_mafs[curr_snps,c("A1","A2")]
+# table(y1[,1]==y2[,1])
+# FALSE   TRUE 
+# 58274 379151 
+# table(y1[,2]==y2[,1])
+# FALSE   TRUE 
+# 432706   4719 
+# table(y1_flipped[,1]==y2[,1])
+# FALSE   TRUE 
+# 382415  55010
+strand_flipped_inds = y1_flipped[,1]==y2[,1]
+maf_flipped_inds = y1[,2]==y2[,1]
+# quantile(x2[maf_flipped_inds])
+# 0%      25%      50%      75%     100% 
+# 0.001459 0.170950 0.481500 0.494000 0.500000 
+# quantile(x2[strand_flipped_inds])
+# 0%       25%       50%       75%      100% 
+# 0.0009767 0.1382000 0.2552000 0.3751000 0.5000000 
+# quantile(x2)
+# 0%       25%       50%       75%      100% 
+# 0.0007508 0.0513200 0.1662000 0.3174000 0.5000000 
+
+# Check the JHU stuff
+jhu_snps = our_mafs[grepl(our_mafs$SNP,pattern = "JHU"),]
+our_bim = read.table(paste(job_dir,"merged_mega_data_autosomal_after_pca.bim",sep=""),
+                      header=F,stringsAsFactors = F)
+rownames(our_bim) = our_bim[,2]
+ukbb_bim = read.table("/oak/stanford/groups/euan/projects/fitness_genetics/ukbb/ukbb_imputed_20k_rand_controls_sex_age/merged_control_geno-1000g_updated.bim",
+                       header=F,stringsAsFactors = F)
+inds1 = is.element(ukbb_bim[,4],set = our_bim[jhu_snps$SNP,4])
+ukbb_bim = ukbb_bim[inds1,]
+jhu_bim = our_bim[jhu_snps$SNP,]
+rownames(ukbb_bim) = ukbb_bim[,2]
+ids1 = apply(jhu_bim[,c(1,4)],1,paste,collapse=";")
+ids2 = apply(ukbb_bim[,c(1,4)],1,paste,collapse=";")
+rownames(ukbb_bim) = ids2
+jhu_bim = jhu_bim[ids1!="0;0",]
+ids1 = ids1[ids1!="0;0"]
+rownames(jhu_bim) = ids1
+ids = intersect(ids1,ids2)
+jhu_bim = jhu_bim[ids,]
+ukbb_bim = ukbb_bim[ids,]
+x1 = our_mafs[jhu_bim[,2],"MAF"]
+x2 = ukbb_mafs[ukbb_bim[,2],"MAF"]
+# > table(abs(x1-x2)>0.1)
+# FALSE   TRUE 
+# 142586   1977 
+# > table(abs(x1-x2)>0.2)
+# FALSE   TRUE 
+# 143707    856 
 
 ####################################################################################################
 ####################################################################################################

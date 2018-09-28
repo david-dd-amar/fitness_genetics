@@ -164,6 +164,9 @@ pc_x = as.matrix(d[,paste("PC",1:5,sep="")])
 rownames(pc_x) = d$IID
 pc_x = combined_pcs2[,1:5]
 
+pcs_explained_var = read.table(paste(bfile,".eigenval",sep=""))[,1]
+for(j in 1:ncol(pc_x)){pc_x[,j]=pc_x[,j]*sqrt(pcs_explained_var[j])}
+
 wss <- sapply(1:10,
               function(k){kmeans(pc_x, k, nstart=50,iter.max = 15 )$tot.withinss})
 
@@ -174,7 +177,7 @@ wss <- sapply(1:10,
 # for(j in 1:ncol(pc_x)){pc_x[,j]=pc_x[,j]*sqrt(pcs_explained_var[j])}
 # wss <- sapply(1:10,function(k){kmeans(pc_x, k, nstart=50,iter.max = 15 )$tot.withinss})
 # wss[2:length(wss)]/wss[1:(length(wss)-1)]
-kmeans_res <- kmeans(pc_x, 10)$cluster
+kmeans_res <- kmeans(pc_x, 5)$cluster
 table(kmeans_res)
 table(kmeans_res,d[rownames(pc_x),]$CohortName)
 table(kmeans_res,alldata_is_jap[rownames(pc_x)]) # Japanese are well clustered and removed
@@ -467,7 +470,7 @@ low_ps2_snps = ps2<1e-8
 ####################################################################################################
 ####################################################################################################
 
-setwd("/Users/David/Desktop/elite/gwas_results/ukbb_qctools_pca/")
+setwd("/Users/David/Desktop/elite/sept2018_prepro_res/with_ukbb/")
 d = read.table("all_cohorts.phe",header=T,stringsAsFactors = F)
 rownames(d) = d$IID
 d2 = read.delim("../../metadata/june_2018_integrated_info/merged_metadata_file_stanford3k_elite_cooper.txt",stringsAsFactors = F)
@@ -480,7 +483,7 @@ d2_analysis_ids = paste(d2$SentrixBarcode_A,d2$SentrixPosition_A,sep="_")
 jap_samples = d2_analysis_ids [is_jap]
 alldata_is_jap = is.element(d$IID,set=jap_samples)
 names(alldata_is_jap) = d$IID
-our_pca = read_pca_res("../../analysis/final_dataset_for_analysis.eigenvec")
+# our_pca = read_pca_res("../../analysis/final_dataset_for_analysis.eigenvec")
 
 # Examine the PCA results
 library(corrplot)
@@ -493,21 +496,22 @@ corrplot(corrs)
 pcainds = intersect(rownames(pca1),rownames(our_pca))
 corrs = cor(pca1[pcainds,],our_pca[pcainds,])
 corrplot(corrs)
+d = d[rownames(pca1),]
 
 # Cluster by PCs
-pc_x = as.matrix(d[,paste("PC",1:10,sep="")])
-pcs_explained_var = read.table("merged_data_qctool_bed.eigenval")[,1]
-for(j in 1:ncol(pc_x)){pc_x[,j]=pc_x[,j]*sqrt(pcs_explained_var[j])}
+pc_x = as.matrix(d[,paste("PC",1:3,sep="")])
+# pcs_explained_var = read.table("merged_data_qctool_bed.eigenval")[,1]
+# for(j in 1:ncol(pc_x)){pc_x[,j]=pc_x[,j]*sqrt(pcs_explained_var[j])}
 apply(pc_x,2,sd)
 
-# All cohorts: example analysis using hclust
-dd = dist(pc_x,method="manhattan")
-h = hclust(dd,method = "complete")
-wss <- sapply(2:10,function(k,dd,h,pc_x){run_hclust(pc_x=pc_x, k,dd=dd,h=h)},pc_x,dd,h)
-plot(2:10, wss,
-     type="b", pch = 19, frame = FALSE,
-     xlab="Number of clusters K",
-     ylab="Total within-clusters sum of squares")
+# # All cohorts: example analysis using hclust
+# dd = dist(pc_x,method="manhattan")
+# h = hclust(dd,method = "complete")
+# wss <- sapply(2:10,function(k,dd,h,pc_x){run_hclust(pc_x=pc_x, k,dd=dd,h=h)},pc_x,dd,h)
+# plot(2:10, wss,
+#      type="b", pch = 19, frame = FALSE,
+#      xlab="Number of clusters K",
+#      ylab="Total within-clusters sum of squares")
 
 # All cohorts: example analysis using kmeans
 # Examine the number of clusters
@@ -520,28 +524,29 @@ set.seed(123)
 kmeans_res <- kmeans(pc_x, 4, nstart = 100)$cluster
 
 table(kmeans_res)
-write.table(table(kmeans_res,d[rownames(pc_x),]$CohortName))
+write.table(table(kmeans_res,d$CohortName))
 table(kmeans_res,alldata_is_jap[rownames(pc_x)]) # Japanese are well clustered and removed
-res = two_d_plot_visualize_covariate(d[rownames(pc_x),]$PC1,
-    d[rownames(pc_x),]$PC2,kmeans_res,kmeans_res,
+
+res = two_d_plot_visualize_covariate(d$PC1,d$PC2,kmeans_res,kmeans_res,
     main = "Clustering results: PCs 1 and 2",xlab="PC1",ylab="PC2")
-legend(x="bottomright",names(res[[1]]),fill = res[[1]])
-res = two_d_plot_visualize_covariate(d[rownames(pc_x),]$PC2,
-    d[rownames(pc_x),]$PC3,kmeans_res,kmeans_res,
+legend(x="bottomleft",names(res[[1]]),fill = res[[1]])
+res = two_d_plot_visualize_covariate(d$PC2,d$PC3,kmeans_res,kmeans_res,
     main = "All cohorts",xlab="PC3",ylab="PC2")
-legend(x="bottomright",names(res[[1]]),fill = res[[1]])
-res = two_d_plot_visualize_covariate(d[rownames(pc_x),]$PC4,
-    d[rownames(pc_x),]$PC3,kmeans_res,kmeans_res,
-    main = "Clustering results: PCs 3 and 4",xlab="PC3",ylab="PC4")
-legend(x="bottomright",names(res[[1]]),fill = res[[1]])
-res = two_d_plot_visualize_covariate(d[rownames(pc_x),]$PC4,
-    d[rownames(pc_x),]$PC5,kmeans_res,kmeans_res,
-    main = "All cohorts",xlab="PC4",ylab="PC5")
-legend(x="top",names(res[[1]]),fill = res[[1]])
-res = two_d_plot_visualize_covariate(d[rownames(pc_x),]$PC6,
-    d[rownames(pc_x),]$PC5,kmeans_res,kmeans_res,
-    main = "Clustering results: PCs 5 and 6",xlab="PC6",ylab="PC5")
-legend(x="bottomright",names(res[[1]]),fill = res[[1]])
+legend(x="bottomleft",names(res[[1]]),fill = res[[1]])
+
+res = two_d_plot_visualize_covariate(d$PC1,d$PC2,d$CohortName,d$CohortName,
+    main = "Clustering results: PCs 1 and 2",xlab="PC1",ylab="PC2")
+legend(x="bottomleft",names(res[[1]]),fill = res[[1]])
+res = two_d_plot_visualize_covariate(d$PC2,d$PC3,d$CohortName,d$CohortName,
+    main = "All cohorts",xlab="PC3",ylab="PC2")
+legend(x="bottomleft",names(res[[1]]),fill = res[[1]])
+
+res = two_d_plot_visualize_covariate(pca2[,"PC1"],pca2[,"PC2"],d$CohortName,d$CohortName,
+  main = "Clustering results: PCs 1 and 2",xlab="PC1",ylab="PC2")
+legend(x="bottomleft",names(res[[1]]),fill = res[[1]])
+res = two_d_plot_visualize_covariate(pca2[,"PC13"],pca2[,"PC14"],d$CohortName,d$CohortName,
+  main = "Clustering results: PCs 1 and 2",xlab="PC1",ylab="PC2")
+legend(x="bottomleft",names(res[[1]]),fill = res[[1]])
 
 # Additional PCA plots
 # All cohorts

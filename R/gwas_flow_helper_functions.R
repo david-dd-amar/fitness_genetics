@@ -352,6 +352,33 @@ check_if_bim_is_sorted<-function(bimfile){
   return(cor(1:length(ord),ord)>0.95)
 }
 
+process_bim_data<-function(bfile1){
+  bim_data1 = read.table(paste(bfile1,".bim",sep=""),stringsAsFactors = F,header = F)
+  bim_data1_snp_ids = as.character(bim_data1[,2])
+  # correct our bim info if needed
+  id_is_location = grepl(":",bim_data1[,2])
+  print(paste("num snp ids that are location:",sum(id_is_location)))
+  # extract true locations from the snp ids
+  id_is_lc_arr = sapply(bim_data1[id_is_location,2],function(x)strsplit(x,":|-",perl=T)[[1]][1:2])
+  bim_data1[id_is_location,1] = id_is_lc_arr[1,]
+  bim_data1[id_is_location,4] = id_is_lc_arr[2,]
+  rownames(bim_data1) = bim_data1[,2]
+  return(list(bim_data1,id_is_location))
+}
+
+flip_nuc<-function(x){
+  if(x=="T"){return("A")}
+  if(x=="A"){return("T")}
+  if(x=="G"){return("C")}
+  if(x=="C"){return("G")}
+  if(x=="0"){return("0")}
+}
+flip_snp_info<-function(x){
+  return(sapply(x,flip_nuc))
+}
+get_num_alleles<-function(x){
+  return(length(setdiff(unique(x),"0")))
+}
 
 
 

@@ -28,10 +28,10 @@ bfile1 = "/oak/stanford/groups/euan/projects/fitness_genetics/ukbb/ukbb_imputed_
 bfile2 = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl_mega_separate_recalls/merged_mega_data_autosomal-updated"
 out_path = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl_mega_separate_recalls/with_ukbb_1000g/"
 
-# September 2018 2: new MEGA analysis with PCA filter, 1000 genomes as the panel
+# September 2018 2: new MEGA analysis with PCA filter, 1000 genomes as the panel, sanity check without JHU 
 bfile1 = "/oak/stanford/groups/euan/projects/fitness_genetics/ukbb/ukbb_imputed_20k_rand_controls_sex_age/merged_control_geno-1000g_updated"
 bfile2 = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl_mega_separate_recalls/merged_mega_data_autosomal_after_pca-1000g_updated"
-out_path = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl_mega_separate_recalls/with_ukbb_1000g_2/"
+out_path = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl_mega_separate_recalls/with_ukbb_1000g_sanity/"
 
 try(system(paste("mkdir",out_path)))
 
@@ -41,26 +41,20 @@ qctool_path = "/home/users/davidama/apps/qctool_v2/build/release/qctool_v2.0.1"
 script_file = "~/repos/fitness_genetics/R/gwas_flow_helper_functions.R"
 source(script_file)
 
+remove_JHU = grepl("sanity",out_path)
+
 ####################################################################################################
 ####################################################################################################
 ####################################################################################################
 # Compare the bim files
 # (1) Check SNP intersect, locations, and which snps must be flipped before we analyze
-process_bim_data<-function(bfile1){
-  bim_data1 = read.table(paste(bfile1,".bim",sep=""),stringsAsFactors = F,header = F)
-  bim_data1_snp_ids = as.character(bim_data1[,2])
-  # correct our bim info if needed
-  id_is_location = grepl(":",bim_data1[,2])
-  print(paste("num snp ids that are location:",sum(id_is_location)))
-  # extract true locations from the snp ids
-  id_is_lc_arr = sapply(bim_data1[id_is_location,2],function(x)strsplit(x,":|-",perl=T)[[1]][1:2])
-  bim_data1[id_is_location,1] = id_is_lc_arr[1,]
-  bim_data1[id_is_location,4] = id_is_lc_arr[2,]
-  rownames(bim_data1) = bim_data1[,2]
-  return(list(bim_data1,id_is_location))
-}
 bim_data1 = process_bim_data(bfile1)
 bim_data2 = process_bim_data(bfile2)
+
+if(remove_JHU){
+  bim_data2 = bim_data2[!grepl("JHU",bim_data2[,2]),]
+}
+
 shared_snps = intersect(rownames(bim_data2[[1]]),rownames(bim_data1[[1]]))
 intersected_locations = list()
 for(chr in unique(bim_data2[[1]][,1])){

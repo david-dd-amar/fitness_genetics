@@ -104,6 +104,7 @@ extract_snps_using_plink(bfile2,final_shared_snps[,2],out_path,"file2_shared_snp
                         get_sh_default_prefix)
 extract_snps_using_plink(bfile1,final_shared_snps[,1],out_path,"file1_shared_snps","new_bed_1",
                         get_sh_default_prefix)
+wait_for_job()
 
 # Print the new bed file for file 2
 conv_ids = final_shared_snps[,1];names(conv_ids) = final_shared_snps[,2]
@@ -113,6 +114,7 @@ newbim2[,2] = conv_ids[newbim2[,2]]
 rownames(newbim2) = NULL
 write.table(newbim2,file=paste(out_path,"new_bed_2_alt.bim",sep=""),sep="\t",
             row.names=F,col.names=F,quote=F)
+check_if_bim_is_sorted(paste(out_path,"new_bed_2_alt.bim",sep=""))
 
 # Convert to bgen
 # August 2018: check rerunning with "id-delim=" because our ids have "_" in them
@@ -238,7 +240,7 @@ err_path = paste(out_path,"merge_plink_pca.err",sep="")
 log_path = paste(out_path,"merge_plink_pca.log",sep="")
 curr_cmd = paste("plink --bfile",paste(out_path,"merged_data_plink",sep=''),
                  "--extract", paste(out_path,analysis_name,".prune.in",sep=""),
-                 "--pca 40 --freq --out",paste(out_path,"merged_data_plink",sep=''))
+                 "--pca 40 --out",paste(out_path,"merged_data_plink",sep=''))
 curr_sh_file = "merge_plink_pca.sh"
 print_sh_file(paste(out_path,curr_sh_file,sep=''),
               get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,Ncpu=4,mem_size=32000),curr_cmd)
@@ -252,6 +254,15 @@ curr_cmd = paste("plink --bfile",paste(out_path,"merged_data_plink",sep=''),
 curr_sh_file = "merge_plink_relatedness.sh"
 print_sh_file(paste(out_path,curr_sh_file,sep=''),
               get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,Ncpu=4,mem_size=32000),curr_cmd)
+system(paste("sbatch",paste(out_path,curr_sh_file,sep='')))
+# Freq on all snps
+err_path = paste(out_path,"merge_plink_frq.err",sep="")
+log_path = paste(out_path,"merge_plink_frq.log",sep="")
+curr_cmd = paste("plink --bfile",paste(out_path,"merged_data_plink",sep=''),
+                 "--freq --out",paste(out_path,"merged_data_plink",sep=''))
+curr_sh_file = "merge_plink_frq.sh"
+print_sh_file(paste(out_path,curr_sh_file,sep=''),
+              get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,Ncpu=2,mem_size=16000),curr_cmd)
 system(paste("sbatch",paste(out_path,curr_sh_file,sep='')))
 
 

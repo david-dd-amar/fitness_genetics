@@ -21,6 +21,7 @@ alt_bfile = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_rec
 external_data_mafs = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl_mega_separate_recalls/with_ukbb_hrc/new_bed_1.frq"
 our_data_mafs = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl_mega_separate_recalls/with_ukbb_hrc/new_bed_2.frq"
 out_path = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl_mega_separate_recalls/with_ukbb_hrc/gwas/"
+our_covars_path = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl_mega_separate_recalls/integrated_sample_metadata_and_covariates.phe"
 
 # September 2018: new MEGA analysis, 1000g as the panel
 bfile = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl_mega_separate_recalls/with_ukbb_1000g/merged_data_qctool_bed"
@@ -28,11 +29,18 @@ alt_bfile = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_rec
 external_data_mafs = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl_mega_separate_recalls/with_ukbb_1000g/new_bed_1.frq"
 our_data_mafs = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl_mega_separate_recalls/with_ukbb_1000g/new_bed_2.frq"
 out_path = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl_mega_separate_recalls/with_ukbb_1000g/gwas/"
+our_covars_path = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl_mega_separate_recalls/integrated_sample_metadata_and_covariates.phe"
+
+# September 2018: new MEGA analysis, 1000g as the panel (second run, better preprocessing)
+bfile = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl_mega_separate_recalls/with_ukbb_1000g_2/merged_data_qctool_bed"
+alt_bfile = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl_mega_separate_recalls/with_ukbb_1000g_2/merged_data_plink"
+external_data_mafs = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl_mega_separate_recalls/with_ukbb_1000g_2/new_bed_1.frq"
+our_data_mafs = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl_mega_separate_recalls/with_ukbb_1000g_2/new_bed_2.frq"
+out_path = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl_mega_separate_recalls/with_ukbb_1000g_2/gwas/"
+our_covars_path = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl_mega_separate_recalls/integrated_sample_metadata_and_covariates_after_pca1.phe"
 
 external_control_ids = "/oak/stanford/groups/euan/projects/fitness_genetics/ukbb/20k_rand_controls_sex_age.txt"
 external_covars_path = "/oak/stanford/groups/euan/projects/fitness_genetics/ukbb/20k_rand_controls_sex_age_with_info.txt"
-# this should have our original pca results: important for us
-our_covars_path = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl_mega_separate_recalls/integrated_sample_metadata_and_covariates.phe"
 our_metadata = "/oak/stanford/groups/euan/projects/fitness_genetics/metadata/merged_metadata_file_stanford3k_elite_cooper.txt"
 
 try({system(paste("mkdir",out_path))})
@@ -63,7 +71,7 @@ our_data_mafs_by_group = list(
 # part of this file should be revised (June 2018)
 our_covars = read.table(our_covars_path,header=T,stringsAsFactors = F)
 our_phe = as.character(our_covars[,"Cohort"])
-table(our_covars[,4])
+table(our_covars[,"Cohort"])
 cohorts = as.character(our_covars[,"Cohort"])
 our_covars[,"Cohort"] = our_covars[,"Cohort"] + 1
 
@@ -99,7 +107,7 @@ pcs_explained_var = read.table(paste(bfile,".eigenval",sep=""))
 combined_pcs = read_pca_res(paste(bfile,".eigenvec",sep=""))
 combined_pcs2 = read_pca_res(paste(alt_bfile,".eigenvec",sep=""))
 length(intersect(rownames(combined_pcs),rownames(combined_pcs2))) == nrow(combined_pcs)
-combined_pcs2 = combined_pcs2[rownames(combined_pcs),1:20]
+combined_pcs2 = combined_pcs2[rownames(combined_pcs),1:40]
 pc_corrs = cor(combined_pcs,combined_pcs2)
 apply(abs(pc_corrs),1,max)
 apply(abs(pc_corrs),2,max)
@@ -109,14 +117,13 @@ apply(abs(pc_corrs2),2,max)
 
 subjects_for_analysis = intersect(covars[,"IID"],rownames(combined_pcs))
 covars = cbind(covars[subjects_for_analysis,],combined_pcs[subjects_for_analysis,])
-covars[,"Batch"] = cov_phe_col_to_plink_numeric_format(covars[,"Batch"])
+# covars[,"Batch"] = cov_phe_col_to_plink_numeric_format(covars[,"Batch"])
 for(j in 1:ncol(covars)){
   covars[,j] = gsub(" ","",as.character(covars[,j]))
 }
 
 write.table(file=paste(out_path,"all_cohorts.phe",sep=''),
             covars,sep=" ",row.names = F,col.names = T,quote=F)
-
 
 ####################################################################################################
 ####################################################################################################
@@ -127,6 +134,7 @@ write.table(file=paste(out_path,"all_cohorts.phe",sep=''),
 library("igraph",lib.loc = "~/R/packages")
 rl_data = read.table(paste(bfile,".genome",sep=""),header=T,stringsAsFactors = F)
 rl_edges = as.matrix(rl_data[,c("IID1","IID2")])
+mode(rl_edges) = "character"
 rl_g = igraph::graph_from_edgelist(rl_edges,directed = F)
 rl_clusters = clusters(rl_g)[[1]]
 rl_subjects_to_remove = c()
@@ -152,9 +160,13 @@ names(alldata_is_jap) = d$IID
 set.seed(123)
 pc_x = as.matrix(d[d$CohortName!="ukbb",paste("PC",1:5,sep="")])
 pc_x = as.matrix(our_dataset_pcs[,1:5])
-
-pc_x = as.matrix(d[,paste("PC",1:2,sep="")])
+pc_x = as.matrix(d[,paste("PC",1:5,sep="")])
 rownames(pc_x) = d$IID
+pc_x = combined_pcs2[,1:5]
+
+wss <- sapply(1:10,
+              function(k){kmeans(pc_x, k, nstart=50,iter.max = 15 )$tot.withinss})
+
 
 ## Kmeans-based analysis
 # nonukbb_vars = apply(d[d$CohortName!="ukbb",paste("PC",1:20,sep="")],2,sd)
@@ -162,7 +174,7 @@ rownames(pc_x) = d$IID
 # for(j in 1:ncol(pc_x)){pc_x[,j]=pc_x[,j]*sqrt(pcs_explained_var[j])}
 # wss <- sapply(1:10,function(k){kmeans(pc_x, k, nstart=50,iter.max = 15 )$tot.withinss})
 # wss[2:length(wss)]/wss[1:(length(wss)-1)]
-kmeans_res <- kmeans(pc_x, 3)$cluster
+kmeans_res <- kmeans(pc_x, 10)$cluster
 table(kmeans_res)
 table(kmeans_res,d[rownames(pc_x),]$CohortName)
 table(kmeans_res,alldata_is_jap[rownames(pc_x)]) # Japanese are well clustered and removed

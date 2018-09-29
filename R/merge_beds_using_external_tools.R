@@ -52,7 +52,9 @@ bim_data1 = process_bim_data(bfile1)
 bim_data2 = process_bim_data(bfile2)
 
 if(remove_JHU){
-  bim_data2 = bim_data2[!grepl("JHU",bim_data2[,2]),]
+  print(paste("num variants before JHU removal:",nrow(bim_data2[[1]])))
+  bim_data2[[1]] = bim_data2[[1]][!grepl("JHU",bim_data2[[1]][,2]),]
+  print(paste("num variants after JHU removal:",nrow(bim_data2[[1]])))
 }
 
 shared_snps = intersect(rownames(bim_data2[[1]]),rownames(bim_data1[[1]]))
@@ -173,12 +175,13 @@ curr_sh_file = paste(analysis_name,"_ld_report.sh",sep="")
 print_sh_file(paste(out_path,curr_sh_file,sep=''),
               get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,Ncpu=2,mem_size=16000),curr_cmd)
 system(paste("sbatch",paste(out_path,curr_sh_file,sep='')))
+wait_for_job()
 # Run PCA
 err_path = paste(out_path,"merge_qctool_pca.err",sep="")
 log_path = paste(out_path,"merge_qctool_pca.log",sep="")
 curr_cmd = paste("plink --bfile",paste(out_path,"merged_data_qctool_bed",sep=''),
                  "--extract", paste(out_path,analysis_name,".prune.in",sep=""),
-                 "--pca 40 --freq --out",paste(out_path,"merged_data_qctool_bed",sep=''))
+                 "--pca 40 --out",paste(out_path,"merged_data_qctool_bed",sep=''))
 curr_sh_file = "merge_qctool_pca.sh"
 print_sh_file(paste(out_path,curr_sh_file,sep=''),
               get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,Ncpu=4,mem_size=32000),curr_cmd)
@@ -229,6 +232,7 @@ curr_sh_file = paste(analysis_name,"_ld_report.sh",sep="")
 print_sh_file(paste(out_path,curr_sh_file,sep=''),
               get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,Ncpu=2,mem_size=16000),curr_cmd)
 system(paste("sbatch",paste(out_path,curr_sh_file,sep='')))
+wait_for_job()
 # Run PCA
 err_path = paste(out_path,"merge_plink_pca.err",sep="")
 log_path = paste(out_path,"merge_plink_pca.log",sep="")

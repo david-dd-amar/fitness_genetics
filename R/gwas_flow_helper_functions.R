@@ -335,10 +335,10 @@ flip_snps_using_plink<-function(bfile,snps,out_path,snpfile,newbedfile,
   system(paste("sbatch",curr_sh_file))
 }
 
-compute_pc_vs_binary_variable_association_p<-function(pc,y){
+compute_pc_vs_binary_variable_association_p<-function(pc,y,test=wilcox.test){
   x1 = pc[y==y[1]]
   x2 = pc[y!=y[1]]
-  return(wilcox.test(x1,x2)$p.value)
+  return(test(x1,x2)$p.value)
 }
 
 compute_pc_vs_discrete_variable_association_p<-function(pc,y){

@@ -42,6 +42,40 @@ script_file = "~/repos/fitness_genetics/R/gwas_flow_helper_functions.R"
 source(script_file)
 
 remove_JHU = grepl("sanity",out_path)
+maf1 = 0.01
+maf2 = 0.05
+maf_for_pca = 0.05
+
+####################################################################################################
+####################################################################################################
+####################################################################################################
+# create maf reduced copies of the data
+err_path = paste(out_path,"maf_filter1.err",sep="")
+log_path = paste(out_path,"maf_filter1.log",sep="")
+curr_cmd = paste("plink --bfile",bfile1,
+                 "--maf",maf1,
+                 "--make-bed --freq",
+                 "--out",paste(out_path,"bfile1",sep=""))
+curr_sh_file = "maf_filter1.sh"
+print_sh_file(paste(out_path,curr_sh_file,sep=''),
+              get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,Ncpu=2,mem_size=16000),curr_cmd)
+system(paste("sbatch",paste(out_path,curr_sh_file,sep='')))
+wait_for_job()
+
+err_path = paste(out_path,"maf_filter2.err",sep="")
+log_path = paste(out_path,"maf_filter2.log",sep="")
+curr_cmd = paste("plink --bfile",bfile1,
+                 "--maf",maf2,
+                 "--make-bed --freq",
+                 "--out",paste(out_path,"bfile2",sep=""))
+curr_sh_file = "maf_filter2.sh"
+print_sh_file(paste(out_path,curr_sh_file,sep=''),
+              get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,Ncpu=2,mem_size=16000),curr_cmd)
+system(paste("sbatch",paste(out_path,curr_sh_file,sep='')))
+wait_for_job()
+
+bfile1 = paste(out_path,"bfile1",sep="")
+bfile2 = paste(out_path,"bfile2",sep="")
 
 ####################################################################################################
 ####################################################################################################
@@ -164,12 +198,13 @@ print_sh_file(paste(out_path,curr_sh_file,sep=''),
 system(paste("sbatch",paste(out_path,curr_sh_file,sep='')))
 
 # Add frq and PCA
-# Snp prune
+# Snp prune (with MAF)
 analysis_name = "qctool_prune"
 err_path = paste(out_path,analysis_name,"_ld_report.err",sep="")
 log_path = paste(out_path,analysis_name,"_ld_report.log",sep="")
 curr_cmd = paste("plink --bfile",paste(out_path,"merged_data_qctool_bed",sep=''),
                  "--indep-pairwise 250 10",0.1,
+                 "--maf",maf_for_pca,
                  "--out",paste(out_path,analysis_name,sep=""))
 curr_sh_file = paste(analysis_name,"_ld_report.sh",sep="")
 print_sh_file(paste(out_path,curr_sh_file,sep=''),
@@ -227,6 +262,7 @@ err_path = paste(out_path,analysis_name,"_ld_report.err",sep="")
 log_path = paste(out_path,analysis_name,"_ld_report.log",sep="")
 curr_cmd = paste("plink --bfile",paste(out_path,"merged_data_plink",sep=''),
                  "--indep-pairwise 250 10",0.1,
+                 "--maf",maf_for_pca,
                  "--out",paste(out_path,analysis_name,sep=""))
 curr_sh_file = paste(analysis_name,"_ld_report.sh",sep="")
 print_sh_file(paste(out_path,curr_sh_file,sep=''),
@@ -263,7 +299,49 @@ print_sh_file(paste(out_path,curr_sh_file,sep=''),
               get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,Ncpu=2,mem_size=16000),curr_cmd)
 system(paste("sbatch",paste(out_path,curr_sh_file,sep='')))
 
-
+# run_prune_pca_rl_analysis<-function(bfile,analysis_name,out_path,maf=0.05,){
+#   # Snp prune
+#   err_path = paste(out_path,analysis_name,"_ld_report.err",sep="")
+#   log_path = paste(out_path,analysis_name,"_ld_report.log",sep="")
+#   curr_cmd = paste("plink --bfile",bfile,
+#                    "--indep-pairwise 250 10",0.1,
+#                    "--out",paste(out_path,analysis_name,sep=""))
+#   curr_sh_file = paste(analysis_name,"_ld_report.sh",sep="")
+#   print_sh_file(paste(out_path,curr_sh_file,sep=''),
+#                 get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,Ncpu=2,mem_size=16000),curr_cmd)
+#   system(paste("sbatch",paste(out_path,curr_sh_file,sep='')))
+#   wait_for_job()
+#   # Run PCA
+#   err_path = paste(out_path,"merge_plink_pca.err",sep="")
+#   log_path = paste(out_path,"merge_plink_pca.log",sep="")
+#   curr_cmd = paste("plink --bfile",bfile,
+#                    "--extract", paste(out_path,analysis_name,".prune.in",sep=""),
+#                    "--pca 40 --out",bfile)
+#   curr_sh_file = "merge_plink_pca.sh"
+#   print_sh_file(paste(out_path,curr_sh_file,sep=''),
+#                 get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,Ncpu=4,mem_size=32000),curr_cmd)
+#   system(paste("sbatch",paste(out_path,curr_sh_file,sep='')))
+#   # Run relatedness
+#   err_path = paste(out_path,"merge_plink_relatedness.err",sep="")
+#   log_path = paste(out_path,"merge_plink_relatedness.log",sep="")
+#   curr_cmd = paste("plink --bfile",bfile,
+#                    "--extract", paste(out_path,analysis_name,".prune.in",sep=""),
+#                    "--genome --min 0.2 --out",bfile)
+#   curr_sh_file = "merge_plink_relatedness.sh"
+#   print_sh_file(paste(out_path,curr_sh_file,sep=''),
+#                 get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,Ncpu=4,mem_size=32000),curr_cmd)
+#   system(paste("sbatch",paste(out_path,curr_sh_file,sep='')))
+#   # Freq on all snps
+#   err_path = paste(out_path,"merge_plink_frq.err",sep="")
+#   log_path = paste(out_path,"merge_plink_frq.log",sep="")
+#   curr_cmd = paste("plink --bfile",bfile,
+#                    "--freq --out",bfile)
+#   curr_sh_file = "merge_plink_frq.sh"
+#   print_sh_file(paste(out_path,curr_sh_file,sep=''),
+#                 get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,Ncpu=2,mem_size=16000),curr_cmd)
+#   system(paste("sbatch",paste(out_path,curr_sh_file,sep='')))
+#   
+# }
 
 
 

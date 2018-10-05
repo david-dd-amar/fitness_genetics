@@ -214,7 +214,6 @@ err_path = paste(out_path,analysis_name,"_ld_report.err",sep="")
 log_path = paste(out_path,analysis_name,"_ld_report.log",sep="")
 curr_cmd = paste("plink --bfile",paste(out_path,"merged_data_after_pca_rl_filters",sep=''),
                  "--indep-pairwise 250 10",0.1,
-                 "--maf 0.05",
                  "--out",paste(out_path,analysis_name,sep=""))
 curr_sh_file = paste(analysis_name,"_ld_report.sh",sep="")
 print_sh_file(paste(out_path,curr_sh_file,sep=''),
@@ -264,31 +263,31 @@ for(j in 1:40){
 pc_ps = p.adjust(pc_ps)
 pc_inds = which(pc_ps < 0.01) # Before correction: almost all
 
-# Take the closest sample to each of our subjects and recalculate
-our_samples = rownames(d)[d$CohortName != "ukbb"]
-ukbb_samples = rownames(d)[d$CohortName == "ukbb"]
-pc_x = as.matrix(d[,paste("PC",1:3,sep="")])
-rownames(pc_x) = rownames(d)
-selected_samples = c()
-n_to_select = 2
-for (i in our_samples){
-  curr_dists = sweep(pc_x[ukbb_samples,],2,pc_x[i,])
-  curr_dists = curr_dists^2
-  curr_dists = sqrt(rowSums(curr_dists))
-  curr_dists = sort(curr_dists,decreasing = F)
-  selected_samples = union(selected_samples,names(curr_dists)[1:n_to_select])
-  print(length(selected_samples))
-}
-subjects_for_analysis = c(our_samples,selected_samples)
-pc_ps = c()
-for(j in 1:40){
-  pc_ps[j] = compute_pc_vs_discrete_variable_association_p(
-    pc = d[subjects_for_analysis,paste("PC",j,sep="")],
-    y = d[subjects_for_analysis,"CohortName"]
-  )
-}
-pc_ps = p.adjust(pc_ps)
-pc_inds = which(pc_ps < 0.01) # Before correction: almost all
+# # Take the closest sample to each of our subjects and recalculate
+# our_samples = rownames(d)[d$CohortName != "ukbb"]
+# ukbb_samples = rownames(d)[d$CohortName == "ukbb"]
+# pc_x = as.matrix(d[,paste("PC",1:3,sep="")])
+# rownames(pc_x) = rownames(d)
+# selected_samples = c()
+# n_to_select = 2
+# for (i in our_samples){
+#   curr_dists = sweep(pc_x[ukbb_samples,],2,pc_x[i,])
+#   curr_dists = curr_dists^2
+#   curr_dists = sqrt(rowSums(curr_dists))
+#   curr_dists = sort(curr_dists,decreasing = F)
+#   selected_samples = union(selected_samples,names(curr_dists)[1:n_to_select])
+#   print(length(selected_samples))
+# }
+# subjects_for_analysis = c(our_samples,selected_samples)
+# pc_ps = c()
+# for(j in 1:40){
+#   pc_ps[j] = compute_pc_vs_discrete_variable_association_p(
+#     pc = d[subjects_for_analysis,paste("PC",j,sep="")],
+#     y = d[subjects_for_analysis,"CohortName"]
+#   )
+# }
+# pc_ps = p.adjust(pc_ps)
+# pc_inds = which(pc_ps < 0.01) # Before correction: almost all
 
 ####################################################################################################
 ####################################################################################################
@@ -298,7 +297,7 @@ pc_inds = which(pc_ps < 0.01) # Before correction: almost all
 covar_file = paste(out_path,"kmeans_cleaned.phe",sep='')
 gwas_bfile = paste(out_path,"merged_data_after_pca_rl_filters",sep='')
 
-# 1. Linear of all three groups + sex, age, and 20 PCs
+# 1. Linear of all three groups + sex, age, and 10 PCs
 err_path = paste(out_path,"gwas_three_groups_linear.err",sep="")
 log_path = paste(out_path,"gwas_three_groups_linear.log",sep="")
 curr_cmd = paste("plink2",
@@ -306,7 +305,7 @@ curr_cmd = paste("plink2",
                  paste("--pheno",covar_file),
                  paste("--pheno-name ExerciseGroup"),
                  paste("--covar",covar_file),
-                 paste("--covar-name sex,Age,",paste(paste("PC",1:20,sep=""),collapse=","),sep=""),
+                 paste("--covar-name sex,Age,",paste(paste("PC",1:10,sep=""),collapse=","),sep=""),
                  "--adjust",
                  "--out",paste(out_path,"gwas_three_groups_linear",sep=''))
 curr_sh_file = "gwas_three_groups_linear.sh"
@@ -314,7 +313,7 @@ print_sh_file(paste(out_path,curr_sh_file,sep=''),
               get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,"plink/2.0a1",2,10000),curr_cmd)
 system(paste("sbatch",paste(out_path,curr_sh_file,sep='')))
 
-# 2. Logistic: Elite vs. UKBB, + sex, age, and 20 PCs
+# 2. Logistic: Elite vs. UKBB, + sex, age, and 10 PCs
 covars_copy = d[d$CohortName!="cooper",]
 covars_copy$ExerciseGroup[covars_copy$ExerciseGroup=="3"] = 2
 table(covars_copy$ExerciseGroup)
@@ -327,14 +326,14 @@ curr_cmd = paste("plink2",
                  paste("--pheno",covar_file),
                  paste("--pheno-name ExerciseGroup"),
                  paste("--covar",covar_file),
-                 paste("--covar-name sex,Age,",paste(paste("PC",1:20,sep=""),collapse=","),sep=""),
+                 paste("--covar-name sex,Age,",paste(paste("PC",1:10,sep=""),collapse=","),sep=""),
                  "--adjust --out",paste(out_path,"ukbb_vs_elite_logistic",sep=''))
 curr_sh_file = "ukbb_vs_elite_logistic.sh"
 print_sh_file(paste(out_path,curr_sh_file,sep=''),
               get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,"plink/2.0a1",2,10000),curr_cmd)
 system(paste("sbatch",paste(out_path,curr_sh_file,sep='')))
 
-# 3. Logistic: Cooper vs. UKBB, + sex, age, and 20 PCs
+# 3. Logistic: Cooper vs. UKBB, + sex, age, and 10 PCs
 covars_copy = d[d$CohortName!="elite",]
 table(covars_copy$ExerciseGroup)
 covar_file = paste(out_path,"ukbb_vs_cooper.phe",sep='')
@@ -346,7 +345,7 @@ curr_cmd = paste("plink2",
                  paste("--pheno",covar_file),
                  paste("--pheno-name ExerciseGroup"),
                  paste("--covar",covar_file),
-                 paste("--covar-name sex,Age,",paste(paste("PC",1:20,sep=""),collapse=","),sep=""),
+                 paste("--covar-name sex,Age,",paste(paste("PC",1:10,sep=""),collapse=","),sep=""),
                  "--adjust --out",paste(out_path,"ukbb_vs_cooper_logistic",sep=''))
 curr_sh_file = "ukbb_vs_cooper_logistic.sh"
 print_sh_file(paste(out_path,curr_sh_file,sep=''),
@@ -386,7 +385,7 @@ for(j in 1:40){
 pc_ps = p.adjust(pc_ps)
 pc_inds = which(pc_ps < 0.01) # Before correction: almost all
 
-# 4. Logistic: Elite vs. UKBB, + sex, age, and 20 PCs
+# 4. Logistic: Elite vs. UKBB, + sex, age, and 10 PCs
 covars_copy = d[subjects_for_analysis,]
 covars_copy$ExerciseGroup[covars_copy$ExerciseGroup=="3"] = 2
 table(covars_copy$ExerciseGroup)
@@ -661,7 +660,7 @@ names(alldata_is_jap) = d$IID
 # d = d[rownames(pca1),]
 
 # Cluster by PCs
-pc_x = as.matrix(d[,paste("PC",1:5,sep="")])
+pc_x = as.matrix(d[,paste("PC",1:3,sep="")])
 # pcs_explained_var = read.table("merged_data_qctool_bed.eigenval")[,1]
 # for(j in 1:ncol(pc_x)){pc_x[,j]=pc_x[,j]*sqrt(pcs_explained_var[j])}
 apply(pc_x,2,sd)
@@ -674,41 +673,41 @@ plot(1:10, wss,
      xlab="Number of clusters K",
      ylab="Total within-clusters sum of squares")
 set.seed(123)
-kmeans_res <- kmeans(pc_x, 6, nstart = 100)$cluster
+kmeans_res <- kmeans(pc_x, 5, nstart = 100)$cluster
 
 table(kmeans_res)
 write.table(table(kmeans_res,d$CohortName))
 table(kmeans_res,alldata_is_jap[rownames(pc_x)]) # Japanese are well clustered and removed
 
-# Take the closest sample to each of our subjects and recalculate
-our_samples = rownames(d)[d$CohortName == "elite"]
-ukbb_samples = rownames(d)[d$CohortName == "ukbb"]
-pc_x = as.matrix(d[,paste("PC",1:10,sep="")])
-rownames(pc_x) = rownames(d)
-selected_samples = c()
-n_to_select = 1
-for (i in our_samples){
-  curr_dists = sweep(pc_x[ukbb_samples,],2,pc_x[i,])
-  curr_dists = abs(curr_dists^2)
-  curr_dists = sqrt(rowSums(curr_dists))
-  curr_dists = sort(curr_dists,decreasing = F)
-  selected_samples = union(selected_samples,names(curr_dists)[1:n_to_select])
-  print(length(selected_samples))
-}
-
-subjects_for_analysis = c(our_samples,selected_samples)
-subjects_for_analysis = rownames(d)
-pc_ps = c()
-for(j in 1:40){
-  pc_ps[j] = compute_pc_vs_binary_variable_association_p(
-    pc = d[subjects_for_analysis,paste("PC",j,sep="")],
-    y = d[subjects_for_analysis,"CohortName"]
-  )
-}
-pc_ps = p.adjust(pc_ps)
-pc_inds = which(pc_ps < 0.01) # Before correction: almost all
-
-inds = subjects_for_analysis
+# # Take the closest sample to each of our subjects and recalculate
+# our_samples = rownames(d)[d$CohortName == "elite"]
+# ukbb_samples = rownames(d)[d$CohortName == "ukbb"]
+# pc_x = as.matrix(d[,paste("PC",1:10,sep="")])
+# rownames(pc_x) = rownames(d)
+# selected_samples = c()
+# n_to_select = 1
+# for (i in our_samples){
+#   curr_dists = sweep(pc_x[ukbb_samples,],2,pc_x[i,])
+#   curr_dists = abs(curr_dists^2)
+#   curr_dists = sqrt(rowSums(curr_dists))
+#   curr_dists = sort(curr_dists,decreasing = F)
+#   selected_samples = union(selected_samples,names(curr_dists)[1:n_to_select])
+#   print(length(selected_samples))
+# }
+# 
+# subjects_for_analysis = c(our_samples,selected_samples)
+# subjects_for_analysis = rownames(d)
+# pc_ps = c()
+# for(j in 1:40){
+#   pc_ps[j] = compute_pc_vs_binary_variable_association_p(
+#     pc = d[subjects_for_analysis,paste("PC",j,sep="")],
+#     y = d[subjects_for_analysis,"CohortName"]
+#   )
+# }
+# pc_ps = p.adjust(pc_ps)
+# pc_inds = which(pc_ps < 0.01) # Before correction: almost all
+# 
+# inds = subjects_for_analysis
 inds = rownames(d)
 res = two_d_plot_visualize_covariate(d[inds,]$PC1,d[inds,]$PC2,kmeans_res,kmeans_res,
     main = "Clustering results: PCs 1 and 2",xlab="PC1",ylab="PC2")
@@ -726,6 +725,11 @@ legend(x="bottomleft",names(res[[1]]),fill = res[[1]])
 res = two_d_plot_visualize_covariate(d[inds,]$PC39,d[inds,]$PC1,d[inds,]$CohortName,d[inds,]$CohortName,
     main = "All cohorts",xlab="PC3",ylab="PC2")
 legend(x="bottomleft",names(res[[1]]),fill = res[[1]])
+
+res = two_d_plot_visualize_covariate(d[inds,]$PC39,d[inds,]$PC1,kmeans_res,kmeans_res,
+                                     main = "All cohorts",xlab="PC3",ylab="PC2")
+legend(x="bottomleft",names(res[[1]]),fill = res[[1]])
+
 
 # res = two_d_plot_visualize_covariate(pca2[,"PC1"],pca2[,"PC2"],d[inds,]$CohortName,d[inds,]$CohortName,
 #   main = "Clustering results: PCs 1 and 2",xlab="PC1",ylab="PC2")

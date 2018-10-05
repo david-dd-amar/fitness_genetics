@@ -269,9 +269,17 @@ run_hclust<-function(pc_x,k,dd=NULL,h=NULL){
   clust = cutree(h,k)
   return(clust)
 }
-
+wss_score <- function(d) {
+  sum(scale(d, scale = FALSE)^2)
+}
+tot_wss_hluct <- function(k, hc, x) {
+  cl <- cutree(hc, k)
+  spl <- split(x, cl)
+  wss <- sum(sapply(spl, wss_score))
+  wss
+}
 read_pca_res<-function(path){
-  pca1 = read.table(path)
+  pca1 = read.table(path,stringsAsFactors = F)
   r = pca1[,2]
   rownames(pca1)=r
   pca1 = pca1[,-c(1:2)]

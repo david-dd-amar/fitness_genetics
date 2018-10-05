@@ -64,7 +64,7 @@ wait_for_job()
 
 err_path = paste(out_path,"maf_filter2.err",sep="")
 log_path = paste(out_path,"maf_filter2.log",sep="")
-curr_cmd = paste("plink --bfile",bfile1,
+curr_cmd = paste("plink --bfile",bfile2,
                  "--maf",maf2,
                  "--make-bed --freq",
                  "--out",paste(out_path,"bfile2",sep=""))
@@ -204,7 +204,6 @@ err_path = paste(out_path,analysis_name,"_ld_report.err",sep="")
 log_path = paste(out_path,analysis_name,"_ld_report.log",sep="")
 curr_cmd = paste("plink --bfile",paste(out_path,"merged_data_qctool_bed",sep=''),
                  "--indep-pairwise 250 10",0.1,
-                 "--maf",maf_for_pca,
                  "--out",paste(out_path,analysis_name,sep=""))
 curr_sh_file = paste(analysis_name,"_ld_report.sh",sep="")
 print_sh_file(paste(out_path,curr_sh_file,sep=''),
@@ -262,13 +261,14 @@ err_path = paste(out_path,analysis_name,"_ld_report.err",sep="")
 log_path = paste(out_path,analysis_name,"_ld_report.log",sep="")
 curr_cmd = paste("plink --bfile",paste(out_path,"merged_data_plink",sep=''),
                  "--indep-pairwise 250 10",0.1,
-                 "--maf",maf_for_pca,
                  "--out",paste(out_path,analysis_name,sep=""))
 curr_sh_file = paste(analysis_name,"_ld_report.sh",sep="")
 print_sh_file(paste(out_path,curr_sh_file,sep=''),
               get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,Ncpu=2,mem_size=16000),curr_cmd)
 system(paste("sbatch",paste(out_path,curr_sh_file,sep='')))
 wait_for_job()
+print(paste("number of snps after prunning:",
+            length(readLines(paste(out_path,analysis_name,".prune.in",sep="")))))
 # Run PCA
 err_path = paste(out_path,"merge_plink_pca.err",sep="")
 log_path = paste(out_path,"merge_plink_pca.log",sep="")

@@ -452,7 +452,7 @@ print(paste("number of cooper samples in this file:",sum(sample_metadata_raw[ids
 # ####################################################################################################
 # ####################################################################################################
 # ####################################################################################################
-# impute sex: eahc of the Mega datasets separately
+# impute sex: each of the Mega datasets separately
 run_plink_sex_check_x_chrom<-function(bfile,out_path,
                                       batch_script_func=get_sh_default_prefix,...){
   err_path = paste(job_dir,"impute_sex.err",sep="")
@@ -607,11 +607,61 @@ print(paste("number of cooper samples in this file:",sum(sample_metadata_raw[ids
 ####################################################################################################
 ####################################################################################################
 ####################################################################################################
+# Create a freq file for each cohort
+covariate_matrix = read.table(paste(job_dir,"integrated_sample_metadata_and_covariates.txt",sep=''),sep="\t",header = T)
+table(covariate_matrix$Cohort)
+for(cc in unique(covariate_matrix$Cohort)){
+  inds = covariate_matrix$Cohort == cc
+  m = covariate_matrix[inds,1:2]
+  write.table(m,sep=" ",file=paste(job_dir,cc,"_subjects.txt",sep=""),row.names = F,quote = F)
+  err_path = paste(job_dir,cc,"_cohort_freq.err",sep="")
+  log_path = paste(job_dir,cc,"_cohort_freq.log",sep="")
+  curr_cmd = paste("plink --bfile",paste(job_dir,"merged_mega_data_autosomal",sep=''),
+                   "--keep",paste(job_dir,cc,"_subjects.txt",sep=""),
+                   "--freq --out",paste(job_dir,cc,"_cohort_freq",sep=""))
+  curr_sh_file = paste(cc,"_cohort_freq.sh",sep="")
+  print_sh_file(paste(job_dir,curr_sh_file,sep=''),
+                get_sh_default_prefix(err_path,log_path),curr_cmd)
+  system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
+}
+wait_for_job()
+
+# analyze the results, get low MAF SNPs
+mafs = list()
+get_mafs<-function(path){
+  x = read.table(path,header = T,stringsAsFactors = F,row.names = 2)
+  y = x[,"MAF"]
+  names(y) = rownames(x)
+  return(y)
+}
+mafs[["all"]] = get_mafs(paste(job_dir,"merged_mega_data_autosomal.frq",sep=''))
+for(cc in unique(covariate_matrix$Cohort)){
+  mafs[[as.character(cc)]] = get_mafs(paste(job_dir,cc,"_cohort_freq.frq",sep=""))
+  print(all(names(mafs[[as.character(cc)]])==names(mafs[["all"]])))
+}
+mafs = sapply(mafs,function(x)x) # into a matrix
+# > cor(mafs,method="spearman")
+# all         2         1
+# all 1.0000000 0.9955802 0.9981975
+# 2   0.9955802 1.0000000 0.9884692
+# 1   0.9981975 0.9884692 1.0000000
+mafs_0.5 = mafs < 0.05
+table(rowSums(mafs_0.5))
+table(mafs_0.5[,1],mafs_0.5[,2] | mafs_0.5[,3])
+
+high_maf_snps_for_analysis = rownames(mafs)[mafs[,2]>= 0.05 & mafs[,1]>= 0.05]
+extract_snps_using_plink(paste(job_dir,"merged_mega_data_autosomal",sep=""),high_maf_snps_for_analysis,job_dir,
+                         "high_maf_snps_for_analysis","merged_mega_data_autosomal_after_maf",
+                         batch_script_func=get_sh_default_prefix)
+
+####################################################################################################
+####################################################################################################
+####################################################################################################
 # Prune and run PCA and relatedness
 analysis_name = "our_data_ld_prune"
 err_path = paste(job_dir,analysis_name,"_ld_report.err",sep="")
 log_path = paste(job_dir,analysis_name,"_ld_report.log",sep="")
-curr_cmd = paste("plink --bfile",paste(job_dir,"merged_mega_data_autosomal",sep=''),
+curr_cmd = paste("plink --bfile",paste(job_dir,"merged_mega_data_autosomal_after_maf",sep=''),
                  "--indep-pairwise 250 10",0.1,
                  "--out",paste(job_dir,analysis_name,"_plink.prune",sep=""))
 curr_sh_file = paste(analysis_name,"_ld_report.sh",sep="")
@@ -623,9 +673,9 @@ print(paste("Prune before PCA, num of variants is:",
             length(readLines(paste(job_dir,analysis_name,"_plink.prune.prune.in",sep="")))))
 err_path = paste(job_dir,"final_data_pca.err",sep="")
 log_path = paste(job_dir,"final_data_pca.log",sep="")
-curr_cmd = paste("plink --bfile",paste(job_dir,"merged_mega_data_autosomal",sep=''),
+curr_cmd = paste("plink --bfile",paste(job_dir,"merged_mega_data_autosomal_after_maf",sep=''),
                  "--extract", paste(job_dir,analysis_name,"_plink.prune.prune.in",sep=""),
-                 "--freq --pca --out",paste(job_dir,"merged_mega_data_autosomal",sep=''))
+                 "--pca --out",paste(job_dir,"merged_mega_data_autosomal_after_maf",sep=''))
 curr_sh_file = "final_data_pca.sh"
 print_sh_file(paste(job_dir,curr_sh_file,sep=''),
               get_sh_default_prefix(err_path,log_path),curr_cmd)
@@ -633,9 +683,9 @@ system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
 # relatedness
 err_path = paste(job_dir,"final_data_rl.err",sep="")
 log_path = paste(job_dir,"final_data_rl.log",sep="")
-curr_cmd = paste("plink --bfile",paste(job_dir,"merged_mega_data_autosomal",sep=''),
+curr_cmd = paste("plink --bfile",paste(job_dir,"merged_mega_data_autosomal_after_maf",sep=''),
                  "--extract", paste(job_dir,analysis_name,"_plink.prune.prune.in",sep=""),
-                 "--genome --min 0.2 --out",paste(job_dir,"merged_mega_data_autosomal",sep=''))
+                 "--genome --min 0.2 --out",paste(job_dir,"merged_mega_data_autosomal_after_maf",sep=''))
 curr_sh_file = "final_data_rl.sh"
 print_sh_file(paste(job_dir,curr_sh_file,sep=''),
               get_sh_default_prefix(err_path,log_path),curr_cmd)
@@ -643,17 +693,23 @@ system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
 # frq on all
 err_path = paste(job_dir,"final_data_fr.err",sep="")
 log_path = paste(job_dir,"final_data_fr.log",sep="")
-curr_cmd = paste("plink --bfile",paste(job_dir,"merged_mega_data_autosomal",sep=''),
-                 "--freq --out",paste(job_dir,"merged_mega_data_autosomal",sep=''))
+curr_cmd = paste("plink --bfile",paste(job_dir,"merged_mega_data_autosomal_after_maf",sep=''),
+                 "--freq --out",paste(job_dir,"merged_mega_data_autosomal_after_maf",sep=''))
 curr_sh_file = "final_data_fr.sh"
 print_sh_file(paste(job_dir,curr_sh_file,sep=''),
               get_sh_default_prefix(err_path,log_path),curr_cmd)
 system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
 wait_for_job()
 
+# Code to update cov matrix in case we rerun PCA
+# covariate_matrix = read.table(paste(job_dir,"integrated_sample_metadata_and_covariates.txt",sep=''),sep="\t",header = T)
+# pca_res = read_pca_res(paste(job_dir,"merged_mega_data_autosomal_after_maf.eigenvec",sep=""))
+# rownames(covariate_matrix) = covariate_matrix[,2]
+# covariate_matrix[rownames(pca_res),colnames(pca_res)] = pca_res
+
 # define the samples to exclude for subsequent analysis, get the bed, bgen, and covariate files
-fam_samples = read.table(paste(job_dir,"merged_mega_data_autosomal.fam",sep=""),stringsAsFactors = F)
-pca_res = read_pca_res(paste(job_dir,"merged_mega_data_autosomal.eigenvec",sep=""))
+fam_samples = read.table(paste(job_dir,"merged_mega_data_autosomal_after_maf.fam",sep=""),stringsAsFactors = F)
+pca_res = read_pca_res(paste(job_dir,"merged_mega_data_autosomal_after_maf.eigenvec",sep=""))
 all(is.element(fam_samples[,2],set=rownames(sample_metadata_raw))) # this should be TRUE
 all(rownames(pca_res) == fam_samples[,2]) # this should be true as well
 subjects_for_analysis = fam_samples[,2]
@@ -701,27 +757,6 @@ table(covariate_matrix[,"Cohort"],covariate_matrix[,"batch"])
 ####################################################################################################
 ####################################################################################################
 ####################################################################################################
-# Create a freq file for each cohort
-covariate_matrix = read.table(paste(job_dir,"integrated_sample_metadata_and_covariates.txt",sep=''),sep="\t",header = T)
-table(covariate_matrix$Cohort)
-for(cc in unique(covariate_matrix$Cohort)){
-  inds = covariate_matrix$Cohort == cc
-  m = covariate_matrix[inds,1:2]
-  write.table(m,sep=" ",file=paste(job_dir,cc,"_subjects.txt",sep=""),row.names = F,quote = F)
-  err_path = paste(job_dir,cc,"_cohort_freq.err",sep="")
-  log_path = paste(job_dir,cc,"_cohort_freq.log",sep="")
-  curr_cmd = paste("plink --bfile",paste(job_dir,"merged_mega_data_autosomal",sep=''),
-                   "--keep",paste(job_dir,cc,"_subjects.txt",sep=""),
-                   "--freq --out",paste(job_dir,cc,"_cohort_freq",sep=""))
-  curr_sh_file = paste(cc,"_cohort_freq.sh",sep="")
-  print_sh_file(paste(job_dir,curr_sh_file,sep=''),
-                get_sh_default_prefix(err_path,log_path),curr_cmd)
-  system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
-}
-
-####################################################################################################
-####################################################################################################
-####################################################################################################
 # Use PCA and relatedness to remove samples and then rerun PCA
 covariate_matrix = read.delim(paste(job_dir,"integrated_sample_metadata_and_covariates.txt",sep=''),stringsAsFactors = F)
 rownames(covariate_matrix) = covariate_matrix$IID
@@ -729,16 +764,29 @@ altsamp_id = sample_metadata_raw$alt_sample_id
 names(altsamp_id) = rownames(sample_metadata_raw)
 is_jap = grepl(altsamp_id,pattern="JA"); names(is_jap) = rownames(sample_metadata_raw)
 
-# Cluster by the first PCs
 set.seed(123)
-pc_x = as.matrix(covariate_matrix[,paste("PC",1:3,sep="")])
-rownames(pc_x) = rownames(covariate_matrix)
-# Based on manual inspection of wss plot - see reports
-pc_x_kmeans = kmeans(pc_x,4)
-table(pc_x_kmeans$cluster)
-table(pc_x_kmeans$cluster,covariate_matrix$Cohort)
-table(pc_x_kmeans$cluster,is_jap[names(pc_x_kmeans$cluster)])
-kmeans_res = pc_x_kmeans$cluster
+d = covariate_matrix
+pc_x = as.matrix(d[,paste("PC",1:3,sep="")])
+rownames(pc_x) = rownames(d)
+# pc_x_kmeans = kmeans(pc_x,4)
+# kmeans_res = pc_x_kmeans$cluster
+# Using hierarchical
+dd = dist(pc_x,method="manhattan")
+h = hclust(dd,method = "single")
+kmeans_res = run_hclust(pc_x,12,dd,h)
+
+table(kmeans_res)
+table(kmeans_res,d$Cohort)
+table(kmeans_res,is_jap[names(kmeans_res)])
+
+to_rem = rep(F,nrow(d))
+for(j in 1:20){
+  x = d[,paste("PC",j,sep="")]
+  x = (x-mean(x))/sd(x)
+  print(sum(abs(x)>6))
+  to_rem[abs(x)>6] = T
+}
+table(to_rem)
 
 # Select subjects from the largest cluster
 clustable = table(kmeans_res)
@@ -748,8 +796,13 @@ selected_subjects = names(which(kmeans_res == selected_cluster))
 print(paste("PCA and clustering analysis, largest cluster size is:",length(selected_subjects)))
 print(paste("number of cooper subjects",sum(covariate_matrix[selected_subjects,"Cohort"]==1)))
 
+selected_subjects = setdiff(selected_subjects,rownames(d)[to_rem])
+
+print(paste("PC outliers removed, number of remaining subjects:",length(selected_subjects)))
+print(paste("number of cooper subjects",sum(covariate_matrix[selected_subjects,"Cohort"]==1)))
+
 library("igraph",lib.loc = "~/R/packages")
-rl_data = read.table(paste(job_dir,"merged_mega_data_autosomal.genome",sep=""),
+rl_data = read.table(paste(job_dir,"merged_mega_data_autosomal_after_maf.genome",sep=""),
                      header=T,stringsAsFactors = F)
 rl_edges = as.matrix(rl_data[,c("IID1","IID2")])
 rl_g = igraph::graph_from_edgelist(rl_edges,directed = F)
@@ -766,22 +819,22 @@ selected_subjects = setdiff(selected_subjects,rl_subjects_to_remove)
 print(paste("PCA and clustering analysis, largest cluster size is:",length(selected_subjects)))
 print(paste("number of cooper subjects",sum(covariate_matrix[selected_subjects,"Cohort"]==1)))
 
-curr_fam = read.table(paste(job_dir,"merged_mega_data_autosomal.fam",sep=""),stringsAsFactors = F)
+curr_fam = read.table(paste(job_dir,"merged_mega_data_autosomal_after_maf.fam",sep=""),stringsAsFactors = F)
 curr_fam = curr_fam[!is.element(curr_fam[,2],set=selected_subjects),]
-remove_subjects_using_plink(paste(job_dir,"merged_mega_data_autosomal",sep=""),
+remove_subjects_using_plink(paste(job_dir,"merged_mega_data_autosomal_after_maf",sep=""),
                             curr_fam,
-                            job_dir,"_pca_and_rl_subj_qc","merged_mega_data_autosomal_after_pca",
+                            job_dir,"_pca_and_rl_subj_qc","merged_mega_data_autosomal_after_maf_after_pca",
                             batch_script_func=get_sh_default_prefix)
 wait_for_job()
 print("After PCA and Rl analysis, data sizes are:")
-print(paste("number of samples:",length(readLines(paste(job_dir,"merged_mega_data_autosomal_after_pca.fam",sep="")))))
-print(paste("number of snps:",length(readLines(paste(job_dir,"merged_mega_data_autosomal_after_pca.bim",sep="")))))
+print(paste("number of samples:",length(readLines(paste(job_dir,"merged_mega_data_autosomal_after_maf_after_pca.fam",sep="")))))
+print(paste("number of snps:",length(readLines(paste(job_dir,"merged_mega_data_autosomal_after_maf_after_pca.bim",sep="")))))
 
 # Prune and run PCA and relatedness
 analysis_name = "our_data_ld_prune2"
 err_path = paste(job_dir,analysis_name,"_ld_report2.err",sep="")
 log_path = paste(job_dir,analysis_name,"_ld_report2.log",sep="")
-curr_cmd = paste("plink --bfile",paste(job_dir,"merged_mega_data_autosomal_after_pca",sep=''),
+curr_cmd = paste("plink --bfile",paste(job_dir,"merged_mega_data_autosomal_after_maf_after_pca",sep=''),
                  "--indep-pairwise 250 10",0.1,
                  "--out",paste(job_dir,analysis_name,"_after_pca",sep=""))
 curr_sh_file = paste(analysis_name,"_ld_report2.sh",sep="")
@@ -793,9 +846,9 @@ print(paste("Prune before PCA, num of variants is:",
             length(readLines(paste(job_dir,analysis_name,"_after_pca.prune.in",sep="")))))
 err_path = paste(job_dir,"final_data_pca2.err",sep="")
 log_path = paste(job_dir,"final_data_pca2.log",sep="")
-curr_cmd = paste("plink --bfile",paste(job_dir,"merged_mega_data_autosomal_after_pca",sep=''),
+curr_cmd = paste("plink --bfile",paste(job_dir,"merged_mega_data_autosomal_after_maf_after_pca",sep=''),
                  "--extract", paste(job_dir,analysis_name,"_after_pca.prune.in",sep=""),
-                 "--pca --out",paste(job_dir,"merged_mega_data_autosomal_after_pca",sep=''))
+                 "--pca --out",paste(job_dir,"merged_mega_data_autosomal_after_maf_after_pca",sep=''))
 curr_sh_file = "final_data_pca2.sh"
 print_sh_file(paste(job_dir,curr_sh_file,sep=''),
               get_sh_default_prefix(err_path,log_path),curr_cmd)
@@ -803,8 +856,8 @@ system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
 # rerun frq
 err_path = paste(job_dir,"final_data_frq2.err",sep="")
 log_path = paste(job_dir,"final_data_frq2.log",sep="")
-curr_cmd = paste("plink --bfile",paste(job_dir,"merged_mega_data_autosomal_after_pca",sep=''),
-                 "--freq --out",paste(job_dir,"merged_mega_data_autosomal_after_pca",sep=''))
+curr_cmd = paste("plink --bfile",paste(job_dir,"merged_mega_data_autosomal_after_maf_after_pca",sep=''),
+                 "--freq --out",paste(job_dir,"merged_mega_data_autosomal_after_maf_after_pca",sep=''))
 curr_sh_file = "final_data_frq2.sh"
 print_sh_file(paste(job_dir,curr_sh_file,sep=''),
               get_sh_default_prefix(err_path,log_path),curr_cmd)
@@ -812,7 +865,7 @@ system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
 wait_for_job()
 
 # Create the new covariate matrix file
-new_pca_res = read_pca_res(paste(job_dir,"merged_mega_data_autosomal_after_pca.eigenvec",sep=""))
+new_pca_res = read_pca_res(paste(job_dir,"merged_mega_data_autosomal_after_maf_after_pca.eigenvec",sep=""))
 covariate_matrix = covariate_matrix[rownames(new_pca_res),]
 covariate_matrix[,paste("PC",1:20,sep="")] = new_pca_res
 write.table(covariate_matrix,file=
@@ -831,7 +884,7 @@ write.table(covariate_matrix,file=
 curr_dir = paste(job_dir,"1000g/",sep="")
 system(paste("mkdir",curr_dir))
 setwd(curr_dir)
-curr_bfile = "merged_mega_data_autosomal_after_pca"
+curr_bfile = "merged_mega_data_autosomal_after_maf_after_pca"
 check_if_bim_is_sorted(paste(paste(job_dir,curr_bfile,".bim",sep='')))
 err_path = paste(curr_dir,"run_check_bim.err",sep="")
 log_path = paste(curr_dir,"run_check_bim.log",sep="")
@@ -911,7 +964,7 @@ covariate_matrix = read.delim(paste(job_dir,"integrated_sample_metadata_and_cova
 rownames(covariate_matrix) = covariate_matrix$IID
 
 # read our fam file
-fam_info = read_plink_table(paste(job_dir,"merged_mega_data_autosomal_after_pca.fam",sep=""),has_header = F)
+fam_info = read_plink_table(paste(job_dir,"merged_mega_data_autosomal_after_maf_after_pca.fam",sep=""),has_header = F)
 iid_to_fid = fam_info[,1]
 
 # PC vs cohort p-values
@@ -923,15 +976,11 @@ for(j in 1:20){
   )
 }
 pc_ps = p.adjust(pc_ps)
-pc_ind = max(which(pc_ps>0.01))
+pc_ind = max(which(pc_ps<0.01))
 
-# Logistic: Cooper vs. Elite
-# September 2018: three tests:
-#   1. With batch and 19 PCs
-#   2. Without batch (perfectly separates the groups) and with 19 PCs
-#   3. Without batch but with 10 PCs
+# Logistic: Cooper vs. Elite: without batch but with the selected PCs
 pheno_file = paste(job_dir,"integrated_sample_metadata_and_covariates_after_pca1.phe",sep='')
-curr_bfile = "merged_mega_data_autosomal_after_pca"
+curr_bfile = "merged_mega_data_autosomal_after_maf_after_pca"
 
 err_path = paste(job_dir,"cooper_vs_elite.err",sep="")
 log_path = paste(job_dir,"cooper_vs_elite.log",sep="")
@@ -941,46 +990,13 @@ curr_cmd = paste("plink2",
                  paste("--pheno",pheno_file),
                  paste("--pheno-name Cohort"),
                  paste("--covar",pheno_file),
-                 paste("--covar-name sex,age,batch,",paste(paste("PC",1:(pc_ind-1),sep=""),collapse=","),sep=""),
+                 paste("--covar-name sex,age,",paste(paste("PC",1:pc_ind,sep=""),collapse=","),sep=""),
                  "--adjust",
                  "--out",paste(job_dir,"cooper_vs_elite",sep=''))
 curr_sh_file = "cooper_vs_elite.sh"
 print_sh_file(paste(job_dir,curr_sh_file,sep=''),
               get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,"plink/2.0a1",2,10000),curr_cmd)
 system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
-
-err_path = paste(job_dir,"cooper_vs_elite2.err",sep="")
-log_path = paste(job_dir,"cooper_vs_elite2.log",sep="")
-curr_cmd = paste("plink2",
-                 "--bfile",paste(job_dir,curr_bfile,sep=''),
-                 "--logistic hide-covar firth-fallback",
-                 paste("--pheno",pheno_file),
-                 paste("--pheno-name Cohort"),
-                 paste("--covar",pheno_file),
-                 paste("--covar-name sex,age,",paste(paste("PC",1:(pc_ind-1),sep=""),collapse=","),sep=""),
-                 "--adjust",
-                 "--out",paste(job_dir,"cooper_vs_elite_without_batch",sep=''))
-curr_sh_file = "cooper_vs_elite2.sh"
-print_sh_file(paste(job_dir,curr_sh_file,sep=''),
-              get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,"plink/2.0a1",2,10000),curr_cmd)
-system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
-
-err_path = paste(job_dir,"cooper_vs_elite3.err",sep="")
-log_path = paste(job_dir,"cooper_vs_elite3.log",sep="")
-curr_cmd = paste("plink2",
-                 "--bfile",paste(job_dir,curr_bfile,sep=''),
-                 "--logistic hide-covar firth-fallback",
-                 paste("--pheno",pheno_file),
-                 paste("--pheno-name Cohort"),
-                 paste("--covar",pheno_file),
-                 paste("--covar-name sex,age,",paste(paste("PC",1:10,sep=""),collapse=","),sep=""),
-                 "--adjust",
-                 "--out",paste(job_dir,"cooper_vs_elite_without_batch_10PCs",sep=''))
-curr_sh_file = "cooper_vs_elite3.sh"
-print_sh_file(paste(job_dir,curr_sh_file,sep=''),
-              get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,"plink/2.0a1",2,10000),curr_cmd)
-system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
-wait_for_job()
 
 ####################################################################################################
 ####################################################################################################
@@ -1002,6 +1018,8 @@ for(x in xt){
              as.numeric(arr[1])+as.numeric(arr[2])/60)
 }
 names(new_xt) = as.character(cooper_metadata[,1])
+
+new_xt = qnorm((rank(new_xt)-0.5)/length(new_xt))
 
 # 2. Cut the cov matrix to have cooper samples only
 inds = is.element(covariate_matrix$Sample_ID,set=as.character(cooper_metadata[,1]))
@@ -1031,7 +1049,7 @@ curr_cmd = paste("plink2",
                  paste("--pheno",pheno_file),
                  paste("--pheno-name Treadmill.time"),
                  paste("--covar",pheno_file),
-                 paste("--covar-name sex,age,batch,",paste(paste("PC",1:5,sep=""),collapse=","),sep=""),
+                 paste("--covar-name sex,age,batch,",paste(paste("PC",1:3,sep=""),collapse=","),sep=""),
                  "--adjust",
                  "--out",paste(job_dir,"cooper_treadmill_times",sep=''))
 curr_sh_file = "cooper_treadmill_times.sh"
@@ -1052,6 +1070,7 @@ covariate_matrix = read.delim(paste(job_dir,"integrated_sample_metadata_and_cova
 # change the vo2 feature names
 colnames(elite_metadata)[grepl("VO2",colnames(elite_metadata),ignore.case = T)] = c("vo2","vo2_l")
 new_xt = elite_metadata[,"vo2"]
+new_xt = qnorm((rank(new_xt)-0.5)/length(new_xt))
 names(new_xt) = elite_metadata[,"Sample_ID"]
 
 # Cut the cov matrix to have cooper samples only
@@ -1084,7 +1103,7 @@ curr_cmd = paste("plink2",
                  paste("--pheno",pheno_file),
                  paste("--pheno-name vo2"),
                  paste("--covar",pheno_file),
-                 paste("--covar-name sex,age,batch,",paste(paste("PC",1:5,sep=""),collapse=","),sep=""),
+                 paste("--covar-name sex,age,batch,",paste(paste("PC",1:3,sep=""),collapse=","),sep=""),
                  "--adjust",
                  "--out",paste(job_dir,"elite_treadmill_times",sep=''))
 curr_sh_file = "elite_treadmill_times.sh"
@@ -1098,7 +1117,17 @@ wait_for_job()
 ####################################################################################################
 # output all gwas results into a new dir with input files for fuma interpretation
 
-curr_bfile = paste(job_dir,"merged_mega_data_autosomal_after_pca",sep='')
+res1 = read.table(paste(job_dir,"cooper_treadmill_times.Treadmill.time.glm.linear.adjusted",sep=""),
+                  stringsAsFactors = F)
+res2 = read.table(paste(job_dir,"elite_treadmill_times.vo2.glm.linear.adjusted",sep=""),
+                  stringsAsFactors = F)
+x1 = res1[,3];names(x1)=res1[,2]
+x2 = res2[,3];names(x2)=res2[,2]
+cor(x1,x2[names(x1)])
+fishersMethod = function(x) pchisq(-2 * sum(log(x)),df=2*length(x),lower=FALSE)
+new_ps = apply(cbind(x1,x2[names(x1)]),1,fishersMethod)
+
+curr_bfile = paste(job_dir,"merged_mega_data_autosomal_after_maf_after_pca",sep='')
 create_fuma_files_for_fir(job_dir,
                           paste(curr_bfile,".bim",sep=""),
                           paste(curr_bfile,".frq",sep=""),p = 1,maf = 0.01,
@@ -1112,7 +1141,7 @@ create_fuma_files_for_fir(job_dir,
 # for cohort specific mafs see _cohort_freq as regex
 
 # 1. MAFs: ours vs. the ukbb
-our_mafs = read.table(paste(job_dir,"merged_mega_data_autosomal_after_pca.frq",sep=""),
+our_mafs = read.table(paste(job_dir,"merged_mega_data_autosomal_after_maf_after_pca.frq",sep=""),
                       header=T,stringsAsFactors = F)
 ukbb_mafs = read.table("/oak/stanford/groups/euan/projects/fitness_genetics/ukbb/ukbb_imputed_20k_rand_controls_sex_age/merged_control_geno.frq",
                        header=T,stringsAsFactors = F)
@@ -1130,7 +1159,7 @@ cor(x1,x2,method="spearman") # Spearman correlation: 0.997
 # 442034     73 
 
 # 2. MAFs: ours vs. the ukbb after 1000g as ref
-our_mafs = read.table(paste(job_dir,"merged_mega_data_autosomal_after_pca.frq",sep=""),
+our_mafs = read.table(paste(job_dir,"merged_mega_data_autosomal_after_maf_after_pca.frq",sep=""),
                       header=T,stringsAsFactors = F)
 ukbb_mafs = read.table("/oak/stanford/groups/euan/projects/fitness_genetics/ukbb/ukbb_imputed_20k_rand_controls_sex_age/merged_control_geno-1000g_updated.frq",
                        header=T,stringsAsFactors = F)
@@ -1172,7 +1201,7 @@ maf_flipped_inds = y1[,2]==y2[,1]
 
 # Check the JHU stuff
 jhu_snps = our_mafs[grepl(our_mafs$SNP,pattern = "JHU"),]
-our_bim = read.table(paste(job_dir,"merged_mega_data_autosomal_after_pca.bim",sep=""),
+our_bim = read.table(paste(job_dir,"merged_mega_data_autosomal_after_maf_after_pca.bim",sep=""),
                       header=F,stringsAsFactors = F)
 rownames(our_bim) = our_bim[,2]
 ukbb_bim = read.table("/oak/stanford/groups/euan/projects/fitness_genetics/ukbb/ukbb_imputed_20k_rand_controls_sex_age/merged_control_geno-1000g_updated.bim",
@@ -1202,6 +1231,13 @@ x2 = ukbb_mafs[ukbb_bim[,2],"MAF"]
 ####################################################################################################
 ####################################################################################################
 ####################################################################################################
+####################################################################################################
+####################################################################################################
+####################################################################################################
+####################################################################################################
+####################################################################################################
+####################################################################################################
+
 # Locally, should be commented out before running as a batch
 setwd("/Users/David/Desktop/elite/sept2018_prepro_res/")
 d = read.delim("integrated_sample_metadata_and_covariates.txt")
@@ -1214,47 +1250,76 @@ names(samp_id) = d2_ids
 names(altsamp_id) = d2_ids
 is_jap = grepl(altsamp_id,pattern="JA"); names(is_jap) = d2_ids
 
+
 # Cluster by the first two PCs
 set.seed(123)
 pc_x = as.matrix(d[,paste("PC",1:3,sep="")])
 rownames(pc_x) = rownames(d)
-pc_x_kmeans = kmeans(pc_x,4)
-table(pc_x_kmeans$cluster)
-table(pc_x_kmeans$cluster,d$Cohort)
-table(pc_x_kmeans$cluster,is_jap[names(pc_x_kmeans$cluster)])
-kmeans_res = pc_x_kmeans$cluster
+# pc_x_kmeans = kmeans(pc_x,4)
+# kmeans_res = pc_x_kmeans$cluster
+# Using hierarchical
+dd = dist(pc_x,method="manhattan")
+h = hclust(dd,method = "single")
+kmeans_res = run_hclust(pc_x,12,dd,h)
+
+table(kmeans_res)
+table(kmeans_res,d$Cohort)
+table(kmeans_res,is_jap[names(kmeans_res)])
+
+to_rem = rep(F,nrow(d))
+for(j in 1:20){
+  x = d[,paste("PC",j,sep="")]
+  x = (x-mean(x))/sd(x)
+  print(sum(abs(x)>6))
+  to_rem[abs(x)>6] = T
+}
+table(to_rem)
+kmeans_res = as.numeric(to_rem)
+names(kmeans_res) = rownames(d)
 
 inds = 1:nrow(d)
+cohort_name = c("Cooper","ELITE")
 res = two_d_plot_visualize_covariate(d$PC1[inds],
     d$PC2[inds],d$Cohort[inds],d$Cohort[inds],
-    main = "Cooper and Elite",xlab="PC1",ylab="PC2")
-legend(x="topleft",names(res[[1]]),fill = res[[1]])
+    main = "Cooper and Elite",xlab="PC1",ylab="PC2",lwd=2,cex.axis=1.4,cex.lab=1.4)
+legend(x="topleft",cohort_name[as.numeric(names(res[[1]]))],
+       fill = res[[1]],cex=1.3)
+
+res = two_d_plot_visualize_covariate(d$PC1[inds],
+      d$PC3[inds],kmeans_res[inds],kmeans_res[inds],
+      main = "PCA+Clustering",xlab="PC1",ylab="PC3",lwd=2,cex.axis=1.4,cex.lab=1.4)
+legend(x="bottomright",names(res[[1]]),fill = res[[1]],cex=1.3)
 
 res = two_d_plot_visualize_covariate(d$PC1[inds],
     d$PC2[inds],kmeans_res[inds],kmeans_res[inds],
-    main = "PCA+Kmeans",xlab="PC1",ylab="PC2")
-legend(x="topleft",names(res[[1]]),fill = res[[1]])
+    main = "PCA+Clustering",xlab="PC1",ylab="PC2",lwd=2,cex.axis=1.4,cex.lab=1.4)
+legend(x="topright",names(res[[1]]),fill = res[[1]],cex=1.3,ncol = 4)
 
 res = two_d_plot_visualize_covariate(d$PC3[inds],
     d$PC2[inds],d$Cohort[inds],d$Cohort[inds],
-    main = "Cooper and Elite",xlab="PC3",ylab="PC2")
-legend(x="topleft",names(res[[1]]),fill = res[[1]])
+    main = "Cooper and Elite",xlab="PC3",ylab="PC2",lwd=2,cex.axis=1.4,cex.lab=1.4)
+legend(x="topleft",cohort_name[as.numeric(names(res[[1]]))],
+       fill = res[[1]],cex=1.3)
 
 res = two_d_plot_visualize_covariate(d$PC1[inds],
     d$PC2[inds],d$batch[inds],d$batch[inds],
-    main = "Cooper and Elite",xlab="PC1",ylab="PC2")
-legend(x="topleft",names(res[[1]]),fill = res[[1]])
+    main = "Cooper and Elite",xlab="PC1",ylab="PC2",cex.axis=1.4,cex.lab=1.4)
+legend(x="topleft",cohort_name[as.numeric(names(res[[1]]))],
+       fill = res[[1]],cex=1.3)
 
 curr_is_jap = is_jap[rownames(d)]
 res = two_d_plot_visualize_covariate(d$PC1[inds],
     d$PC2[inds],curr_is_jap[inds],curr_is_jap[inds],
     main = "Is JA sample?",xlab="PC1",ylab="PC2")
-legend(x="top",names(res[[1]]),fill = res[[1]])
+legend(x="topleft",cohort_name[as.numeric(names(res[[1]]))],
+       fill = res[[1]],cex=1.3)
 
 # Check number of clusters in PCA plot
 wss <- sapply(1:10,
               function(k){kmeans(pc_x, k, nstart=50,iter.max = 15 )$tot.withinss})
-plot(1:10, wss,
+wss <- sapply(1:50,function(k){tot_wss_hluct(k,h,pc_x)})
+
+plot(1:length(wss), wss,
      type="b", pch = 19, frame = FALSE,
      xlab="Number of clusters K",
      ylab="Total within-clusters sum of squares")

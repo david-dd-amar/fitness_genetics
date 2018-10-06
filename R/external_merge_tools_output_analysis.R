@@ -159,16 +159,41 @@ names(alldata_is_jap) = d$IID
 
 set.seed(123)
 pc_x = as.matrix(d[,paste("PC",1:3,sep="")])
-rownames(pc_x) = d$IID
-wss <- sapply(1:10,
-              function(k){kmeans(pc_x, k, nstart=50,iter.max = 15 )$tot.withinss})
-# wss[2:length(wss)]/wss[1:(length(wss)-1)]
-
-## Kmeans-based analysis
-kmeans_res <- kmeans(pc_x, 5)$cluster
+rownames(pc_x) = rownames(d)
+dd = dist(pc_x,method="manhattan")
+h = hclust(dd,method = "single")
+kmeans_res = run_hclust(pc_x,150,dd,h)
+kmeans_res[kmeans_res!=1] = 0
 table(kmeans_res)
-table(kmeans_res,d[rownames(pc_x),]$CohortName)
-table(kmeans_res,alldata_is_jap[rownames(pc_x)]) # Japanese are well clustered and removed
+table(kmeans_res,d$Cohort)
+
+to_rem = rep(F,nrow(d))
+for(j in 1:20){
+  x = d[,paste("PC",j,sep="")]
+  x = (x-mean(x))/sd(x)
+  print(sum(abs(x)>8))
+  to_rem[abs(x)>8] = T
+}
+table(to_rem,d$CohortName)
+table(to_rem,kmeans_res)
+table(kmeans_res[!to_rem],d$CohortName[!to_rem])
+
+kmeans_res[to_rem] = 0
+kmeans_res[rl_subjects_to_remove] = 0
+table(kmeans_res)
+table(kmeans_res,d$Cohort)
+
+# set.seed(123)
+# pc_x = as.matrix(d[,paste("PC",1:3,sep="")])
+# rownames(pc_x) = d$IID
+# wss <- sapply(1:10,
+#               function(k){kmeans(pc_x, k, nstart=50,iter.max = 15 )$tot.withinss})
+# wss[2:length(wss)]/wss[1:(length(wss)-1)]
+# ## Kmeans-based analysis
+# kmeans_res <- kmeans(pc_x, 5)$cluster
+# table(kmeans_res)
+# table(kmeans_res,d[rownames(pc_x),]$CohortName)
+# table(kmeans_res,alldata_is_jap[rownames(pc_x)]) # Japanese are well clustered and removed
 
 pc_ps = c()
 for(j in 1:40){
@@ -184,8 +209,9 @@ pc_inds = which(pc_ps < 0.01) # Before correction: almost all
 cl_tb = table(kmeans_res)
 cl_fa = names(cl_tb)[cl_tb==max(cl_tb)]
 selected_subjects_for_gwas = names(kmeans_res)[kmeans_res==cl_fa]
-d = d[selected_subjects_for_gwas,]
 selected_subjects_for_gwas = setdiff(selected_subjects_for_gwas,rl_subjects_to_remove)
+d = d[selected_subjects_for_gwas,]
+
 dim(d)
 save(selected_subjects_for_gwas,kmeans_res,pc_x,file=paste(out_path,"clustering_data.RData",sep=""))
 write.table(file=paste(out_path,"kmeans_cleaned.phe",sep=''),
@@ -214,6 +240,7 @@ err_path = paste(out_path,analysis_name,"_ld_report.err",sep="")
 log_path = paste(out_path,analysis_name,"_ld_report.log",sep="")
 curr_cmd = paste("plink --bfile",paste(out_path,"merged_data_after_pca_rl_filters",sep=''),
                  "--indep-pairwise 250 10",0.1,
+                 "--maf 0.01",
                  "--out",paste(out_path,analysis_name,sep=""))
 curr_sh_file = paste(analysis_name,"_ld_report.sh",sep="")
 print_sh_file(paste(out_path,curr_sh_file,sep=''),
@@ -261,7 +288,8 @@ for(j in 1:40){
   )
 }
 pc_ps = p.adjust(pc_ps)
-pc_inds = which(pc_ps < 0.01) # Before correction: almost all
+pc_inds = which(pc_ps < 0.001) # Before correction: almost all
+PCs = paste("PC",pc_inds,sep="")
 
 # # Take the closest sample to each of our subjects and recalculate
 # our_samples = rownames(d)[d$CohortName != "ukbb"]
@@ -305,7 +333,7 @@ curr_cmd = paste("plink2",
                  paste("--pheno",covar_file),
                  paste("--pheno-name ExerciseGroup"),
                  paste("--covar",covar_file),
-                 paste("--covar-name sex,Age,",paste(paste("PC",1:10,sep=""),collapse=","),sep=""),
+                 paste("--covar-name sex,Age,",paste(PCs,collapse=","),sep=""),
                  "--adjust",
                  "--out",paste(out_path,"gwas_three_groups_linear",sep=''))
 curr_sh_file = "gwas_three_groups_linear.sh"
@@ -326,7 +354,7 @@ curr_cmd = paste("plink2",
                  paste("--pheno",covar_file),
                  paste("--pheno-name ExerciseGroup"),
                  paste("--covar",covar_file),
-                 paste("--covar-name sex,Age,",paste(paste("PC",1:10,sep=""),collapse=","),sep=""),
+                 paste("--covar-name sex,Age,",paste(PCs,collapse=","),sep=""),
                  "--adjust --out",paste(out_path,"ukbb_vs_elite_logistic",sep=''))
 curr_sh_file = "ukbb_vs_elite_logistic.sh"
 print_sh_file(paste(out_path,curr_sh_file,sep=''),
@@ -345,7 +373,7 @@ curr_cmd = paste("plink2",
                  paste("--pheno",covar_file),
                  paste("--pheno-name ExerciseGroup"),
                  paste("--covar",covar_file),
-                 paste("--covar-name sex,Age,",paste(paste("PC",1:10,sep=""),collapse=","),sep=""),
+                 paste("--covar-name sex,Age,",paste(PCs,collapse=","),sep=""),
                  "--adjust --out",paste(out_path,"ukbb_vs_cooper_logistic",sep=''))
 curr_sh_file = "ukbb_vs_cooper_logistic.sh"
 print_sh_file(paste(out_path,curr_sh_file,sep=''),
@@ -631,8 +659,8 @@ low_ps2_snps = ps2<1e-8
 ####################################################################################################
 
 setwd("/Users/David/Desktop/elite/sept2018_prepro_res/with_ukbb/")
-d = read.table("all_cohorts.phe",header=T,stringsAsFactors = F)
-d = read.table("kmeans_cleaned.phe",header=T,stringsAsFactors = F)
+d = read.table("../all_cohorts.phe",header=T,stringsAsFactors = F)
+# d = read.table("kmeans_cleaned.phe",header=T,stringsAsFactors = F)
 rownames(d) = d$IID
 d2 = read.delim("../../metadata/june_2018_integrated_info/merged_metadata_file_stanford3k_elite_cooper.txt",stringsAsFactors = F)
 d2_ids = paste(d2$SentrixBarcode_A,d2$SentrixPosition_A,sep="_")
@@ -663,21 +691,37 @@ names(alldata_is_jap) = d$IID
 pc_x = as.matrix(d[,paste("PC",1:3,sep="")])
 # pcs_explained_var = read.table("merged_data_qctool_bed.eigenval")[,1]
 # for(j in 1:ncol(pc_x)){pc_x[,j]=pc_x[,j]*sqrt(pcs_explained_var[j])}
-apply(pc_x,2,sd)
 
-# All cohorts: example analysis using kmeans
-# Examine the number of clusters
-wss <- sapply(1:10,function(k){kmeans(pc_x, k, nstart=50,iter.max = 15 )$tot.withinss})
-plot(1:10, wss,
+# # All cohorts: example analysis using kmeans
+# # Examine the number of clusters
+# wss <- sapply(1:10,function(k){kmeans(pc_x, k, nstart=50,iter.max = 15 )$tot.withinss})
+# plot(1:10, wss,
+#      type="b", pch = 19, frame = FALSE,
+#      xlab="Number of clusters K",
+#      ylab="Total within-clusters sum of squares")
+# set.seed(123)
+# kmeans_res <- kmeans(pc_x, 5, nstart = 100)$cluster
+# table(kmeans_res)
+# write.table(table(kmeans_res,d$CohortName))
+# table(kmeans_res,alldata_is_jap[rownames(pc_x)]) # Japanese are well clustered and removed
+
+# hierarchical clustering
+dd = dist(pc_x,method="manhattan")
+h = hclust(dd,method = "single")
+kmeans_res = run_hclust(pc_x,150,dd,h)
+kmeans_res[kmeans_res!=1] = 0
+table(kmeans_res)
+table(kmeans_res,d$CohortName)
+wss <- sapply(seq(1,5000,by=100),function(k){tot_wss_hluct(k,h,pc_x)})
+plot(seq(1,5000,by=100), wss,
      type="b", pch = 19, frame = FALSE,
      xlab="Number of clusters K",
      ylab="Total within-clusters sum of squares")
-set.seed(123)
-kmeans_res <- kmeans(pc_x, 5, nstart = 100)$cluster
-
-table(kmeans_res)
-write.table(table(kmeans_res,d$CohortName))
-table(kmeans_res,alldata_is_jap[rownames(pc_x)]) # Japanese are well clustered and removed
+wss <- sapply(seq(1,200,by=10),function(k){tot_wss_hluct(k,h,pc_x)})
+plot(seq(1,200,by=10), wss,
+     type="b", pch = 19, frame = FALSE,
+     xlab="Number of clusters K",
+     ylab="Total within-clusters sum of squares")
 
 # # Take the closest sample to each of our subjects and recalculate
 # our_samples = rownames(d)[d$CohortName == "elite"]
@@ -711,9 +755,9 @@ table(kmeans_res,alldata_is_jap[rownames(pc_x)]) # Japanese are well clustered a
 inds = rownames(d)
 res = two_d_plot_visualize_covariate(d[inds,]$PC1,d[inds,]$PC2,kmeans_res,kmeans_res,
     main = "Clustering results: PCs 1 and 2",xlab="PC1",ylab="PC2")
-legend(x="bottomleft",names(res[[1]]),fill = res[[1]])
+legend(x="topleft",names(res[[1]]),fill = res[[1]])
 res = two_d_plot_visualize_covariate(d[inds,]$PC2,d[inds,]$PC3,kmeans_res,kmeans_res,
-    main = "All cohorts",xlab="PC3",ylab="PC2")
+    main = "Clustering results: PCs 2 and 3",xlab="PC3",ylab="PC2")
 legend(x="bottomleft",names(res[[1]]),fill = res[[1]])
 
 res = two_d_plot_visualize_covariate(d[inds,]$PC1,d[inds,]$PC2,d[inds,]$CohortName,d[inds,]$CohortName,

@@ -30,7 +30,7 @@ out_path = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl
 
 # September 2018 2: new MEGA analysis with PCA filter, 1000 genomes as the panel, sanity check without JHU 
 bfile1 = "/oak/stanford/groups/euan/projects/fitness_genetics/ukbb/ukbb_imputed_20k_rand_controls_sex_age/merged_control_geno-1000g_updated"
-bfile2 = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl_mega_separate_recalls/merged_mega_data_autosomal_after_pca-1000g_updated"
+bfile2 = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl_mega_separate_recalls/1000g/merged_mega_data_autosomal_after_maf_after_pca"
 out_path = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl_mega_separate_recalls/with_ukbb_1000g_sanity/"
 
 try(system(paste("mkdir",out_path)))
@@ -43,8 +43,8 @@ source(script_file)
 
 remove_JHU = grepl("sanity",out_path)
 maf1 = 0.01
-maf2 = 0.05
-maf_for_pca = 0.05
+maf2 = 0.01 # our data was already filtered in our prepro script
+maf_for_pca = 0.01 
 
 ####################################################################################################
 ####################################################################################################
@@ -60,7 +60,6 @@ curr_sh_file = "maf_filter1.sh"
 print_sh_file(paste(out_path,curr_sh_file,sep=''),
               get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,Ncpu=2,mem_size=16000),curr_cmd)
 system(paste("sbatch",paste(out_path,curr_sh_file,sep='')))
-wait_for_job()
 
 err_path = paste(out_path,"maf_filter2.err",sep="")
 log_path = paste(out_path,"maf_filter2.log",sep="")
@@ -194,7 +193,8 @@ curr_cmd = paste("plink2 --bgen",paste(out_path,"merged_data.bgen",sep=""),
                  "--make-bed --out",paste(out_path,"merged_data_qctool_bed",sep=''))
 curr_sh_file = "bgen_to_bed.sh"
 print_sh_file(paste(out_path,curr_sh_file,sep=''),
-              get_sh_prefix_bigmem(err_path,log_path,Ncpu=1,mem_size=256000,plink_pkg = "plink/2.0a1"),curr_cmd)
+              get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,
+              Ncpu=4,mem_size=64000,plink_pkg = "plink/2.0a1"),curr_cmd)
 system(paste("sbatch",paste(out_path,curr_sh_file,sep='')))
 
 # Add frq and PCA

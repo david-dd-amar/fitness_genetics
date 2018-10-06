@@ -893,11 +893,15 @@ system(paste("cp /home/users/davidama/apps/check_bim/HRC-1000G-check-bim-NoReadK
 curr_cmd = paste("perl", paste(curr_dir, "HRC-1000G-check-bim-NoReadKey.pl",sep=""),
                  "-b", paste(job_dir,curr_bfile,".bim",sep=''),
                  "-f", paste(job_dir,curr_bfile,".frq",sep=''),
-                 "-1000g -t 0.2 -r ",
+                 "-1000g -p EUR -t 0.3 -r ",
                  "/home/users/davidama/apps/check_bim/1000GP_Phase3_combined.legend")
 curr_sh_file = "run_check_bim.sh"
 print_sh_file(paste(curr_dir,curr_sh_file,sep=''),
               get_sh_prefix_bigmem(err_path,log_path,mem_size = 256000,time="6:00:00"),curr_cmd)
+# Try without bigmem
+print_sh_file(paste(curr_dir,curr_sh_file,sep=''),
+              get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,
+              mem_size = 64000,time="6:00:00",Ncpu = 4),curr_cmd)
 system(paste("sbatch",paste(curr_dir,curr_sh_file,sep='')))
 wait_for_job()
 system(paste("less ",curr_dir,"Run-plink.sh | grep TEMP > ",curr_dir,"Run-plink_1000g.sh",sep=""))
@@ -921,11 +925,15 @@ log_path = paste(curr_dir,"run_check_bim2.log",sep="")
 curr_cmd = paste("perl", paste(curr_dir, "HRC-1000G-check-bim-NoReadKey.pl",sep=""),
                  "-b", paste(job_dir,curr_bfile,".bim",sep=''),
                  "-f", paste(job_dir,curr_bfile,".frq",sep=''),
-                 "-hrc -p EU -t 0.2 -r",
+                 "-hrc -p EU -t 0.3 -r",
                  "/home/users/davidama/apps/check_bim/HRC.r1-1.GRCh37.wgs.mac5.sites.tab")
 curr_sh_file = "run_check_bim2.sh"
 print_sh_file(paste(curr_dir,curr_sh_file,sep=''),
               get_sh_prefix_bigmem(err_path,log_path,mem_size = 256000,time="6:00:00"),curr_cmd)
+# Try without bigmem
+print_sh_file(paste(curr_dir,curr_sh_file,sep=''),
+              get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,
+              mem_size = 64000,time="6:00:00",Ncpu = 4),curr_cmd)
 system(paste("sbatch",paste(curr_dir,curr_sh_file,sep='')))
 wait_for_job()
 system(paste("less ",curr_dir,"Run-plink.sh | grep TEMP > ",curr_dir,"Run-plink_hrc.sh",sep=""))
@@ -1274,8 +1282,8 @@ for(j in 1:20){
   to_rem[abs(x)>6] = T
 }
 table(to_rem)
-kmeans_res = as.numeric(to_rem)
-names(kmeans_res) = rownames(d)
+kmeans_res[to_rem] = 0
+
 
 inds = 1:nrow(d)
 cohort_name = c("Cooper","ELITE")
@@ -1285,9 +1293,9 @@ res = two_d_plot_visualize_covariate(d$PC1[inds],
 legend(x="topleft",cohort_name[as.numeric(names(res[[1]]))],
        fill = res[[1]],cex=1.3)
 
-res = two_d_plot_visualize_covariate(d$PC1[inds],
+res = two_d_plot_visualize_covariate(d$PC2[inds],
       d$PC3[inds],kmeans_res[inds],kmeans_res[inds],
-      main = "PCA+Clustering",xlab="PC1",ylab="PC3",lwd=2,cex.axis=1.4,cex.lab=1.4)
+      main = "PCA+Clustering",xlab="PC2",ylab="PC3",lwd=2,cex.axis=1.4,cex.lab=1.4)
 legend(x="bottomright",names(res[[1]]),fill = res[[1]],cex=1.3)
 
 res = two_d_plot_visualize_covariate(d$PC1[inds],
@@ -1317,7 +1325,7 @@ legend(x="topleft",cohort_name[as.numeric(names(res[[1]]))],
 # Check number of clusters in PCA plot
 wss <- sapply(1:10,
               function(k){kmeans(pc_x, k, nstart=50,iter.max = 15 )$tot.withinss})
-wss <- sapply(1:50,function(k){tot_wss_hluct(k,h,pc_x)})
+wss <- sapply(1:500,function(k){tot_wss_hluct(k,h,pc_x)})
 
 plot(1:length(wss), wss,
      type="b", pch = 19, frame = FALSE,

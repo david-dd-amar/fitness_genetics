@@ -86,7 +86,7 @@ system(paste("cp /home/users/davidama/apps/check_bim/HRC-1000G-check-bim-NoReadK
 curr_cmd = paste("perl", paste(out_path, "HRC-1000G-check-bim-NoReadKey.pl",sep=""),
                  "-b", paste(out_path,"merged_control_geno.bim",sep=''),
                  "-f", paste(out_path,"merged_control_geno.frq",sep=''),
-                 "-hrc -p ALL -t 0.3 -r",
+                 "-hrc -p EU -t 0.1 -r",
                  "/home/users/davidama/apps/check_bim/HRC.r1-1.GRCh37.wgs.mac5.sites.tab")
 curr_sh_file = "run_check_bim.sh"
 print_sh_file(paste(out_path,curr_sh_file,sep=''),
@@ -115,9 +115,9 @@ system(paste("cp /home/users/davidama/apps/check_bim/HRC-1000G-check-bim-NoReadK
 curr_cmd = paste("perl", paste(out_path, "HRC-1000G-check-bim-NoReadKey.pl",sep=""),
                  "-b", paste(out_path,"merged_control_geno.bim",sep=''),
                  "-f", paste(out_path,"merged_control_geno.frq",sep=''),
-                 "-1000g -t 0.3 -r ",
+                 "-1000g -p EUR -t 0.1 -r ",
                  "/home/users/davidama/apps/check_bim/1000GP_Phase3_combined.legend")
-urr_sh_file = "run_check_bim2.sh"
+curr_sh_file = "run_check_bim2.sh"
 print_sh_file(paste(out_path,curr_sh_file,sep=''),
               get_sh_prefix_bigmem(err_path,log_path,Ncpu=1,mem_size=256000),curr_cmd)
 system(paste("sbatch",paste(out_path,curr_sh_file,sep='')))

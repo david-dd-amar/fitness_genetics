@@ -289,7 +289,7 @@ for(j in 1:40){
 }
 pc_ps = p.adjust(pc_ps)
 pc_inds = which(pc_ps < 0.001) # Before correction: almost all
-PCs = paste("PC",pc_inds,sep="")
+PCs = paste("PC",pc_inds[pc_inds<20],sep="")
 
 # # Take the closest sample to each of our subjects and recalculate
 # our_samples = rownames(d)[d$CohortName != "ukbb"]
@@ -325,7 +325,7 @@ PCs = paste("PC",pc_inds,sep="")
 covar_file = paste(out_path,"kmeans_cleaned.phe",sep='')
 gwas_bfile = paste(out_path,"merged_data_after_pca_rl_filters",sep='')
 
-# 1. Linear of all three groups + sex, age, and 10 PCs
+# 1. Linear of all three groups + sex, age, and up to 20 PCs
 err_path = paste(out_path,"gwas_three_groups_linear.err",sep="")
 log_path = paste(out_path,"gwas_three_groups_linear.log",sep="")
 curr_cmd = paste("plink2",
@@ -341,7 +341,7 @@ print_sh_file(paste(out_path,curr_sh_file,sep=''),
               get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,"plink/2.0a1",2,10000),curr_cmd)
 system(paste("sbatch",paste(out_path,curr_sh_file,sep='')))
 
-# 2. Logistic: Elite vs. UKBB, + sex, age, and 10 PCs
+# 2. Logistic: Elite vs. UKBB, + sex, age, and up to 20 PCs
 covars_copy = d[d$CohortName!="cooper",]
 covars_copy$ExerciseGroup[covars_copy$ExerciseGroup=="3"] = 2
 table(covars_copy$ExerciseGroup)
@@ -361,7 +361,7 @@ print_sh_file(paste(out_path,curr_sh_file,sep=''),
               get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,"plink/2.0a1",2,10000),curr_cmd)
 system(paste("sbatch",paste(out_path,curr_sh_file,sep='')))
 
-# 3. Logistic: Cooper vs. UKBB, + sex, age, and 10 PCs
+# 3. Logistic: Cooper vs. UKBB, + sex, age, and up to 20 PCs
 covars_copy = d[d$CohortName!="elite",]
 table(covars_copy$ExerciseGroup)
 covar_file = paste(out_path,"ukbb_vs_cooper.phe",sep='')
@@ -530,6 +530,29 @@ create_fuma_files_for_fir(out_path,
                           paste(gwas_bfile,".frq",sep=""),p = 1,maf = 0.05,
                           snps_to_exclude_from_results=NULL)
 
+# Compare the results
+res_files = list.files(out_path)
+res_files = res_files[grepl("adjusted$",res_files)]
+m =  NULL
+for (f in res_files){
+  res = read.table(paste(out_path,f,sep=''),stringsAsFactors = F)
+  p = res[,3];names(p) = res[,2]
+  if(is.null(m)){m=p;next}
+  if(is.null(dim(m))){m = cbind(m,p[names(m)]);next}
+  m = cbind(m,p[rownames(m)])
+}
+table(m[,1]<5e-8,m[,2]<5e-8)
+table(m[,3]<0.001,m[,2]<5e-8)
+
+# Optional: discard unreliable UKBB snps
+bad_ukbb_snps = read.table("/oak/stanford/groups/euan/projects/fitness_genetics/ukbb/ukbb_imputed_20k_rand_controls_sex_age/bad_ukbb_snps.txt",
+                           stringsAsFactors = F)
+bad_ukbb_snps = bad_ukbb_snps[,1]
+create_fuma_files_for_fir(out_path,
+                          paste(gwas_bfile,".bim",sep=""),
+                          paste(gwas_bfile,".frq",sep=""),p = 1,maf = 0.01,
+                          snps_to_exclude_from_results=bad_ukbb_snps)
+
 ####################################################################################################
 ####################################################################################################
 ####################################################################################################
@@ -659,7 +682,7 @@ low_ps2_snps = ps2<1e-8
 ####################################################################################################
 
 setwd("/Users/David/Desktop/elite/sept2018_prepro_res/with_ukbb/")
-d = read.table("../all_cohorts.phe",header=T,stringsAsFactors = F)
+d = read.table("all_cohorts.phe",header=T,stringsAsFactors = F)
 # d = read.table("kmeans_cleaned.phe",header=T,stringsAsFactors = F)
 rownames(d) = d$IID
 d2 = read.delim("../../metadata/june_2018_integrated_info/merged_metadata_file_stanford3k_elite_cooper.txt",stringsAsFactors = F)
@@ -708,10 +731,7 @@ pc_x = as.matrix(d[,paste("PC",1:3,sep="")])
 # hierarchical clustering
 dd = dist(pc_x,method="manhattan")
 h = hclust(dd,method = "single")
-kmeans_res = run_hclust(pc_x,150,dd,h)
-kmeans_res[kmeans_res!=1] = 0
-table(kmeans_res)
-table(kmeans_res,d$CohortName)
+
 wss <- sapply(seq(1,5000,by=100),function(k){tot_wss_hluct(k,h,pc_x)})
 plot(seq(1,5000,by=100), wss,
      type="b", pch = 19, frame = FALSE,
@@ -752,6 +772,12 @@ plot(seq(1,200,by=10), wss,
 # pc_inds = which(pc_ps < 0.01) # Before correction: almost all
 # 
 # inds = subjects_for_analysis
+
+kmeans_res = run_hclust(pc_x,150,dd,h)
+kmeans_res[kmeans_res!=1] = 0
+table(kmeans_res)
+table(kmeans_res,d$CohortName)
+
 inds = rownames(d)
 res = two_d_plot_visualize_covariate(d[inds,]$PC1,d[inds,]$PC2,kmeans_res,kmeans_res,
     main = "Clustering results: PCs 1 and 2",xlab="PC1",ylab="PC2")

@@ -1263,16 +1263,6 @@ is_jap = grepl(altsamp_id,pattern="JA"); names(is_jap) = d2_ids
 set.seed(123)
 pc_x = as.matrix(d[,paste("PC",1:3,sep="")])
 rownames(pc_x) = rownames(d)
-# pc_x_kmeans = kmeans(pc_x,4)
-# kmeans_res = pc_x_kmeans$cluster
-# Using hierarchical
-dd = dist(pc_x,method="manhattan")
-h = hclust(dd,method = "single")
-kmeans_res = run_hclust(pc_x,12,dd,h)
-
-table(kmeans_res)
-table(kmeans_res,d$Cohort)
-table(kmeans_res,is_jap[names(kmeans_res)])
 
 to_rem = rep(F,nrow(d))
 for(j in 1:20){
@@ -1282,8 +1272,22 @@ for(j in 1:20){
   to_rem[abs(x)>6] = T
 }
 table(to_rem)
-kmeans_res[to_rem] = 0
 
+pc_x = pc_x[!to_rem,]
+
+# pc_x_kmeans = kmeans(pc_x,2)
+# kmeans_res = pc_x_kmeans$cluster
+# Using hierarchical
+dd = dist(pc_x,method="manhattan")
+h = hclust(dd,method = "complete")
+kmeans_res = run_hclust(pc_x,5,dd,h)
+kmeans_res[kmeans_res!=1] = 0
+
+kmeans_res[rownames(d)[to_rem]] = 10
+kmeans_res = kmeans_res[rownames(d)]
+table(kmeans_res)
+table(kmeans_res,d$Cohort)
+table(kmeans_res,is_jap[names(kmeans_res)])
 
 inds = 1:nrow(d)
 cohort_name = c("Cooper","ELITE")
@@ -1325,7 +1329,7 @@ legend(x="topleft",cohort_name[as.numeric(names(res[[1]]))],
 # Check number of clusters in PCA plot
 wss <- sapply(1:10,
               function(k){kmeans(pc_x, k, nstart=50,iter.max = 15 )$tot.withinss})
-wss <- sapply(1:500,function(k){tot_wss_hluct(k,h,pc_x)})
+wss <- sapply(1:20,function(k){tot_wss_hluct(k,h,pc_x)})
 
 plot(1:length(wss), wss,
      type="b", pch = 19, frame = FALSE,

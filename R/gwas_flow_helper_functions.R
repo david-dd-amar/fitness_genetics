@@ -266,7 +266,7 @@ two_d_plot_visualize_covariate<-function(x1,x2,cov1,cov2=NULL,cuts=5,...){
 run_hclust<-function(pc_x,k,dd=NULL,h=NULL){
   if(is.null(dd)){dd = dist(pc_x,method="manhattan")}
   if(is.null(h)){h = hclust(dd,method = "complete")}
-  clust = cutree(h,k)
+  clust = cutree(h,k=k)
   return(clust)
 }
 wss_score <- function(d) {
@@ -320,6 +320,21 @@ remove_subjects_using_plink<-function(bfile,subjs,out_path,subjfile,newbedfile,
   log_path = paste(out_path,"reduce_subjs",subjfile,".log",sep="")
   curr_cmd = paste("plink --bfile",bfile,
                    "--remove",paste(out_path,subjfile,".txt",sep=''),
+                   "--freq --make-bed --out",paste(out_path,newbedfile,sep=''))
+  curr_sh_file = paste(out_path,"reduce_subjs",subjfile,".sh",sep="")
+  batch_script_prefix = batch_script_func(err_path,log_path,...)
+  print_sh_file(curr_sh_file,batch_script_prefix,curr_cmd)
+  system(paste("sbatch",curr_sh_file))
+}
+keep_subjects_using_plink<-function(bfile,subjs,out_path,subjfile,newbedfile,
+                                      batch_script_func=get_sh_default_prefix,...){
+  # create the subjects file
+  write.table(subjs,file=paste(out_path,subjfile,".txt",sep=''),
+              row.names = F,col.names = F,quote = F,sep="\t")
+  err_path = paste(out_path,"reduce_subjs",subjfile,".err",sep="")
+  log_path = paste(out_path,"reduce_subjs",subjfile,".log",sep="")
+  curr_cmd = paste("plink --bfile",bfile,
+                   "--keep",paste(out_path,subjfile,".txt",sep=''),
                    "--freq --make-bed --out",paste(out_path,newbedfile,sep=''))
   curr_sh_file = paste(out_path,"reduce_subjs",subjfile,".sh",sep="")
   batch_script_prefix = batch_script_func(err_path,log_path,...)

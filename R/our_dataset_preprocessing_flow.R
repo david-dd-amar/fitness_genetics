@@ -242,7 +242,7 @@ remove_subjects_using_plink(paste(job_dir,"bfile2",sep=""),to_rem2,job_dir,"file
                                       batch_script_func=get_sh_default_prefix)
 remove_subjects_using_plink(paste(job_dir,"bfile1",sep=""),to_rem1,job_dir,"file1_initial_subj_qc","bfile1",
                             batch_script_func=get_sh_default_prefix)
-
+wait_for_job()
 print("After initial qc, datas sizes are:")
 print(paste("number of samples, file 1:",length(readLines(paste(job_dir,"bfile1.fam",sep="")))))
 print(paste("number of snps, file 1:",length(readLines(paste(job_dir,"bfile1.bim",sep="")))))
@@ -589,25 +589,6 @@ print(paste("number of cooper samples in this file:",sum(sample_metadata_raw[ids
 ####################################################################################################
 ####################################################################################################
 ####################################################################################################
-# GWAS vs. sex
-pheno_file = paste(job_dir,"integrated_sample_metadata_and_covariates.txt",sep='')
-err_path = paste(job_dir,"sex_gwas_qc.err",sep="")
-log_path = paste(job_dir,"sex_gwas_qc.log",sep="")
-curr_cmd = paste("plink2",
-                 "--bfile",paste(job_dir,"merged_mega_data_autosomal",sep=''),
-                 "--logistic hide-covar firth-fallback",
-                 paste("--pheno",pheno_file),
-                 paste("--pheno-name sex"),
-                 "--adjust",
-                 "--out",paste(job_dir,"sex_gwas_qc",sep=''))
-curr_sh_file = "sex_gwas_qc.sh"
-print_sh_file(paste(job_dir,curr_sh_file,sep=''),
-              get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,"plink/2.0a1",2,10000),curr_cmd)
-system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
-
-####################################################################################################
-####################################################################################################
-####################################################################################################
 # Here we analyze the results of some of the jobs above to determine the final set of subjects
 # for the analysis. We basically exclude sex check failures and low call rate samples.
 
@@ -671,52 +652,66 @@ print(paste("number of cooper samples in this file:",sum(sample_metadata_raw[ids
 ####################################################################################################
 ####################################################################################################
 ####################################################################################################
-# Create a freq file for each cohort
-covariate_matrix = read.table(paste(job_dir,"integrated_sample_metadata_and_covariates.txt",sep=''),sep="\t",header = T)
-table(covariate_matrix$Cohort)
-for(cc in unique(covariate_matrix$Cohort)){
-  inds = covariate_matrix$Cohort == cc
-  m = covariate_matrix[inds,1:2]
-  write.table(m,sep=" ",file=paste(job_dir,cc,"_subjects.txt",sep=""),row.names = F,quote = F)
-  err_path = paste(job_dir,cc,"_cohort_freq.err",sep="")
-  log_path = paste(job_dir,cc,"_cohort_freq.log",sep="")
-  curr_cmd = paste("plink --bfile",paste(job_dir,"merged_mega_data_autosomal",sep=''),
-                   "--keep",paste(job_dir,cc,"_subjects.txt",sep=""),
-                   "--freq --out",paste(job_dir,cc,"_cohort_freq",sep=""))
-  curr_sh_file = paste(cc,"_cohort_freq.sh",sep="")
-  print_sh_file(paste(job_dir,curr_sh_file,sep=''),
-                get_sh_default_prefix(err_path,log_path),curr_cmd)
-  system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
-}
+# GWAS vs. sex
+imputed_sex1 = read_plink_table(paste(input_bfile1,".sexcheck",sep=''))[,4]
+imputed_sex2 = read_plink_table(paste(input_bfile2,".sexcheck",sep=''))[,4]
+fam_samples = read.table(paste(job_dir,"merged_mega_data_autosomal.fam",sep=""),stringsAsFactors = F)
+subjects_for_analysis = fam_samples[,2]
+is_mega_consortium = !grepl(fam_samples[,1],pattern="^file")
+imputed_sex = c(
+  imputed_sex1[is.element(names(imputed_sex1),set=subjects_for_analysis[!is_mega_consortium])],
+  imputed_sex2[is.element(names(imputed_sex2),set=subjects_for_analysis[is_mega_consortium])]
+)
+length(intersect(names(imputed_sex),subjects_for_analysis)) == length(subjects_for_analysis) # must be TRUE
+imputed_sex = imputed_sex[subjects_for_analysis]
+all(names(imputed_sex) == fam_samples[,2])
+
+pheno_file = paste(job_dir,"fam_with_sex_info.txt",sep='')
+sex_fam_info = cbind(fam_samples[,1:2],imputed_sex)
+colnames(sex_fam_info) = c("FID","IID","sex")
+write.table(sex_fam_info,file=pheno_file,row.names = F,sep="\t",col.names = T,quote = F)
+err_path = paste(job_dir,"sex_gwas_qc.err",sep="")
+log_path = paste(job_dir,"sex_gwas_qc.log",sep="")
+curr_cmd = paste("plink2",
+                 "--bfile",paste(job_dir,"merged_mega_data_autosomal",sep=''),
+                 "--logistic hide-covar firth-fallback",
+                 paste("--pheno",pheno_file),
+                 paste("--pheno-name sex"),
+                 "--adjust",
+                 "--out",paste(job_dir,"sex_gwas_qc",sep=''))
+curr_sh_file = "sex_gwas_qc.sh"
+print_sh_file(paste(job_dir,curr_sh_file,sep=''),
+              get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,"plink/2.0a1",2,10000),curr_cmd)
+system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
 wait_for_job()
 
-# analyze the results, get low MAF SNPs
-mafs = list()
-get_mafs<-function(path){
-  x = read.table(path,header = T,stringsAsFactors = F,row.names = 2)
-  y = x[,"MAF"]
-  names(y) = rownames(x)
-  return(y)
-}
-mafs[["all"]] = get_mafs(paste(job_dir,"merged_mega_data_autosomal.frq",sep=''))
-for(cc in unique(covariate_matrix$Cohort)){
-  mafs[[as.character(cc)]] = get_mafs(paste(job_dir,cc,"_cohort_freq.frq",sep=""))
-  print(all(names(mafs[[as.character(cc)]])==names(mafs[["all"]])))
-}
-mafs = sapply(mafs,function(x)x) # into a matrix
-# > cor(mafs,method="spearman")
-# all         2         1
-# all 1.0000000 0.9955802 0.9981975
-# 2   0.9955802 1.0000000 0.9884692
-# 1   0.9981975 0.9884692 1.0000000
-mafs_0.5 = mafs < 0.05
-table(rowSums(mafs_0.5))
-table(mafs_0.5[,1],mafs_0.5[,2] | mafs_0.5[,3])
+# Look at the results 
+sex_gwas_qc_res = read.table(paste(job_dir,"sex_gwas_qc.sex.glm.logistic.hybrid.adjusted",sep=""),stringsAsFactors = F)
+sex_snps = sex_gwas_qc_res[sex_gwas_qc_res[,3]> 1e-4,2]
 
-high_maf_snps_for_analysis = rownames(mafs)[mafs[,2]>= 0.05 & mafs[,1]>= 0.05]
-extract_snps_using_plink(paste(job_dir,"merged_mega_data_autosomal",sep=""),high_maf_snps_for_analysis,job_dir,
-                         "high_maf_snps_for_analysis","merged_mega_data_autosomal_after_maf",
+extract_snps_using_plink(paste(job_dir,"merged_mega_data_autosomal",sep=""),sex_snps,job_dir,
+                         "_snps_to_keep_after_sex_gwas_qc","merged_mega_data_autosomal",
                          batch_script_func=get_sh_default_prefix)
+wait_for_job()
+
+####################################################################################################
+####################################################################################################
+####################################################################################################
+# MAF filtering
+err_path = paste(job_dir,"maf_filtering.err",sep="")
+log_path = paste(job_dir,"maf_filtering.log",sep="")
+curr_cmd = paste("plink --bfile",paste(job_dir,"merged_mega_data_autosomal",sep=''),
+                 "--maf 0.05 --make-bed --out",paste(job_dir,"merged_mega_data_autosomal_after_maf",sep=''))
+curr_sh_file = "maf_filtering.sh"
+print_sh_file(paste(job_dir,curr_sh_file,sep=''),
+              get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,Ncpu=2,mem_size=16000),curr_cmd)
+system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
+wait_for_job()
+
+# # sanity check: make sure there are no bad snps
+# bim1 = read.table(paste(job_dir,"merged_mega_data_autosomal_after_maf.bim",sep=''),stringsAsFactors = F)
+# bads = read.table(bad_snps_file,stringsAsFactors = F)
+# table(is.element(bads[,1],set = bim1[,2]))
 
 ####################################################################################################
 ####################################################################################################
@@ -732,6 +727,7 @@ curr_sh_file = paste(analysis_name,"_ld_report.sh",sep="")
 print_sh_file(paste(job_dir,curr_sh_file,sep=''),
               get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,Ncpu=2,mem_size=16000),curr_cmd)
 system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
+wait_for_job()
 wait_for_job()
 print(paste("Prune before PCA, num of variants is:",
             length(readLines(paste(job_dir,analysis_name,"_plink.prune.prune.in",sep="")))))
@@ -817,6 +813,56 @@ write.table(covariate_matrix,file=
 # Some stats
 table(covariate_matrix[,"Cohort"])
 table(covariate_matrix[,"Cohort"],covariate_matrix[,"batch"])
+
+####################################################################################################
+####################################################################################################
+####################################################################################################
+# Create a freq file for each cohort
+covariate_matrix = read.table(paste(job_dir,"integrated_sample_metadata_and_covariates.txt",sep=''),sep="\t",header = T)
+table(covariate_matrix$Cohort)
+for(cc in unique(covariate_matrix$Cohort)){
+  inds = covariate_matrix$Cohort == cc
+  m = covariate_matrix[inds,1:2]
+  write.table(m,sep=" ",file=paste(job_dir,cc,"_subjects.txt",sep=""),row.names = F,quote = F)
+  err_path = paste(job_dir,cc,"_cohort_freq.err",sep="")
+  log_path = paste(job_dir,cc,"_cohort_freq.log",sep="")
+  curr_cmd = paste("plink --bfile",paste(job_dir,"merged_mega_data_autosomal",sep=''),
+                   "--keep",paste(job_dir,cc,"_subjects.txt",sep=""),
+                   "--freq --out",paste(job_dir,cc,"_cohort_freq",sep=""))
+  curr_sh_file = paste(cc,"_cohort_freq.sh",sep="")
+  print_sh_file(paste(job_dir,curr_sh_file,sep=''),
+                get_sh_default_prefix(err_path,log_path),curr_cmd)
+  system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
+}
+wait_for_job()
+
+# analyze the results, get low MAF SNPs
+mafs = list()
+get_mafs<-function(path){
+  x = read.table(path,header = T,stringsAsFactors = F,row.names = 2)
+  y = x[,"MAF"]
+  names(y) = rownames(x)
+  return(y)
+}
+mafs[["all"]] = get_mafs(paste(job_dir,"merged_mega_data_autosomal.frq",sep=''))
+for(cc in unique(covariate_matrix$Cohort)){
+  mafs[[as.character(cc)]] = get_mafs(paste(job_dir,cc,"_cohort_freq.frq",sep=""))
+  print(all(names(mafs[[as.character(cc)]])==names(mafs[["all"]])))
+}
+mafs = sapply(mafs,function(x)x) # into a matrix
+# > cor(mafs,method="spearman")
+# all         2         1
+# all 1.0000000 0.9955802 0.9981975
+# 2   0.9955802 1.0000000 0.9884692
+# 1   0.9981975 0.9884692 1.0000000
+mafs_0.5 = mafs < 0.05
+table(rowSums(mafs_0.5))
+table(mafs_0.5[,1],mafs_0.5[,2] | mafs_0.5[,3])
+
+high_maf_snps_for_analysis = rownames(mafs)[mafs[,2]>= 0.05 & mafs[,1]>= 0.05]
+extract_snps_using_plink(paste(job_dir,"merged_mega_data_autosomal",sep=""),high_maf_snps_for_analysis,job_dir,
+                         "high_maf_snps_for_analysis","merged_mega_data_autosomal_after_maf",
+                         batch_script_func=get_sh_default_prefix)
 
 ####################################################################################################
 ####################################################################################################

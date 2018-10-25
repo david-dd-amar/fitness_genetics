@@ -60,7 +60,7 @@ input_bfile2 = "/oak/stanford/groups/euan/projects/fitness_genetics/illu_process
 snp_report_file2 = "/oak/stanford/groups/euan/projects/fitness_genetics/illu_processed_plink_data/no_reclustering/MEGA_Consortium_recall/SNP_Table.txt"
 sample_report_file2 = "/oak/stanford/groups/euan/projects/fitness_genetics/illu_processed_plink_data/no_reclustering/MEGA_Consortium_recall/Samples_Table.txt"
 
-bad_snps_file = "/scratch/groups/euan/projects/stanford3k/plink/config/remove_snps.txt"
+bad_snps_file = "/oak/stanford/groups/euan/projects/fitness_genetics/bad_mega_snps.txt"
 
 # Our metadata
 sample_metadata = "/oak/stanford/groups/euan/projects/fitness_genetics/metadata/merged_metadata_file_stanford3k_elite_cooper.txt"
@@ -356,27 +356,39 @@ wait_for_job()
 ####################################################################################################
 ####################################################################################################
 ####################################################################################################
-# Run ld reports (useful for ldscore analysis)
-# File 1
-err_path = paste(job_dir,"ld_bfile1.err",sep="")
-log_path = paste(job_dir,"ld_bfile1.log",sep="")
-curr_cmd = paste("plink --bfile",paste(job_dir,"bfile1",sep=''),
-                 "--r2 --ld-window-cm 1 --freq",
-                 "--out",paste(job_dir,"bfile1",sep=''))
-curr_sh_file = "ld_bfile1.sh"
-print_sh_file(paste(job_dir,curr_sh_file,sep=''),
-              get_sh_default_prefix(err_path,log_path),curr_cmd)
-system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
-# File 2
-err_path = paste(job_dir,"ld_bfile2.err",sep="")
-log_path = paste(job_dir,"ld_bfile2.log",sep="")
-curr_cmd = paste("plink --bfile",paste(job_dir,"bfile2",sep=''),
-                 "--r2 --ld-window-cm 1 --freq",
-                 "--out",paste(job_dir,"bfile2",sep=''))
-curr_sh_file = "ld_bfile2.sh"
-print_sh_file(paste(job_dir,curr_sh_file,sep=''),
-              get_sh_default_prefix(err_path,log_path),curr_cmd)
-system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
+# # Run ld reports (useful for ldscore analysis)
+# # File 1
+# err_path = paste(job_dir,"ld_bfile1.err",sep="")
+# log_path = paste(job_dir,"ld_bfile1.log",sep="")
+# curr_cmd = paste("plink --bfile",paste(job_dir,"bfile1",sep=''),
+#                  "--r2 --ld-window 100 --ld-window-kb 1000 --ld-window-r2 0.1 --freq",
+#                  "--out",paste(job_dir,"bfile1",sep=''))
+# curr_sh_file = "ld_bfile1.sh"
+# print_sh_file(paste(job_dir,curr_sh_file,sep=''),
+#               get_sh_default_prefix(err_path,log_path),curr_cmd)
+# system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
+# # File 2
+# err_path = paste(job_dir,"ld_bfile2.err",sep="")
+# log_path = paste(job_dir,"ld_bfile2.log",sep="")
+# curr_cmd = paste("plink --bfile",paste(job_dir,"bfile2",sep=''),
+#                  "--r2 --ld-window 100 --ld-window-kb 1000 --ld-window-r2 0.1 --freq",
+#                  "--out",paste(job_dir,"bfile2",sep=''))
+# curr_sh_file = "ld_bfile2.sh"
+# print_sh_file(paste(job_dir,curr_sh_file,sep=''),
+#               get_sh_default_prefix(err_path,log_path),curr_cmd)
+# system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
+# 
+# # Analyze the results
+# bim1 = read.table(paste(job_dir,"bfile1.bim",sep=""),stringsAsFactors = F)
+# bim2 = read.table(paste(job_dir,"bfile2.bim",sep=""),stringsAsFactors = F)
+# rownames(bim1) = bim1[,2];rownames(bim2) = bim2[,2]
+# 
+# ld1 = read.table(paste(job_dir,"bfile1.ld",sep=""),stringsAsFactors = F,header=T)
+# ld1_snps = table(c(ld1[,6],ld1[,3]))
+# 
+# res = read.table("/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl_mega_separate_recalls/with_ukbb_1000g_sanity/gwas/gwas_three_groups_linear.ExerciseGroup.glm.linear.adjusted",stringsAsFactors = F)
+# res_top_snps = res[res[,3]<1e-50,2]
+# ld1_snps[res_top_snps]
 
 ####################################################################################################
 ####################################################################################################
@@ -391,7 +403,7 @@ curr_sh_file = "merge_plink.sh"
 print_sh_file(paste(job_dir,curr_sh_file,sep=''),
               get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,Ncpu=2,mem_size=16000),curr_cmd)
 system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
-
+wait_for_job()
 print("After merge, data sizes are:")
 print(paste("number of samples:",length(readLines(paste(job_dir,"merged_mega_data.fam",sep="")))))
 print(paste("number of snps:",length(readLines(paste(job_dir,"merged_mega_data.bim",sep="")))))
@@ -519,7 +531,7 @@ curr_sh_file = "chr_filter.sh"
 print_sh_file(paste(job_dir,curr_sh_file,sep=''),
               get_sh_default_prefix(err_path,log_path),curr_cmd)
 system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
-
+wait_for_job()
 print("After removing non autosomal variants, data sizes are:")
 print(paste("number of samples:",length(readLines(paste(job_dir,"merged_mega_data_autosomal.fam",sep="")))))
 print(paste("number of snps:",length(readLines(paste(job_dir,"merged_mega_data_autosomal.bim",sep="")))))
@@ -593,8 +605,6 @@ print_sh_file(paste(job_dir,curr_sh_file,sep=''),
               get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,"plink/2.0a1",2,10000),curr_cmd)
 system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
 
-
-
 ####################################################################################################
 ####################################################################################################
 ####################################################################################################
@@ -607,6 +617,9 @@ names(metadata_sex) = rownames(sample_metadata_raw)
 
 imputed_sex1 = read_plink_table(paste(input_bfile1,".sexcheck",sep=''))[,4]
 imputed_sex2 = read_plink_table(paste(input_bfile2,".sexcheck",sep=''))[,4]
+
+inds1 = intersect(names(imputed_sex1),names(metadata_sex))
+inds2 = intersect(names(imputed_sex2),names(metadata_sex))
 
 sex_errs1 = inds1[((imputed_sex1[inds1] !="2" & metadata_sex[inds1]=="F") | (imputed_sex1[inds1] !="1"& metadata_sex[inds1]=="M"))]
 sex_errs2 = inds2[((imputed_sex2[inds2] !="2" & metadata_sex[inds2]=="F") | (imputed_sex2[inds2] !="1"& metadata_sex[inds2]=="M"))]

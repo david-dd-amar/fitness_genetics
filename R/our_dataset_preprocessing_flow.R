@@ -95,6 +95,8 @@ snp_samp = snp_samp[!is.na(snp_data2[snp_samp,]$MEGA_Consortium_v2_15070954_A2.b
 cor(snp_data1[snp_samp,]$Multi.EthnicGlobal_D1.bpm.Cluster.Sep,snp_data2[snp_samp,]$MEGA_Consortium_v2_15070954_A2.bpm.Cluster.Sep,method="spearman")
 table(snp_data2[snp_samp,]$MEGA_Consortium_v2_15070954_A2.bpm.Cluster.Sep>0.3,snp_data1[snp_samp,]$Multi.EthnicGlobal_D1.bpm.Cluster.Sep>0.3)
 
+# snp_data1["rs1747677",]
+
 # some preprocessing of metadata
 analyze_snp_report_get_snps_to_exclude<-function(snp_data,autosomal_chrs,snp_min_call_rate,
                                                  snp_min_clustersep_thr,snp_min_het_ex,snp_max_het_ex,
@@ -351,6 +353,34 @@ flip_snps_using_plink(paste(job_dir,"bfile1",sep=""),snps_to_flip,job_dir,"final
                          batch_script_func=get_sh_default_prefix)
 wait_for_job()
 
+####################################################################################################
+####################################################################################################
+####################################################################################################
+# Run ld reports (useful for ldscore analysis)
+# File 1
+err_path = paste(job_dir,"ld_bfile1.err",sep="")
+log_path = paste(job_dir,"ld_bfile1.log",sep="")
+curr_cmd = paste("plink --bfile",paste(job_dir,"bfile1",sep=''),
+                 "--r2 --ld-window-cm 1 --freq",
+                 "--out",paste(job_dir,"bfile1",sep=''))
+curr_sh_file = "ld_bfile1.sh"
+print_sh_file(paste(job_dir,curr_sh_file,sep=''),
+              get_sh_default_prefix(err_path,log_path),curr_cmd)
+system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
+# File 2
+err_path = paste(job_dir,"ld_bfile2.err",sep="")
+log_path = paste(job_dir,"ld_bfile2.log",sep="")
+curr_cmd = paste("plink --bfile",paste(job_dir,"bfile2",sep=''),
+                 "--r2 --ld-window-cm 1 --freq",
+                 "--out",paste(job_dir,"bfile2",sep=''))
+curr_sh_file = "ld_bfile2.sh"
+print_sh_file(paste(job_dir,curr_sh_file,sep=''),
+              get_sh_default_prefix(err_path,log_path),curr_cmd)
+system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
+
+####################################################################################################
+####################################################################################################
+####################################################################################################
 # Merge
 err_path = paste(job_dir,"merge_plink.err",sep="")
 log_path = paste(job_dir,"merge_plink.log",sep="")
@@ -543,6 +573,27 @@ print(paste("number of cooper samples in this file:",sum(sample_metadata_raw[ids
 #   system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
 #   wait_for_job()
 # }
+
+####################################################################################################
+####################################################################################################
+####################################################################################################
+# GWAS vs. sex
+pheno_file = paste(job_dir,"integrated_sample_metadata_and_covariates.txt",sep='')
+err_path = paste(job_dir,"sex_gwas_qc.err",sep="")
+log_path = paste(job_dir,"sex_gwas_qc.log",sep="")
+curr_cmd = paste("plink2",
+                 "--bfile",paste(job_dir,"merged_mega_data_autosomal",sep=''),
+                 "--logistic hide-covar firth-fallback",
+                 paste("--pheno",pheno_file),
+                 paste("--pheno-name sex"),
+                 "--adjust",
+                 "--out",paste(job_dir,"sex_gwas_qc",sep=''))
+curr_sh_file = "sex_gwas_qc.sh"
+print_sh_file(paste(job_dir,curr_sh_file,sep=''),
+              get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,"plink/2.0a1",2,10000),curr_cmd)
+system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
+
+
 
 ####################################################################################################
 ####################################################################################################
@@ -1005,6 +1056,31 @@ curr_sh_file = "cooper_vs_elite.sh"
 print_sh_file(paste(job_dir,curr_sh_file,sep=''),
               get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,"plink/2.0a1",2,10000),curr_cmd)
 system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
+
+
+####################################################################################################
+####################################################################################################
+####################################################################################################
+# Run GWAS for each PC
+pheno_file = paste(job_dir,"integrated_sample_metadata_and_covariates_after_pca1.phe",sep='')
+curr_bfile = "merged_mega_data_autosomal_after_maf_after_pca"
+for (j in 1:20){
+  err_path = paste(job_dir,"gwas_PC",j,".err",sep="")
+  log_path = paste(job_dir,"gwas_PC",j,".log",sep="")
+  curr_cmd = paste("plink2",
+                   "--bfile",paste(job_dir,curr_bfile,sep=''),
+                   "--linear hide-covar",
+                   paste("--pheno-name",paste("PC",j,sep="")),
+                   paste("--pheno",pheno_file),
+                   paste("--covar",pheno_file),
+                   "--covar-name sex,age",
+                   "--adjust",
+                   "--out",paste(job_dir,"gwas_PC",j,"",sep=''))
+  curr_sh_file = paste("gwas_PC",j,".sh",sep="")
+  print_sh_file(paste(job_dir,curr_sh_file,sep=''),
+                get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,"plink/2.0a1",2,10000),curr_cmd)
+  system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
+}
 
 ####################################################################################################
 ####################################################################################################

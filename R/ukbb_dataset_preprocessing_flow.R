@@ -134,3 +134,9 @@ curr_sh_file = "run_check_bim_update.sh"
 print_sh_file(paste(out_path,curr_sh_file,sep=''),
               get_sh_prefix_bigmem(err_path,log_path,Ncpu=1,mem_size=256000),plink_commands)
 system(paste("sbatch",paste(out_path,curr_sh_file,sep='')))
+
+
+
+
+
+

@@ -280,12 +280,16 @@ write.table(d,file=paste(out_path,"kmeans_cleaned.phe",sep=''),
             sep=" ",quote=F,row.names = F)
 
 # Compute the new PCs association
+d = read.table(paste(out_path,"kmeans_cleaned.phe",sep=''),header=T,stringsAsFactors = F)
+library(class)
 pc_ps = c()
 for(j in 1:40){
-  pc_ps[j] = compute_pc_vs_discrete_variable_association_p(
-    pc = d[,paste("PC",j,sep="")],
-    y = d[,"CohortName"]
-  )
+  # pc_ps[j] = compute_pc_vs_discrete_variable_association_p(
+  #   pc = d[subjects_for_analysis,paste("PC",j,sep="")],
+  #   y = d[subjects_for_analysis,"CohortName"]
+  # )
+  pc_ps[j] = chisq.test(table(knn.cv(d[,paste("PC",j,sep="")],
+                                     d$CohortName,k=5),d$CohortName))$p.value
 }
 pc_ps = p.adjust(pc_ps)
 pc_inds = which(pc_ps < 0.001) # Before correction: almost all
@@ -384,16 +388,17 @@ system(paste("sbatch",paste(out_path,curr_sh_file,sep='')))
 ####################################################################################################
 ####################################################################################################
 
+# Elite vs. UKBB: select samples
 d = read.table(paste(out_path,"kmeans_cleaned.phe",sep=''),header=T,stringsAsFactors = F)
 rownames(d) = d$IID
 
 # Take the closest sample to each of our subjects and recalculate
 our_samples = rownames(d)[d$CohortName == "elite"]
 ukbb_samples = rownames(d)[d$CohortName == "ukbb"]
-pc_x = as.matrix(d[,paste("PC",1:10,sep="")])
+pc_x = as.matrix(d[,paste("PC",1:5,sep="")])
 rownames(pc_x) = rownames(d)
 selected_samples = c()
-n_to_select = 2
+n_to_select = 10
 for (i in our_samples){
   curr_dists = sweep(pc_x[ukbb_samples,],2,pc_x[i,])
   curr_dists = curr_dists^2
@@ -412,6 +417,7 @@ for(j in 1:40){
 }
 pc_ps = p.adjust(pc_ps)
 pc_inds = which(pc_ps < 0.01) # Before correction: almost all
+pc_inds
 
 # 4. Logistic: Elite vs. UKBB, + sex, age, and 10 PCs
 covars_copy = d[subjects_for_analysis,]
@@ -432,6 +438,65 @@ curr_sh_file = "ukbb_vs_elite_logistic_matched_samples.sh"
 print_sh_file(paste(out_path,curr_sh_file,sep=''),
               get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,"plink/2.0a1",2,10000),curr_cmd)
 system(paste("sbatch",paste(out_path,curr_sh_file,sep='')))
+
+####################################################################################################
+####################################################################################################
+####################################################################################################
+
+# Cooper vs. UKBB: select samples
+d = read.table(paste(out_path,"kmeans_cleaned.phe",sep=''),header=T,stringsAsFactors = F)
+rownames(d) = d$IID
+
+# Take the closest sample to each of our subjects and recalculate
+our_samples = rownames(d)[d$CohortName == "cooper"]
+ukbb_samples = rownames(d)[d$CohortName == "ukbb"]
+pc_x = as.matrix(d[,paste("PC",1:5,sep="")])
+rownames(pc_x) = rownames(d)
+selected_samples = c()
+n_to_select = 10
+for (i in our_samples){
+  curr_dists = sweep(pc_x[ukbb_samples,],2,pc_x[i,])
+  curr_dists = curr_dists^2
+  curr_dists = sqrt(rowSums(curr_dists))
+  curr_dists = sort(curr_dists,decreasing = F)
+  selected_samples = union(selected_samples,names(curr_dists)[1:n_to_select])
+  print(length(selected_samples))
+}
+subjects_for_analysis = c(our_samples,selected_samples)
+pc_ps = c()
+for(j in 1:40){
+  # pc_ps[j] = compute_pc_vs_discrete_variable_association_p(
+  #   pc = d[subjects_for_analysis,paste("PC",j,sep="")],
+  #   y = d[subjects_for_analysis,"CohortName"]
+  # )
+  pc_ps[j] = chisq.test(table(knn.cv(d[subjects_for_analysis,paste("PC",j,sep="")],
+                                  d$CohortName,k=5),d[subjects_for_analysis,"CohortName"]$CohortName))$p.value
+}
+pc_ps = p.adjust(pc_ps)
+pc_inds = which(pc_ps < 0.01) # Before correction: almost all
+pc_inds
+
+# 5. Logistic: Cooper vs. UKBB, + sex, age, and 10 PCs
+covars_copy = d[subjects_for_analysis,]
+covar_file = paste(out_path,"ukbb_vs_cooper_matched_samples.phe",sep='')
+write.table(file=covar_file,covars_copy,sep=" ",row.names = F,col.names = T,quote=F)
+err_path = paste(out_path,"ukbb_vs_cooper_matched_samples.err",sep="")
+log_path = paste(out_path,"ukbb_vs_cooper_matched_samples.log",sep="")
+curr_cmd = paste("plink2",
+                 "--bfile",gwas_bfile,"--logistic hide-covar firth-fallback",
+                 paste("--pheno",covar_file),
+                 paste("--pheno-name ExerciseGroup"),
+                 paste("--covar",covar_file),
+                 paste("--covar-name sex,Age,",paste(paste("PC",1:10,sep=""),collapse=","),sep=""),
+                 "--adjust --out",paste(out_path,"ukbb_vs_cooper_logistic_matched_samples",sep=''))
+curr_sh_file = "ukbb_vs_cooper_logistic_matched_samples.sh"
+print_sh_file(paste(out_path,curr_sh_file,sep=''),
+              get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,"plink/2.0a1",2,10000),curr_cmd)
+system(paste("sbatch",paste(out_path,curr_sh_file,sep='')))
+
+####################################################################################################
+####################################################################################################
+####################################################################################################
 
 # # 5. Logistic: Cooper vs. UKBB, + sex, age, and 15 PCs
 # covars_copy = d[d$CohortName!="elite",]
@@ -503,6 +568,7 @@ system(paste("sbatch",paste(out_path,curr_sh_file,sep='')))
 ####################################################################################################
 # Run GWAS for each PC
 covar_file = paste(out_path,"kmeans_cleaned.phe",sep='')
+gwas_bfile = paste(out_path,"merged_data_after_pca_rl_filters",sep='')
 for (j in 1:20){
   err_path = paste(out_path,"gwas_PC",j,".err",sep="")
   log_path = paste(out_path,"gwas_PC",j,".log",sep="")
@@ -530,6 +596,11 @@ create_fuma_files_for_fir(out_path,
                           paste(gwas_bfile,".frq",sep=""),p = 1,maf = 0.05,
                           snps_to_exclude_from_results=NULL)
 
+####################################################################################################
+####################################################################################################
+####################################################################################################
+# Additional analysis: QC and comparisons
+
 # Compare the results
 res_files = list.files(out_path)
 res_files = res_files[grepl("adjusted$",res_files)]
@@ -542,16 +613,26 @@ for (f in res_files){
   m = cbind(m,p[rownames(m)])
 }
 table(m[,1]<5e-8,m[,2]<5e-8)
-table(m[,3]<0.001,m[,2]<5e-8)
+table(m[,3]<5e-8,m[,2]<5e-8)
 
 # Optional: discard unreliable UKBB snps
-bad_ukbb_snps = read.table("/oak/stanford/groups/euan/projects/fitness_genetics/ukbb/ukbb_imputed_20k_rand_controls_sex_age/bad_ukbb_snps.txt",
-                           stringsAsFactors = F)
+bad_ukbb_snps = read.table(
+  "/oak/stanford/groups/euan/projects/fitness_genetics/ukbb/ukbb_imputed_20k_rand_controls_sex_age/bad_ukbb_snps.txt",
+  stringsAsFactors = F)
 bad_ukbb_snps = bad_ukbb_snps[,1]
+
+# Check if significant results tend to appear in blocks: find outlier problematic snps
+res = read.table(paste(out_path,res_files[3],sep=''),stringsAsFactors = F)
+gwas_bfile = paste(out_path,"merged_data_after_pca_rl_filters",sep='')
+table(res[is.element(res[,2],set=flipscan_problematic_snps),3]<1e-8)
+table(res[is.element(res[,2],set=bad_ukbb_snps),3]<1e-8)
+bad_snps = union(bad_ukbb_snps,flipscan_problematic_snps)
+table(res[is.element(res[,2],set=bad_snps),3]<5e-8)
+
 create_fuma_files_for_fir(out_path,
                           paste(gwas_bfile,".bim",sep=""),
                           paste(gwas_bfile,".frq",sep=""),p = 1,maf = 0.01,
-                          snps_to_exclude_from_results=bad_ukbb_snps)
+                          snps_to_exclude_from_results=bad_snps)
 
 ####################################################################################################
 ####################################################################################################
@@ -786,7 +867,7 @@ res = two_d_plot_visualize_covariate(d[inds,]$PC2,d[inds,]$PC3,kmeans_res,kmeans
     main = "Clustering results: PCs 2 and 3",xlab="PC3",ylab="PC2")
 legend(x="bottomleft",names(res[[1]]),fill = res[[1]])
 
-res = two_d_plot_visualize_covariate(d[inds,]$PC1,d[inds,]$PC2,d[inds,]$CohortName,d[inds,]$CohortName,
+res = two_d_plot_visualize_covariate(d[inds,]$PC1,d[inds,]$PC40,d[inds,]$CohortName,d[inds,]$CohortName,
     main = "Clustering results: PCs 1 and 2",xlab="PC1",ylab="PC2")
 legend(x="bottomleft",names(res[[1]]),fill = res[[1]])
 res = two_d_plot_visualize_covariate(d[inds,]$PC2,d[inds,]$PC3,d[inds,]$CohortName,d[inds,]$CohortName,
@@ -822,4 +903,51 @@ legend(x="bottomleft",names(res[[1]]),fill = res[[1]])
 # }
 # pc_matrix = newd[,grepl("^PC",colnames(newd))]
 # vars = apply(pc_matrix,2,var)
+
+pcx = d[,grepl("^PC",colnames(d))]
+rownames(d) = d$IID
+rownames(pcx) = rownames(d)
+excluded_subjects = c()
+n = nrow(pcx)
+while (nrow(pcx) > 0){
+  curr_exclude = rep(F,nrow(pcx))
+  g = d[rownames(pcx),]$CohortName
+  for(j in 1:ncol(pcx)){
+    curr_exclude = curr_exclude | simple_pc_bins_outlier_detection(pcx[,j],g)
+    print(paste(j,sum(curr_exclude)))
+  }
+  if(sum(curr_exclude)==0){break}
+  newx = pcx[!curr_exclude,]
+  pcx = prcomp(newx,retx = T)$x
+}
+
+res = two_d_plot_visualize_covariate(pcx[,1],pcx[,2],g,g,
+    main = "Clustering results: PCs 1 and 2",xlab="PC1",ylab="PC2")
+legend(x="bottomleft",names(res[[1]]),fill = res[[1]])
+
+res = two_d_plot_visualize_covariate(pcx[,31],pcx[,32],g,g,
+      main = "Clustering results: PCs 1 and 2",xlab="PC1",ylab="PC2")
+legend(x="bottomleft",names(res[[1]]),fill = res[[1]])
+
+pc_ps = c()
+for(j in 1:40){
+  disc_pc = cut(pcx[,j],breaks = 5)
+  tb = table(g,disc_pc)
+  tb = tb[,colSums(tb)>0]
+  pc_ps[j] = chisq.test(tb)$p.value
+}
+p.adjust(pc_ps)
+
+simple_pc_bins_outlier_detection<-function(pc,g,bins=10,pct = 0.99){
+  disc_pc = cut(pc,breaks = bins)
+  tb = table(g,disc_pc)
+  ukbb_p = tb["ukbb",]/colSums(tb)
+  bad_pc_bins = names(which(ukbb_p>pct))
+  to_rem = is.element(disc_pc,set=bad_pc_bins)
+  return(to_rem)
+}
+
+
+
+
 

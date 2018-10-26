@@ -364,8 +364,13 @@ compute_pc_vs_binary_variable_association_p<-function(pc,y,test=wilcox.test){
   return(test(x1,x2)$p.value)
 }
 
-compute_pc_vs_discrete_variable_association_p<-function(pc,y){
-  return(kruskal.test(pc,g=as.factor(y))$p.value)
+compute_pc_vs_discrete_variable_association_p<-function(pc,y,cuts=5){
+  if(is.null(cuts)){return(kruskal.test(pc,g=as.factor(y))$p.value)}
+  pc_d = cut(pc,breaks=cuts)
+  tb = table(pc_d,y)
+  tb = tb[rowSums(tb)>0,]
+  tb = tb[,colSums(tb)>0]
+  return(chisq.test(tb)$p.value)
 }
 
 check_if_bim_is_sorted<-function(bimfile){

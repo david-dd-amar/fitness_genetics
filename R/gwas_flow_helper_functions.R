@@ -85,7 +85,7 @@ get_my_jobs<-function(){
   return(jobs[new_jobs,])
 }
 get_job_id<-function(x){return(x[1])}
-wait_for_job<-function(jobs_before=NULL,waittime=10,max_wait=6000){
+wait_for_job<-function(jobs_before=NULL,waittime=30,max_wait=6000){
   Sys.sleep(waittime)
   curr_jobs = get_my_jobs()
   if(length(curr_jobs)==0){return(NULL)}

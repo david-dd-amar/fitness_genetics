@@ -782,7 +782,7 @@ print(paste("number of cooper samples in this file:",sum(sample_metadata_raw[ids
 analysis_name = "our_data_ld_prune"
 err_path = paste(job_dir,analysis_name,"_ld_report.err",sep="")
 log_path = paste(job_dir,analysis_name,"_ld_report.log",sep="")
-curr_cmd = paste("plink --bfile",paste(job_dir,"merged_mega_data_autosomal_after_maf",sep=''),
+curr_cmd = paste("plink --bfile",paste(job_dir,"merged_mega_data_autosomal",sep=''),
                  "--maf 0.05 --indep-pairwise 250 10",0.1,
                  "--out",paste(job_dir,analysis_name,"_plink.prune",sep=""))
 curr_sh_file = paste(analysis_name,"_ld_report.sh",sep="")
@@ -795,9 +795,9 @@ print(paste("Prune before PCA, num of variants is:",
             length(readLines(paste(job_dir,analysis_name,"_plink.prune.prune.in",sep="")))))
 err_path = paste(job_dir,"final_data_pca.err",sep="")
 log_path = paste(job_dir,"final_data_pca.log",sep="")
-curr_cmd = paste("plink --bfile",paste(job_dir,"merged_mega_data_autosomal_after_maf",sep=''),
+curr_cmd = paste("plink --bfile",paste(job_dir,"merged_mega_data_autosomal",sep=''),
                  "--extract", paste(job_dir,analysis_name,"_plink.prune.prune.in",sep=""),
-                 "--pca --out",paste(job_dir,"merged_mega_data_autosomal_after_maf",sep=''))
+                 "--pca --out",paste(job_dir,"merged_mega_data_autosomal",sep=''))
 curr_sh_file = "final_data_pca.sh"
 print_sh_file(paste(job_dir,curr_sh_file,sep=''),
               get_sh_default_prefix(err_path,log_path),curr_cmd)
@@ -805,9 +805,9 @@ system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
 # relatedness
 err_path = paste(job_dir,"final_data_rl.err",sep="")
 log_path = paste(job_dir,"final_data_rl.log",sep="")
-curr_cmd = paste("plink --bfile",paste(job_dir,"merged_mega_data_autosomal_after_maf",sep=''),
+curr_cmd = paste("plink --bfile",paste(job_dir,"merged_mega_data_autosomal",sep=''),
                  "--extract", paste(job_dir,analysis_name,"_plink.prune.prune.in",sep=""),
-                 "--genome --min 0.2 --out",paste(job_dir,"merged_mega_data_autosomal_after_maf",sep=''))
+                 "--genome --min 0.2 --out",paste(job_dir,"merged_mega_data_autosomal",sep=''))
 curr_sh_file = "final_data_rl.sh"
 print_sh_file(paste(job_dir,curr_sh_file,sep=''),
               get_sh_default_prefix(err_path,log_path),curr_cmd)
@@ -815,8 +815,8 @@ system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
 # frq on all
 err_path = paste(job_dir,"final_data_fr.err",sep="")
 log_path = paste(job_dir,"final_data_fr.log",sep="")
-curr_cmd = paste("plink --bfile",paste(job_dir,"merged_mega_data_autosomal_after_maf",sep=''),
-                 "--freq --out",paste(job_dir,"merged_mega_data_autosomal_after_maf",sep=''))
+curr_cmd = paste("plink --bfile",paste(job_dir,"merged_mega_data_autosomal",sep=''),
+                 "--freq --out",paste(job_dir,"merged_mega_data_autosomal",sep=''))
 curr_sh_file = "final_data_fr.sh"
 print_sh_file(paste(job_dir,curr_sh_file,sep=''),
               get_sh_default_prefix(err_path,log_path),curr_cmd)
@@ -825,15 +825,15 @@ wait_for_job()
 
 # Code to update cov matrix in case we rerun PCA
 # covariate_matrix = read.table(paste(job_dir,"integrated_sample_metadata_and_covariates.txt",sep=''),sep="\t",header = T)
-# pca_res = read_pca_res(paste(job_dir,"merged_mega_data_autosomal_after_maf.eigenvec",sep=""))
+# pca_res = read_pca_res(paste(job_dir,"merged_mega_data_autosomal.eigenvec",sep=""))
 # rownames(covariate_matrix) = covariate_matrix[,2]
 # covariate_matrix[rownames(pca_res),colnames(pca_res)] = pca_res
 
 # define the samples to exclude for subsequent analysis, get the bed, bgen, and covariate files
 imputed_sex1 = read_plink_table(paste(input_bfile1,".sexcheck",sep=''))[,4]
 imputed_sex2 = read_plink_table(paste(input_bfile2,".sexcheck",sep=''))[,4]
-fam_samples = read.table(paste(job_dir,"merged_mega_data_autosomal_after_maf.fam",sep=""),stringsAsFactors = F)
-pca_res = read_pca_res(paste(job_dir,"merged_mega_data_autosomal_after_maf.eigenvec",sep=""))
+fam_samples = read.table(paste(job_dir,"merged_mega_data_autosomal.fam",sep=""),stringsAsFactors = F)
+pca_res = read_pca_res(paste(job_dir,"merged_mega_data_autosomal.eigenvec",sep=""))
 all(is.element(fam_samples[,2],set=rownames(sample_metadata_raw))) # this should be TRUE
 all(rownames(pca_res) == fam_samples[,2]) # this should be true as well
 subjects_for_analysis = fam_samples[,2]
@@ -881,6 +881,118 @@ write.table(covariate_matrix,file=
 # Some stats
 table(covariate_matrix[,"Cohort"])
 table(covariate_matrix[,"Cohort"],covariate_matrix[,"batch"])
+
+####################################################################################################
+####################################################################################################
+####################################################################################################
+load(paste(job_dir,"manual_clustering.RData",sep=""))
+selected_subjects = names(which(manual_clustering))
+curr_fam = read.table(paste(job_dir,"merged_mega_data_autosomal.fam",sep=""),stringsAsFactors = F)
+curr_fam = curr_fam[!is.element(curr_fam[,2],set=selected_subjects),]
+remove_subjects_using_plink(paste(job_dir,"merged_mega_data_autosomal",sep=""),
+                            curr_fam,
+                            job_dir,"_eu_selection","merged_mega_data_autosomal_eu_selected",
+                            batch_script_func=get_sh_default_prefix)
+wait_for_job()
+print("After PCA and Rl analysis, data sizes are:")
+print(paste("number of samples:",length(readLines(paste(job_dir,"merged_mega_data_autosomal_eu_selected.fam",sep="")))))
+print(paste("number of snps:",length(readLines(paste(job_dir,"merged_mega_data_autosomal_eu_selected.bim",sep="")))))
+ids = read.table(paste(job_dir,"merged_mega_data_autosomal_eu_selected.fam",sep=""),stringsAsFactors = F)[,2]
+print(paste("number of cooper samples in this file:",sum(sample_metadata_raw[ids,"Cohort"]!="Cooper")))
+print(paste("number of cooper samples in this file:",sum(sample_metadata_raw[ids,"Cohort"]=="Cooper")))
+
+####################################################################################################
+####################################################################################################
+####################################################################################################
+# Transform the dataset into HRC-based or 1000G-based data
+# Run the check_bim analysis
+
+curr_dir = paste(job_dir,"1000g/",sep="")
+system(paste("mkdir",curr_dir))
+setwd(curr_dir)
+curr_bfile = "merged_mega_data_autosomal"
+check_if_bim_is_sorted(paste(paste(job_dir,curr_bfile,".bim",sep='')))
+err_path = paste(curr_dir,"run_check_bim.err",sep="")
+log_path = paste(curr_dir,"run_check_bim.log",sep="")
+system(paste("cp /home/users/davidama/apps/check_bim/HRC-1000G-check-bim-NoReadKey.pl",curr_dir))
+# For 1000G-based analysis
+curr_cmd = paste("perl", paste(curr_dir, "HRC-1000G-check-bim-NoReadKey.pl",sep=""),
+                 "-b", paste(job_dir,curr_bfile,".bim",sep=''),
+                 "-f", paste(job_dir,curr_bfile,".frq",sep=''),
+                 "-1000g -p EUR -t 0.3 -r ",
+                 "/home/users/davidama/apps/check_bim/1000GP_Phase3_combined.legend")
+curr_sh_file = "run_check_bim.sh"
+# print_sh_file(paste(curr_dir,curr_sh_file,sep=''),
+#               get_sh_prefix_bigmem(err_path,log_path,mem_size = 256000,time="6:00:00"),curr_cmd)
+# Try without bigmem
+print_sh_file(paste(curr_dir,curr_sh_file,sep=''),
+              get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,
+              mem_size = 64000,time="6:00:00",Ncpu = 4),curr_cmd)
+system(paste("sbatch",paste(curr_dir,curr_sh_file,sep='')))
+wait_for_job()
+wait_for_job()
+system(paste("less ",curr_dir,"Run-plink.sh | grep TEMP > ",curr_dir,"Run-plink_1000g.sh",sep=""))
+run_sh_lines = readLines(paste(curr_dir,"Run-plink_1000g.sh",sep=""))
+run_sh_lines[1] = gsub(paste("plink --bfile",curr_bfile),paste("plink --bfile ",job_dir,curr_bfile,sep=""),run_sh_lines[1])
+run_sh_lines = sapply(run_sh_lines,gsub,pattern = "-updated",replacement = "")
+err_path = paste(curr_dir,"run_check_bim_update.err",sep="")
+log_path = paste(curr_dir,"run_check_bim_update.log",sep="")
+curr_sh_file = "run_check_bim_update.sh"
+print_sh_file(paste(curr_dir,curr_sh_file,sep=''),
+              get_sh_default_prefix(err_path,log_path),run_sh_lines)
+system(paste("sbatch",paste(curr_dir,curr_sh_file,sep='')))
+
+# For HRC-based analysis
+curr_dir = paste(job_dir,"hrc/",sep="")
+system(paste("mkdir",curr_dir))
+setwd(curr_dir)
+system(paste("cp /home/users/davidama/apps/check_bim/HRC-1000G-check-bim-NoReadKey.pl",curr_dir))
+err_path = paste(curr_dir,"run_check_bim2.err",sep="")
+log_path = paste(curr_dir,"run_check_bim2.log",sep="")
+curr_cmd = paste("perl", paste(curr_dir, "HRC-1000G-check-bim-NoReadKey.pl",sep=""),
+                 "-b", paste(job_dir,curr_bfile,".bim",sep=''),
+                 "-f", paste(job_dir,curr_bfile,".frq",sep=''),
+                 "-hrc -p EU -t 0.3 -r",
+                 "/home/users/davidama/apps/check_bim/HRC.r1-1.GRCh37.wgs.mac5.sites.tab")
+curr_sh_file = "run_check_bim2.sh"
+# print_sh_file(paste(curr_dir,curr_sh_file,sep=''),
+#               get_sh_prefix_bigmem(err_path,log_path,mem_size = 256000,time="6:00:00"),curr_cmd)
+# Try without bigmem
+print_sh_file(paste(curr_dir,curr_sh_file,sep=''),
+              get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,
+              mem_size = 64000,time="6:00:00",Ncpu = 4),curr_cmd)
+system(paste("sbatch",paste(curr_dir,curr_sh_file,sep='')))
+wait_for_job()
+system(paste("less ",curr_dir,"Run-plink.sh | grep TEMP > ",curr_dir,"Run-plink_hrc.sh",sep=""))
+run_sh_lines[1] = gsub(paste("plink --bfile",curr_bfile),paste("plink --bfile ",job_dir,curr_bfile,sep=""),run_sh_lines[1])
+run_sh_lines = readLines(paste(curr_dir,"Run-plink_hrc.sh",sep=""))
+run_sh_lines = sapply(run_sh_lines,gsub,pattern = "-updated",replacement = "")
+err_path = paste(curr_dir,"run_check_bim_update.err",sep="")
+log_path = paste(curr_dir,"run_check_bim_update.log",sep="")
+curr_sh_file = "run_check_bim_update.sh"
+print_sh_file(paste(curr_dir,curr_sh_file,sep=''),
+              get_sh_default_prefix(err_path,log_path),run_sh_lines)
+system(paste("sbatch",paste(curr_dir,curr_sh_file,sep='')))
+
+# To download and install the tools on the cluster
+# 1. Check bim:
+# wget http://www.well.ox.ac.uk/~wrayner/tools/HRC-1000G-check-bim-v4.2.9-NoReadKey.zip
+# unzip HRC-1000G-check-bim-v4.2.9-NoReadKey.zip
+# mkdir check_bim
+# mv HRC* check_bim/
+# mv LICENSE.txt check_bim/
+# cd check_bim
+# wget ftp://ngs.sanger.ac.uk/production/hrc/HRC.r1-1/HRC.r1-1.GRCh37.wgs.mac5.sites.tab.gz
+# gunzip HRC.r1-1.GRCh37.wgs.mac5.sites.tab.gz
+#
+# 2. Strand analysis:
+# mkdir ~/apps/wrayner_strand/
+# cd ~/apps/wrayner_strand
+# wget http://www.well.ox.ac.uk/~wrayner/strand/update_build.sh
+
+####################################################################################################
+####################################################################################################
+####################################################################################################
 
 # !!!!!!!!!!!!!!!!!!!!
 # Code beyond this point should be moved to another script
@@ -1029,94 +1141,6 @@ table(covariate_matrix[,"Cohort"],covariate_matrix[,"batch"])
 # write.table(covariate_matrix,file=
 #               paste(job_dir,"integrated_sample_metadata_and_covariates_after_pca1.phe",sep=''),
 #             sep=" ",quote=F,row.names = F)
-# 
-# ####################################################################################################
-# ####################################################################################################
-# ####################################################################################################
-# # Transform the dataset into HRC-based or 1000G-based data
-# # Run the check_bim analysis
-# 
-# curr_dir = paste(job_dir,"1000g/",sep="")
-# system(paste("mkdir",curr_dir))
-# setwd(curr_dir)
-# curr_bfile = "merged_mega_data_autosomal_after_maf_after_pca"
-# check_if_bim_is_sorted(paste(paste(job_dir,curr_bfile,".bim",sep='')))
-# err_path = paste(curr_dir,"run_check_bim.err",sep="")
-# log_path = paste(curr_dir,"run_check_bim.log",sep="")
-# system(paste("cp /home/users/davidama/apps/check_bim/HRC-1000G-check-bim-NoReadKey.pl",curr_dir))
-# # For 1000G-based analysis
-# curr_cmd = paste("perl", paste(curr_dir, "HRC-1000G-check-bim-NoReadKey.pl",sep=""),
-#                  "-b", paste(job_dir,curr_bfile,".bim",sep=''),
-#                  "-f", paste(job_dir,curr_bfile,".frq",sep=''),
-#                  "-1000g -p EUR -t 0.3 -r ",
-#                  "/home/users/davidama/apps/check_bim/1000GP_Phase3_combined.legend")
-# curr_sh_file = "run_check_bim.sh"
-# print_sh_file(paste(curr_dir,curr_sh_file,sep=''),
-#               get_sh_prefix_bigmem(err_path,log_path,mem_size = 256000,time="6:00:00"),curr_cmd)
-# # Try without bigmem
-# print_sh_file(paste(curr_dir,curr_sh_file,sep=''),
-#               get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,
-#               mem_size = 64000,time="6:00:00",Ncpu = 4),curr_cmd)
-# system(paste("sbatch",paste(curr_dir,curr_sh_file,sep='')))
-# wait_for_job()
-# system(paste("less ",curr_dir,"Run-plink.sh | grep TEMP > ",curr_dir,"Run-plink_1000g.sh",sep=""))
-# run_sh_lines = readLines(paste(curr_dir,"Run-plink_1000g.sh",sep=""))
-# run_sh_lines[1] = gsub(paste("plink --bfile",curr_bfile),paste("plink --bfile ",job_dir,curr_bfile,sep=""),run_sh_lines[1])
-# run_sh_lines = sapply(run_sh_lines,gsub,pattern = "-updated",replacement = "")
-# err_path = paste(curr_dir,"run_check_bim_update.err",sep="")
-# log_path = paste(curr_dir,"run_check_bim_update.log",sep="")
-# curr_sh_file = "run_check_bim_update.sh"
-# print_sh_file(paste(curr_dir,curr_sh_file,sep=''),
-#               get_sh_default_prefix(err_path,log_path),run_sh_lines)
-# system(paste("sbatch",paste(curr_dir,curr_sh_file,sep='')))
-# 
-# # For HRC-based analysis
-# curr_dir = paste(job_dir,"hrc/",sep="")
-# system(paste("mkdir",curr_dir))
-# setwd(curr_dir)
-# system(paste("cp /home/users/davidama/apps/check_bim/HRC-1000G-check-bim-NoReadKey.pl",curr_dir))
-# err_path = paste(curr_dir,"run_check_bim2.err",sep="")
-# log_path = paste(curr_dir,"run_check_bim2.log",sep="")
-# curr_cmd = paste("perl", paste(curr_dir, "HRC-1000G-check-bim-NoReadKey.pl",sep=""),
-#                  "-b", paste(job_dir,curr_bfile,".bim",sep=''),
-#                  "-f", paste(job_dir,curr_bfile,".frq",sep=''),
-#                  "-hrc -p EU -t 0.3 -r",
-#                  "/home/users/davidama/apps/check_bim/HRC.r1-1.GRCh37.wgs.mac5.sites.tab")
-# curr_sh_file = "run_check_bim2.sh"
-# print_sh_file(paste(curr_dir,curr_sh_file,sep=''),
-#               get_sh_prefix_bigmem(err_path,log_path,mem_size = 256000,time="6:00:00"),curr_cmd)
-# # Try without bigmem
-# print_sh_file(paste(curr_dir,curr_sh_file,sep=''),
-#               get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,
-#               mem_size = 64000,time="6:00:00",Ncpu = 4),curr_cmd)
-# system(paste("sbatch",paste(curr_dir,curr_sh_file,sep='')))
-# wait_for_job()
-# system(paste("less ",curr_dir,"Run-plink.sh | grep TEMP > ",curr_dir,"Run-plink_hrc.sh",sep=""))
-# run_sh_lines[1] = gsub(paste("plink --bfile",curr_bfile),paste("plink --bfile ",job_dir,curr_bfile,sep=""),run_sh_lines[1])
-# run_sh_lines = readLines(paste(curr_dir,"Run-plink_hrc.sh",sep=""))
-# run_sh_lines = sapply(run_sh_lines,gsub,pattern = "-updated",replacement = "")
-# err_path = paste(curr_dir,"run_check_bim_update.err",sep="")
-# log_path = paste(curr_dir,"run_check_bim_update.log",sep="")
-# curr_sh_file = "run_check_bim_update.sh"
-# print_sh_file(paste(curr_dir,curr_sh_file,sep=''),
-#               get_sh_default_prefix(err_path,log_path),run_sh_lines)
-# system(paste("sbatch",paste(curr_dir,curr_sh_file,sep='')))
-# 
-# # To download and install the tools on the cluster
-# # 1. Check bim:
-# # wget http://www.well.ox.ac.uk/~wrayner/tools/HRC-1000G-check-bim-v4.2.9-NoReadKey.zip
-# # unzip HRC-1000G-check-bim-v4.2.9-NoReadKey.zip
-# # mkdir check_bim
-# # mv HRC* check_bim/
-# # mv LICENSE.txt check_bim/
-# # cd check_bim
-# # wget ftp://ngs.sanger.ac.uk/production/hrc/HRC.r1-1/HRC.r1-1.GRCh37.wgs.mac5.sites.tab.gz
-# # gunzip HRC.r1-1.GRCh37.wgs.mac5.sites.tab.gz
-# #
-# # 2. Strand analysis:
-# # mkdir ~/apps/wrayner_strand/
-# # cd ~/apps/wrayner_strand
-# # wget http://www.well.ox.ac.uk/~wrayner/strand/update_build.sh
 # 
 # ####################################################################################################
 # ####################################################################################################
@@ -1454,25 +1478,26 @@ rownames(pc_x) = rownames(d)
 # table(to_rem)
 # pc_x = pc_x[!to_rem,]
 
-pc_x_kmeans = kmeans(pc_x,2)
-kmeans_res = pc_x_kmeans$cluster
-# Using hierarchical
-dd = dist(pc_x,method="euclidean")
-h = hclust(dd,method = "complete")
-kmeans_res = run_hclust(pc_x,5,dd,h)
-kmeans_res[kmeans_res!=1] = 0
-
-kmeans_res[rownames(d)[to_rem]] = 10
-kmeans_res = kmeans_res[rownames(d)]
-table(kmeans_res)
-table(kmeans_res,d$Cohort)
-table(kmeans_res,is_jap[names(kmeans_res)])
-
-res = two_d_plot_visualize_covariate(d$PC1[inds],
-  d$PC2[inds],kmeans_res[inds],kmeans_res[inds],
-  main = "PCA+Clustering",xlab="PC1",ylab="PC2",lwd=2,cex.axis=1.4,cex.lab=1.4,
-  xlim = c(-0.02,0.02),ylim = c(-0.05,0.1))
-legend(x="topright",names(res[[1]]),fill = res[[1]],cex=1.3,ncol = 4)
+# Code for automatic clustering
+# pc_x_kmeans = kmeans(pc_x,2)
+# kmeans_res = pc_x_kmeans$cluster
+# # Using hierarchical
+# dd = dist(pc_x,method="euclidean")
+# h = hclust(dd,method = "complete")
+# kmeans_res = run_hclust(pc_x,5,dd,h)
+# kmeans_res[kmeans_res!=1] = 0
+# 
+# kmeans_res[rownames(d)[to_rem]] = 10
+# kmeans_res = kmeans_res[rownames(d)]
+# table(kmeans_res)
+# table(kmeans_res,d$Cohort)
+# table(kmeans_res,is_jap[names(kmeans_res)])
+# 
+# res = two_d_plot_visualize_covariate(d$PC1[inds],
+#   d$PC2[inds],kmeans_res[inds],kmeans_res[inds],
+#   main = "PCA+Clustering",xlab="PC1",ylab="PC2",lwd=2,cex.axis=1.4,cex.lab=1.4,
+#   xlim = c(-0.02,0.02),ylim = c(-0.05,0.1))
+# legend(x="topright",names(res[[1]]),fill = res[[1]],cex=1.3,ncol = 4)
 
 
 inds = 1:nrow(d)
@@ -1481,7 +1506,20 @@ res = two_d_plot_visualize_covariate(d$PC1[inds],
     d$PC2[inds],d$Cohort[inds],d$Cohort[inds],
     main = "Cooper and Elite",xlab="PC1",ylab="PC2",lwd=2,cex.axis=1.4,cex.lab=1.4)
 legend(x="topleft",cohort_name[as.numeric(names(res[[1]]))],
-       fill = res[[1]],cex=1.3)
+       fill = res[[1]],cex=1.1)
+
+manual_clustering = d$PC1 > -0.01 & d$PC2 < 0.1
+names(manual_clustering) = rownames(d)
+table(manual_clustering)
+table(manual_clustering,d$Cohort)
+table(manual_clustering,is_jap[names(manual_clustering)])
+
+save(manual_clustering,file="manual_clustering.RData")
+
+res = two_d_plot_visualize_covariate(d$PC1[inds],
+  d$PC2[inds],manual_clustering[inds],manual_clustering[inds],
+  main = "Inferred EUs",xlab="PC1",ylab="PC2",lwd=2,cex.axis=1.4,cex.lab=1.4)
+legend(x="topright",names(res[[1]]),fill = res[[1]],cex=1.1,ncol = 1)
 
 inds = 1:nrow(d)
 cohort_name = c("Cooper","ELITE")

@@ -34,7 +34,7 @@ for (chr in chrs){
                 get_sh_default_prefix(err_path,log_path),curr_cmd)
   system(paste("sbatch",paste(out_path,curr_sh_file,sep='')))
 }
-wait_for_job()
+wait_for_job(waittime = 120)
 
 ####################################################################################################
 ####################################################################################################

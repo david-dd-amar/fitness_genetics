@@ -12,6 +12,8 @@ ukbb_pheno_file_processed = "/Users/David/Desktop/ukbb/covariate_matrix.RData"
 euro_sample_ids_file = "/Users/David/Desktop/ukbb/pca_results_v2_chrom1_euro.eigenvec"
 # Load genotypes samples after qc
 genotyped_samples = "/Users/David/Desktop/elite/ukbb/ukb_imp_chr1_v2.fam"
+# Subjects that were found fit for the exercise test
+ukbb_exercise_subjects = "/Users/David/Desktop/ukbb/gwas/simple_norm/RHR_fitness_subjects.txt"
 
 # # Input files: sherlock
 # # Metadata: an excel file with multiple sheets. One per project.
@@ -27,9 +29,10 @@ geno_samples = read.table(genotyped_samples,stringsAsFactors = F)
 geno_samples = geno_samples[,1]
 geno_samples = as.character(geno_samples)
 gc()
-# eu_ids = read.delim(euro_sample_ids_file)
-# eu_ids = eu_ids[,1]
-# gc()
+eu_ids = read.delim(euro_sample_ids_file)
+eu_ids = as.character(eu_ids[,1])
+gc()
+geno_samples = intersect(geno_samples,eu_ids)
 
 our_metadata = read.delim(our_metadata_file,stringsAsFactors = F)
 our_metadata = our_metadata[is.element(our_metadata$Cohort,set=c("ELITE","Cooper")),]
@@ -47,12 +50,17 @@ rownames(defined_features) = c("age","sex")
 
 # Look at ukbb ages:
 ages = pheno_data[geno_samples,defined_features["age","ukbb"]]
+ukbb_exercise_subjects = read.table(ukbb_exercise_subjects,header = T)
+ukbb_exercise_subjects = as.character(ukbb_exercise_subjects[,1])
 hist(ages)
-# select subjects aged up to 50
+hist(pheno_data[ukbb_exercise_subjects,defined_features["age","ukbb"]])
+# select subjects aged up to 60
 geno_samples = geno_samples[ages <=60]
 length(geno_samples)
+geno_samples = intersect(geno_samples,ukbb_exercise_subjects)
+length(geno_samples)
 
-# Attempt 1: select based on sex only
+# Select based on sex only
 our_sex_dist = table(our_metadata$Sex_input_data)
 male_prob = (our_sex_dist / nrow(our_metadata))["M"]
 geno_samples_sex = pheno_data[geno_samples,defined_features["sex","ukbb"]]
@@ -64,6 +72,7 @@ female_samples = geno_samples[sample(which(!geno_samples_sex_male))[1:N_female]]
 
 selected_samples = sort(c(male_samples,female_samples))
 length(selected_samples)
+length(male_samples)
 write.table(cbind(selected_samples,selected_samples),file="/Users/David/Desktop/elite/ukbb/20k_rand_controls_sex_age.txt",
             sep="\t",row.names = F,col.names = F,quote=F)
 selected_samples = cbind(selected_samples,
@@ -72,26 +81,3 @@ selected_samples = cbind(selected_samples,
 colnames(selected_samples) = c("ID","sex","age")
 write.table(selected_samples,file="/Users/David/Desktop/elite/ukbb/20k_rand_controls_sex_age_with_info.txt",
             sep="\t",row.names = F,col.names = F,quote=F)
-
-# ###########################################################################
-# # Later: we can choose based on other features as well
-# # Take a cohort from our data and get their control group
-# cohort_name = "elite"
-# mdata_sheet = metadata_sheets[[1]]
-# mdata_sheet = mdata_sheet[,-which(colnames(mdata_sheet)=="Comment")]
-# mdata_sheet = mdata_sheet[,-which(colnames(mdata_sheet)=="DNA_ID")]
-# mdata_sheet = unique(mdata_sheet)
-# cohort_rows = tolower(mdata_sheet$Cohort)==tolower(cohort_name)
-# table(cohort_rows)
-# cohort_mdata = mdata_sheet[cohort_rows,defined_features[,2]]
-# rownames(cohort_mdata) = mdata_sheet$Sample_ID[cohort_rows]
-# ukbb_mdata = covariate_matrix[,defined_features[,1]]
-# 
-# transform_mdata_to_numeric<-function(m,sexind=2,male_code = "Male"){
-#   m[,sexind] = as.numeric(m[,sexind]==male_code)
-#   m = as.matrix(m)
-#   mode(m) = "numeric"
-#   return(m)
-# }
-# cohort_mdata = transform_mdata_to_numeric(cohort_mdata,2,"M")
-# ukbb_mdata = transform_mdata_to_numeric(ukbb_mdata,2,"Male")

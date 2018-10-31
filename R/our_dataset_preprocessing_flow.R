@@ -1560,7 +1560,7 @@ wss <- sapply(1:10,
 wss <- sapply(1:20,function(k){tot_wss_hluct(k,h,pc_x)})
 
 plot(1:length(wss), wss,
-     type="b", pch = 19, frame = FALSE,
+     type="b", pch = 19, frame = FALSE,cex.lab=1.5,lwd=2,cex.axis=1.4,
      xlab="Number of clusters K",
      ylab="Total within-clusters sum of squares")
 

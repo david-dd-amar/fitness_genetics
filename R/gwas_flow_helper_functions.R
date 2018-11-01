@@ -447,8 +447,8 @@ run_check_bim_analysis<-function(curr_dir,bedfile,freqfile,
 }
 run_check_bim_output_script<-function(curr_dir,bfile_short,bfile_full){
   setwd(curr_dir)
-  system(paste("less ",curr_dir,"Run-plink.sh | grep TEMP > ",curr_dir,"Run-plink.sh",sep=""))
-  run_sh_lines = readLines(paste(curr_dir,"Run-plink.sh",sep=""))
+  system(paste("less ",curr_dir,"Run-plink.sh | grep TEMP > ",curr_dir,"Run-plink2.sh",sep=""))
+  run_sh_lines = readLines(paste(curr_dir,"Run-plink2.sh",sep=""))
   run_sh_lines[1] = gsub(paste("plink --bfile",bfile_short),
                          paste("plink --bfile ",bfile_full,sep=""),run_sh_lines[1])
   run_sh_lines = sapply(run_sh_lines,gsub,pattern = "-updated",replacement = "")

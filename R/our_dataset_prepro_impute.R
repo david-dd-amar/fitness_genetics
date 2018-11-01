@@ -325,7 +325,7 @@ for (j in 1:22){
   run_check_bim_analysis(curr_dir,bedfile,freqfile)
 }
 wait_for_job(waittime = 120)
-for (j in 1:22){
+for (j in 1:21){
   setwd(impute2_out_path)
   curr_dir = paste(impute2_out_path,"check_bim_chr",j,'/',sep="")
   bedfile = paste(impute2_out_path,"chr",j,sep="")
@@ -333,4 +333,36 @@ for (j in 1:22){
   run_check_bim_output_script(curr_dir,bedfile_short,bedfile)
 }
 wait_for_job(waittime = 120)
+# 8.3 put all output files in one dir
+setwd(impute2_out_path)
+chrs_dir = paste(impute2_out_path,"check_bim_res/",sep="")
+system(paste("mkdir",chrs_dir))
+for (j in 1:21){
+  curr_fs = paste(impute2_out_path,"check_bim_chr",j,'/',"chr",j,"*",sep="")
+  system(paste("mv",curr_fs,chrs_dir))  
+}
+# 8.4 merge the bim files
+all_out_bed_files = list.files(chrs_dir)
+all_out_bed_files = all_out_bed_files[grepl(".bed$",all_out_bed_files)]
+all_out_bed_files = gsub(".bed","",all_out_bed_files)
+chr_num = as.numeric(gsub("chr","",all_out_bed_files))
+all_out_bed_files = all_out_bed_files[order(chr_num)]
+all_out_bed_files = paste(chrs_dir,all_out_bed_files,sep="")
+length(all_out_bed_files)
+allfiles_path = paste(chrs_dir,"allfiles.txt",sep="")
+write.table(t(t(all_out_bed_files[-1])),
+            file = allfiles_path,sep="",row.names = F,col.names = F,quote = F)
+
+err_path = paste(chrs_dir,"merge_beds.err",sep="")
+log_path = paste(chrs_dir,"merge_beds.log",sep="")
+curr_cmd = paste("plink --bfile",all_out_bed_files[1],
+                 "--merge-list",allfiles_path,
+                 "--make-bed --out",paste(chrs_dir,"merged_geno",sep=''))
+curr_sh_file = "merged_beds.sh"
+print_sh_file(paste(chrs_dir,curr_sh_file,sep=''),
+              get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,Ncpu=4,mem_size=64000),curr_cmd)
+system(paste("sbatch",paste(chrs_dir,curr_sh_file,sep='')))
+wait_for_job(120)
+
+
 

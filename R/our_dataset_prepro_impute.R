@@ -38,30 +38,30 @@ legend_files = paste(ref_for_phasing,legend_files,sep="")
 sample_file = ref_files[grepl(".sample$",ref_files)]
 sample_file = paste(ref_for_phasing,sample_file,sep="")
 
-# Run Shapeit for each chromosome, without a reference
-if(is.null(ref_for_phasing)){
-  shapeit_out_path = paste(job_dir,"shapeit_out/",sep="")
-  system(paste("mkdir",shapeit_out_path))
-  setwd(shapeit_out_path)
-  for (j in 1:22){
-    err_path = paste("shapeit_run_",j,".err",sep="")
-    log_path = paste("shapeit_run_",j,".log",sep="")
-    curr_bed = paste(direct_geno_path,j,".bed",sep="")
-    curr_bim = paste(direct_geno_path,j,".bim",sep="")
-    curr_fam = paste(direct_geno_path,j,".fam",sep="")
-    curr_gmap = map_files[grepl(paste("chr",j,"_",sep=""),map_files)]
-    curr_cmd = paste(shapeit_path,
-                     "--input-bed",curr_bed,curr_bim,curr_fam,
-                     "--input-map",curr_gmap,
-                     "-O",paste(j,"_phased",sep=''),
-                     "--thread 8 --seed 123456789")
-    curr_sh_file = paste("shapeit_run_",j,".sh",sep="")
-    print_sh_file(curr_sh_file,
-                  get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,Ncpu = 8,mem_size = 16000),
-                  curr_cmd)
-    system(paste("sbatch",paste(curr_sh_file,sep='')))
-  }
-}
+# # Run Shapeit for each chromosome, without a reference
+# if(is.null(ref_for_phasing)){
+#   shapeit_out_path = paste(job_dir,"shapeit_out/",sep="")
+#   system(paste("mkdir",shapeit_out_path))
+#   setwd(shapeit_out_path)
+#   for (j in 1:22){
+#     err_path = paste("shapeit_run_",j,".err",sep="")
+#     log_path = paste("shapeit_run_",j,".log",sep="")
+#     curr_bed = paste(direct_geno_path,j,".bed",sep="")
+#     curr_bim = paste(direct_geno_path,j,".bim",sep="")
+#     curr_fam = paste(direct_geno_path,j,".fam",sep="")
+#     curr_gmap = map_files[grepl(paste("chr",j,"_",sep=""),map_files)]
+#     curr_cmd = paste(shapeit_path,
+#                      "--input-bed",curr_bed,curr_bim,curr_fam,
+#                      "--input-map",curr_gmap,
+#                      "-O",paste(j,"_phased",sep=''),
+#                      "--thread 8 --seed 123456789")
+#     curr_sh_file = paste("shapeit_run_",j,".sh",sep="")
+#     print_sh_file(curr_sh_file,
+#                   get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,Ncpu = 8,mem_size = 16000),
+#                   curr_cmd)
+#     system(paste("sbatch",paste(curr_sh_file,sep='')))
+#   }
+# }
 
 # Run Shapeit for each chromosome, with 1000G as a reference
 if(!is.null(ref_for_phasing)){
@@ -273,8 +273,9 @@ wait_for_job(waittime = 120)
 load(paste(info_dir,"our_data_info.RData",sep=""))
 rownames(our_data_info) = our_data_info$rs_id
 # # Examine our concordance scores for "zero" pval snps
-# gwas_res = read.table("/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl_mega_separate_recalls/with_ukbb_1000g_sanity/gwas/ukbb_vs_cooper_logistic.ExerciseGroup.glm.logistic.hybrid.adjusted",
-#                       stringsAsFactors = F,header=F)
+# gwas_res = read.table(
+#           "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl_mega_separate_recalls/with_ukbb_1000g_sanity/gwas/ukbb_vs_cooper_logistic.ExerciseGroup.glm.logistic.hybrid.adjusted",
+#           stringsAsFactors = F,header=F)
 # rownames(gwas_res) = gwas_res[,2]
 # inds = intersect(rownames(gwas_res),rownames(our_data_info) )
 # x1 = -log(gwas_res[inds,3],base=10)
@@ -301,4 +302,35 @@ for(j in 1:22){
   exclude_snps_using_plink(bfile,to_rem,curr_out_path,curr_analysis_name,bfile)
 }
 
+# 8. Run check bim vs 1000G before merge
+# 8.1 update the frq files
+for (j in 1:22){
+  err_path = paste("maf_",j,".err",sep="")
+  log_path = paste("maf_",j,".log",sep="")
+  curr_cmd = paste("plink --bfile",paste("chr",j,sep=""),
+                   "--freq",
+                   "--out",paste("chr",j,sep=""))
+  curr_sh_file = paste("maf_",j,".sh",sep="")
+  print_sh_file(curr_sh_file,get_sh_default_prefix(err_path,log_path),curr_cmd)
+  system(paste("sbatch",curr_sh_file))
+}
+wait_for_job(waittime = 120)
+
+# 8.2 Run check bim
+for (j in 1:22){
+  setwd(impute2_out_path)
+  curr_dir = paste(impute2_out_path,"check_bim_chr",j,'/',sep="")
+  bedfile = paste(impute2_out_path,"chr",j,".bim",sep="")
+  freqfile = paste(impute2_out_path,"chr",j,".frq",sep="")
+  run_check_bim_analysis(curr_dir,bedfile,freqfile)
+}
+wait_for_job(waittime = 120)
+for (j in 1:22){
+  setwd(impute2_out_path)
+  curr_dir = paste(impute2_out_path,"check_bim_chr",j,'/',sep="")
+  bedfile = paste(impute2_out_path,"chr",j,sep="")
+  bedfile_short = paste("chr",j,sep="")
+  run_check_bim_output_script(curr_dir,bedfile_short,bedfile)
+}
+wait_for_job(waittime = 120)
 

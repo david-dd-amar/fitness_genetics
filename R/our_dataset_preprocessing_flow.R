@@ -348,7 +348,6 @@ xx[snps_to_flip,2] = repl[2,]
 all_num_alleles2 = apply(xx,1,get_num_alleles)
 table(all_num_alleles2)
 all(is.na(bim1[all_num_alleles2==0,][1:10,])) # should be all NAs because there are no such snps
-
 flip_snps_using_plink(paste(job_dir,"bfile1",sep=""),snps_to_flip,job_dir,"final_snps_to_flip","bfile1",
                          batch_script_func=get_sh_default_prefix)
 wait_for_job()
@@ -667,9 +666,37 @@ print(paste("number of cooper samples in this file:",sum(sample_metadata_raw[ids
 # ####################################################################################################
 # ####################################################################################################
 # ####################################################################################################
+# # GWAS vs. call rate
+# pheno_file = paste(job_dir,"integrated_sample_metadata_and_covariates.txt",sep='')
+# err_path = paste(job_dir,"call_rate_gwas_qc.err",sep="")
+# log_path = paste(job_dir,"call_rate_gwas_qc.log",sep="")
+# curr_cmd = paste("plink2",
+#                  "--bfile",paste(job_dir,"merged_mega_data_autosomal",sep=''),
+#                  "--linear hide-covar",
+#                  paste("--pheno",pheno_file),
+#                  paste("--pheno-name call_rates_after_filters[subjects_for_analysis]"),
+#                  "--adjust",
+#                  "--out",paste(job_dir,"call_rate_gwas_qc",sep=''))
+# curr_sh_file = "call_rate_gwas_qc.sh"
+# print_sh_file(paste(job_dir,curr_sh_file,sep=''),
+#               get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,"plink/2.0a1",2,10000),curr_cmd)
+# system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
+# wait_for_job()
+# 
+# # Look at the results 
+# call_rate_gwas_qc_res = read.table(paste(job_dir,"call_rate_gwas_qc.call_rates_after_filters[subjects_for_analysis].glm.linear.adjusted",sep=""),stringsAsFactors = F)
+# rownames(call_rate_gwas_qc_res) = call_rate_gwas_qc_res[,2]
+# call_rate_gwas_qc_res["rs1747677",]
+# call_rate_gwas_qc_res["rs73017651",]
+# call_rate_gwas_qc_res["rs867306",]
+# call_rate_gwas_qc_res["rs137925455",]
+# # rs73017651 rs867306 rs137925455
+# callrate_snps = call_rate_gwas_qc_res[call_rate_gwas_qc_res[,3]> 1e-4,2]
+# ####################################################################################################
+# ####################################################################################################
+# ####################################################################################################
 # # Run PCA to find outliers
 # TODO: move to a later stage after EU subjects are detected
-#
 #
 # # Prune and run PCA and relatedness
 # analysis_name = "before_maf_outlier_detection_ld_pruned"

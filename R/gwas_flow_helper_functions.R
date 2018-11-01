@@ -424,6 +424,40 @@ get_num_alleles<-function(x){
   return(length(setdiff(unique(x),"0")))
 }
 
-
+run_check_bim_analysis<-function(curr_dir,bedfile,freqfile,
+                                 ref="-1000g", pop = "EUR",t_val=0.3,
+                                 ref_file = "/home/users/davidama/apps/check_bim/1000GP_Phase3_combined.legend"){
+  system(paste("mkdir",curr_dir))
+  setwd(curr_dir)
+  err_path = paste(curr_dir,"run_check_bim.err",sep="")
+  log_path = paste(curr_dir,"run_check_bim.log",sep="")
+  system(paste("cp /home/users/davidama/apps/check_bim/HRC-1000G-check-bim-NoReadKey.pl",curr_dir))
+  # For 1000G-based analysis
+  curr_cmd = paste("perl", paste(curr_dir, "HRC-1000G-check-bim-NoReadKey.pl",sep=""),
+                   "-b", bedfile,
+                   "-f", freqfile,ref,
+                   "-p",pop,
+                   "-t",t_val,
+                   "-r",ref_file)
+  curr_sh_file = "run_check_bim.sh"
+  print_sh_file(paste(curr_dir,curr_sh_file,sep=''),
+                get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,
+                                                           mem_size = 64000,time="6:00:00",Ncpu = 4),curr_cmd)
+  system(paste("sbatch",paste(curr_dir,curr_sh_file,sep='')))
+}
+run_check_bim_output_script<-function(curr_dir,bfile_short,bfile_full){
+  setwd(curr_dir)
+  system(paste("less ",curr_dir,"Run-plink.sh | grep TEMP > ",curr_dir,"Run-plink.sh",sep=""))
+  run_sh_lines = readLines(paste(curr_dir,"Run-plink.sh",sep=""))
+  run_sh_lines[1] = gsub(paste("plink --bfile",bfile_short),
+                         paste("plink --bfile ",bfile_full,sep=""),run_sh_lines[1])
+  run_sh_lines = sapply(run_sh_lines,gsub,pattern = "-updated",replacement = "")
+  err_path = paste(curr_dir,"run_check_bim_update.err",sep="")
+  log_path = paste(curr_dir,"run_check_bim_update.log",sep="")
+  curr_sh_file = "run_check_bim_update.sh"
+  print_sh_file(paste(curr_dir,curr_sh_file,sep=''),
+                get_sh_default_prefix(err_path,log_path),run_sh_lines)
+  system(paste("sbatch",paste(curr_dir,curr_sh_file,sep='')))
+}
 
 

@@ -135,7 +135,16 @@ print_sh_file(paste(out_path,curr_sh_file,sep=''),
               get_sh_prefix_bigmem(err_path,log_path,Ncpu=1,mem_size=256000),plink_commands)
 system(paste("sbatch",paste(out_path,curr_sh_file,sep='')))
 
-
+# ## MAF filter to reduce file size
+# err_path = paste(out_path,"merge_control_beds.err",sep="")
+# log_path = paste(out_path,"merge_control_beds.log",sep="")
+# curr_cmd = paste("plink --bfile",all_out_bed_files[1],
+#                  "--merge-list",allfiles_path,
+#                  "--make-bed --out",paste(out_path,"merged_control_geno",sep=''))
+# curr_sh_file = "merged_control_beds.sh"
+# print_sh_file(paste(out_path,curr_sh_file,sep=''),
+#               get_sh_prefix_bigmem(err_path,log_path,Ncpu=1,mem_size=256000),curr_cmd)
+# system(paste("sbatch",paste(out_path,curr_sh_file,sep='')))
 
 
 

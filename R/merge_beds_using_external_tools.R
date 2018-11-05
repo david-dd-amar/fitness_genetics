@@ -1,5 +1,6 @@
 # In this script we take two bed files and merge them as follows:
 # Input is two bed paths that are assumed to be comparable (no strand and MAF issues)
+# For using qctool:
 # 1. We use plink to transform the files to bgen
 # 2. We merge the bgens using qctool
 # 3. We convert the bgen to bed - the output
@@ -18,20 +19,25 @@
 # bfile2 = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/elite_only/our_prepro/final_dataset_for_analysis-updated"
 # out_path = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/elite_only/with_ukbb/"
 
-# September 2018 1: new MEGA analysis, HRC as the panel
-bfile1 = "/oak/stanford/groups/euan/projects/fitness_genetics/ukbb/ukbb_imputed_20k_rand_controls_sex_age/merged_control_geno-hrc_updated"
-bfile2 = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl_mega_separate_recalls/merged_mega_data_autosomal-hrc_updated"
-out_path = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl_mega_separate_recalls/with_ukbb_hrc/"
+# # September 2018 1: new MEGA analysis, HRC as the panel
+# bfile1 = "/oak/stanford/groups/euan/projects/fitness_genetics/ukbb/ukbb_imputed_20k_rand_controls_sex_age/merged_control_geno-hrc_updated"
+# bfile2 = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl_mega_separate_recalls/merged_mega_data_autosomal-hrc_updated"
+# out_path = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl_mega_separate_recalls/with_ukbb_hrc/"
+# 
+# # September 2018 2: new MEGA analysis, 1000 genomes as the panel
+# bfile1 = "/oak/stanford/groups/euan/projects/fitness_genetics/ukbb/ukbb_imputed_20k_rand_controls_sex_age/merged_control_geno-1000g_updated"
+# bfile2 = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl_mega_separate_recalls/merged_mega_data_autosomal-updated"
+# out_path = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl_mega_separate_recalls/with_ukbb_1000g/"
+# 
+# # September 2018 2: new MEGA analysis with PCA filter, 1000 genomes as the panel, sanity check without JHU 
+# bfile1 = "/oak/stanford/groups/euan/projects/fitness_genetics/ukbb/ukbb_imputed_20k_rand_controls_sex_age/merged_control_geno-1000g_updated"
+# bfile2 = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl_mega_separate_recalls/1000g/merged_mega_data_autosomal_after_maf_after_pca"
+# out_path = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl_mega_separate_recalls/with_ukbb_1000g_sanity/"
 
-# September 2018 2: new MEGA analysis, 1000 genomes as the panel
+# Nov 2018: Merge imputed data
 bfile1 = "/oak/stanford/groups/euan/projects/fitness_genetics/ukbb/ukbb_imputed_20k_rand_controls_sex_age/merged_control_geno-1000g_updated"
-bfile2 = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl_mega_separate_recalls/merged_mega_data_autosomal-updated"
-out_path = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl_mega_separate_recalls/with_ukbb_1000g/"
-
-# September 2018 2: new MEGA analysis with PCA filter, 1000 genomes as the panel, sanity check without JHU 
-bfile1 = "/oak/stanford/groups/euan/projects/fitness_genetics/ukbb/ukbb_imputed_20k_rand_controls_sex_age/merged_control_geno-1000g_updated"
-bfile2 = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl_mega_separate_recalls/1000g/merged_mega_data_autosomal_after_maf_after_pca"
-out_path = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl_mega_separate_recalls/with_ukbb_1000g_sanity/"
+bfile2 = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/mega_eu_imp/impute2_1000gRef_out/check_bim_res/merged_geno"
+out_path = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/mega_eu_imp/with_ukbb/"
 
 try(system(paste("mkdir",out_path)))
 
@@ -42,47 +48,50 @@ script_file = "~/repos/fitness_genetics/R/gwas_flow_helper_functions.R"
 source(script_file)
 
 remove_JHU = grepl("sanity",out_path)
-maf1 = 0.01
-maf2 = 0.01 # our data was already filtered in our prepro script
-maf_for_pca = 0.01 
+maf_for_pca = 0.05
 
-####################################################################################################
-####################################################################################################
-####################################################################################################
-# create maf reduced copies of the data
-err_path = paste(out_path,"maf_filter1.err",sep="")
-log_path = paste(out_path,"maf_filter1.log",sep="")
-curr_cmd = paste("plink --bfile",bfile1,
-                 "--maf",maf1,
-                 "--make-bed --freq",
-                 "--out",paste(out_path,"bfile1",sep=""))
-curr_sh_file = "maf_filter1.sh"
-print_sh_file(paste(out_path,curr_sh_file,sep=''),
-              get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,Ncpu=2,mem_size=16000),curr_cmd)
-system(paste("sbatch",paste(out_path,curr_sh_file,sep='')))
-
-err_path = paste(out_path,"maf_filter2.err",sep="")
-log_path = paste(out_path,"maf_filter2.log",sep="")
-curr_cmd = paste("plink --bfile",bfile2,
-                 "--maf",maf2,
-                 "--make-bed --freq",
-                 "--out",paste(out_path,"bfile2",sep=""))
-curr_sh_file = "maf_filter2.sh"
-print_sh_file(paste(out_path,curr_sh_file,sep=''),
-              get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,Ncpu=2,mem_size=16000),curr_cmd)
-system(paste("sbatch",paste(out_path,curr_sh_file,sep='')))
-wait_for_job()
-
-bfile1 = paste(out_path,"bfile1",sep="")
-bfile2 = paste(out_path,"bfile2",sep="")
-
+# ####################################################################################################
+# ####################################################################################################
+# ####################################################################################################
+# maf1 = 0.01
+# maf2 = 0.01 # our data was already filtered in our prepro script
+# 
+# # create maf reduced copies of the data
+# err_path = paste(out_path,"maf_filter1.err",sep="")
+# log_path = paste(out_path,"maf_filter1.log",sep="")
+# curr_cmd = paste("plink --bfile",bfile1,
+#                  "--maf",maf1,
+#                  "--make-bed --freq",
+#                  "--out",paste(out_path,"bfile1",sep=""))
+# curr_sh_file = "maf_filter1.sh"
+# print_sh_file(paste(out_path,curr_sh_file,sep=''),
+#               get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,Ncpu=4,mem_size=32000),curr_cmd)
+# system(paste("sbatch",paste(out_path,curr_sh_file,sep='')))
+# 
+# err_path = paste(out_path,"maf_filter2.err",sep="")
+# log_path = paste(out_path,"maf_filter2.log",sep="")
+# curr_cmd = paste("plink --bfile",bfile2,
+#                  "--maf",maf2,
+#                  "--make-bed --freq",
+#                  "--out",paste(out_path,"bfile2",sep=""))
+# curr_sh_file = "maf_filter2.sh"
+# print_sh_file(paste(out_path,curr_sh_file,sep=''),
+#               get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,Ncpu=4,mem_size=32000),curr_cmd)
+# system(paste("sbatch",paste(out_path,curr_sh_file,sep='')))
+# wait_for_job()
+# 
+# bfile1 = paste(out_path,"bfile1",sep="")
+# bfile2 = paste(out_path,"bfile2",sep="")
+# 
 ####################################################################################################
 ####################################################################################################
 ####################################################################################################
 # Compare the bim files
 # (1) Check SNP intersect, locations, and which snps must be flipped before we analyze
-bim_data1 = process_bim_data(bfile1)
-bim_data2 = process_bim_data(bfile2)
+bim_data1 = read.table(paste(bfile1,".bim",sep=""),stringsAsFactors = F,header = F)
+bim_data2 = read.table(paste(bfile2,".bim",sep=""),stringsAsFactors = F,header = F)
+rownames(bim_data2) = bim_data2[,2]
+rownames(bim_data1) = bim_data1[,2]
 
 if(remove_JHU){
   print(paste("num variants before JHU removal:",nrow(bim_data2[[1]])))
@@ -90,61 +99,75 @@ if(remove_JHU){
   print(paste("num variants after JHU removal:",nrow(bim_data2[[1]])))
 }
 
-shared_snps = intersect(rownames(bim_data2[[1]]),rownames(bim_data1[[1]]))
+shared_snps = intersect(bim_data2[,2],bim_data1[,2])
+length(shared_snps)
 intersected_locations = list()
-for(chr in unique(bim_data2[[1]][,1])){
-  rows1 = bim_data1[[1]][,1]==chr
-  rows2 = bim_data2[[1]][,1]==chr
-  x1 = bim_data1[[1]][rows1,]
-  x2 = bim_data2[[1]][rows2,]
+for(chr in unique(bim_data2[,1])){
+  print(paste("chromosome:",chr))
+  rows1 = bim_data1[,1]==chr
+  rows2 = bim_data2[,1]==chr
+  x1 = bim_data1[rows1,]
+  x2 = bim_data2[rows2,]
   curr_loc_intersect = intersect(x1[,4],x2[,4])
-  curr_snp_id_intersect = intersect(x1[,2],x2[,2])
-  print(paste(length(curr_loc_intersect),length(curr_snp_id_intersect)))
-  y2_1 = is.element(x2[,4],set=curr_loc_intersect) 
-  y2_2 = is.element(x2[,2],set=curr_snp_id_intersect)
-  positions_in_intersect_no_id = x2[y2_1&!y2_2,4]
-  rownames(x1) = x1[,4]
-  rownames(x2) = x2[,4]
-  x1 = x1[positions_in_intersect_no_id,]
-  x2 = x2[positions_in_intersect_no_id,]
-  intersected_locations[[chr]] = list(curr_snp_id_intersect,positions_in_intersect_no_id,x1,x2)
+  alt_ids1 = apply(x1[,4:6],1,paste,collapse=";")
+  alt_ids2 = apply(x2[,4:6],1,paste,collapse=";")
+  alt_ids2_sanity = apply(x2[,c(4,6,5)],1,paste,collapse=";")
+  print(paste("intersection:",length(intersect(alt_ids1,alt_ids2))))
+  print(paste("number of shared locations:",length(curr_loc_intersect)))
+  print(paste("intersection sanity check (should be zero):",length(intersect(alt_ids1,alt_ids2_sanity))))
+  alt_intersect = intersect(alt_ids1,alt_ids2)
+  rownames(x1) = alt_ids1
+  rownames(x2) = alt_ids2
+  x1 = x1[alt_intersect,];x2 = x2[alt_intersect,]
+  intersected_locations[[chr]] = list(x1,x2)
 }
 save(intersected_locations,file=paste(out_path,"bim_overlap_analysis_results.RData",sep=""))
 
 # Analyze the results
-get_shared_loc_snpids<-function(x,y){
-  inds = x[,5]==y[,5] & x[,6]==y[,6]
-  return(cbind(x[inds,2],y[inds,2]))
-}
-final_shared_snps = cbind(shared_snps,shared_snps)
-for(chr in names(intersected_locations)){
-  final_shared_snps = rbind(final_shared_snps,get_shared_loc_snpids(
-    intersected_locations[[chr]][[3]],intersected_locations[[chr]][[4]]
-  ))
+final_shared_snps = c()
+for(chr in 1:length(intersected_locations)){
+  final_shared_snps = rbind(final_shared_snps,
+    cbind(intersected_locations[[chr]][[1]][,2],intersected_locations[[chr]][[2]][,2])
+  )
 }
 # Order the SNPs by location: prevents issues with PLINK
-m = bim_data2[[1]][final_shared_snps[,2],]
+m = bim_data2[final_shared_snps[,2],]
 ord = order(as.numeric(m[,1]),as.numeric(m[,4]))
 final_shared_snps = final_shared_snps[ord,]
 save(intersected_locations,final_shared_snps,file=paste(out_path,"bim_overlap_analysis_results.RData",sep=""))
 
 load(paste(out_path,"bim_overlap_analysis_results.RData",sep=""))
 extract_snps_using_plink(bfile2,final_shared_snps[,2],out_path,"file2_shared_snps","new_bed_2",
-                        get_sh_default_prefix)
+                        get_sh_prefix_one_node_specify_cpu_and_mem,Ncpu=4,mem_size=32000)
 extract_snps_using_plink(bfile1,final_shared_snps[,1],out_path,"file1_shared_snps","new_bed_1",
-                        get_sh_default_prefix)
-wait_for_job()
+                        get_sh_prefix_one_node_specify_cpu_and_mem,Ncpu=4,mem_size=32000)
+wait_for_job(waittime = 60)
+
+# Compare the new two beds
+new_bed_2_bim = read.table(paste(out_path,"new_bed_2.bim",sep=""))
+rownames(new_bed_2_bim) = new_bed_2_bim[,2]
+new_bed_1_bim = read.table(paste(out_path,"new_bed_1.bim",sep=""))
+rownames(new_bed_1_bim) = new_bed_1_bim[,2]
+table(new_bed_1_bim[,1]==new_bed_2_bim[,1])
+table(new_bed_1_bim[,4]==new_bed_2_bim[,4])
+table(as.character(new_bed_1_bim[,5])==as.character(new_bed_2_bim[,5]))
+table(as.character(new_bed_1_bim[,6])==as.character(new_bed_2_bim[,6]))
+diff_rows = which(as.character(new_bed_1_bim[,6])!=as.character(new_bed_2_bim[,6]))
+new_bed_1_bim[diff_rows[1:10],]
+new_bed_2_bim[diff_rows[1:10],]
 
 # Print the new bed file for file 2
 conv_ids = final_shared_snps[,1];names(conv_ids) = final_shared_snps[,2]
-new_bed_2_bim = process_bim_data(paste(out_path,"new_bed_2",sep=""))
-newbim2 = new_bed_2_bim[[1]]
-newbim2[,2] = conv_ids[newbim2[,2]]
-rownames(newbim2) = NULL
-write.table(newbim2,file=paste(out_path,"new_bed_2_alt.bim",sep=""),sep="\t",
+new_bed_2_bim[,2] = conv_ids[new_bed_2_bim[,2]]
+rownames(new_bed_2_bim) = NULL
+write.table(new_bed_2_bim,file=paste(out_path,"new_bed_2_alt.bim",sep=""),sep="\t",
             row.names=F,col.names=F,quote=F)
-check_if_bim_is_sorted(paste(out_path,"new_bed_2_alt.bim",sep=""))
 
+###################################################################################################
+###################################################################################################
+###################################################################################################
+###################################################################################################
+# Merge using qctool
 # Convert to bgen
 # August 2018: check rerunning with "id-delim=" because our ids have "_" in them
 err_path = paste(out_path,"convert2bgen2.err",sep="")
@@ -240,8 +263,13 @@ print_sh_file(paste(out_path,curr_sh_file,sep=''),
               get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,Ncpu=4,mem_size=32000),curr_cmd)
 system(paste("sbatch",paste(out_path,curr_sh_file,sep='')))
 
+###################################################################################################
+###################################################################################################
+###################################################################################################
+###################################################################################################
+
 ###############################
-# As a reference we do a simple merge using PLINK, the results should be similar
+# A simple merge using PLINK, the results should be similar to qctool
 ###############################
 err_path = paste(out_path,"merge_plink.err",sep="")
 log_path = paste(out_path,"merge_plink.log",sep="")

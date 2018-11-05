@@ -295,7 +295,7 @@ read_pca_res<-function(path){
 ################################################################################
 # Sept 2018
 # Create the reduced files
-extract_snps_using_plink<-function(bfile,snps,out_path,snpfile,newbedfile,
+extract_snps_using_plink<-function(bfile,snps,out_path,snpfile,newbedfile,ref_allale_line = "",
                                   batch_script_func=get_sh_default_prefix,...){
   # create the snps file
   write.table(t(t(as.character(snps))),
@@ -305,13 +305,14 @@ extract_snps_using_plink<-function(bfile,snps,out_path,snpfile,newbedfile,
   log_path = paste(out_path,"reduce_snps",snpfile,".log",sep="")
   curr_cmd = paste("plink --bfile",bfile,
                    "--extract",paste(out_path,snpfile,".txt",sep=''),
+                   ref_allale_line,
                    "--freq --make-bed --out",paste(out_path,newbedfile,sep=''))
   curr_sh_file = paste(out_path,"reduce_snps",snpfile,".sh",sep="")
   batch_script_prefix = batch_script_func(err_path,log_path,...)
   print_sh_file(curr_sh_file,batch_script_prefix,curr_cmd)
   system(paste("sbatch",curr_sh_file))
 }
-exclude_snps_using_plink<-function(bfile,snps,out_path,snpfile,newbedfile,
+exclude_snps_using_plink<-function(bfile,snps,out_path,snpfile,newbedfile,ref_allale_line = "",
                                    batch_script_func=get_sh_default_prefix,...){
   # create the snps file
   write.table(t(t(as.character(snps))),
@@ -321,13 +322,14 @@ exclude_snps_using_plink<-function(bfile,snps,out_path,snpfile,newbedfile,
   log_path = paste(out_path,"exclude_snps",snpfile,".log",sep="")
   curr_cmd = paste("plink --bfile",bfile,
                    "--exclude",paste(out_path,snpfile,".txt",sep=''),
+                   ref_allale_line,
                    "--freq --make-bed --out",paste(out_path,newbedfile,sep=''))
   curr_sh_file = paste(out_path,"exclude_snps",snpfile,".sh",sep="")
   batch_script_prefix = batch_script_func(err_path,log_path,...)
   print_sh_file(curr_sh_file,batch_script_prefix,curr_cmd)
   system(paste("sbatch",curr_sh_file))
 }
-remove_subjects_using_plink<-function(bfile,subjs,out_path,subjfile,newbedfile,
+remove_subjects_using_plink<-function(bfile,subjs,out_path,subjfile,newbedfile,ref_allale_line="",
                                       batch_script_func=get_sh_default_prefix,...){
   # create the subjects file
   write.table(subjs,file=paste(out_path,subjfile,".txt",sep=''),
@@ -336,6 +338,7 @@ remove_subjects_using_plink<-function(bfile,subjs,out_path,subjfile,newbedfile,
   log_path = paste(out_path,"reduce_subjs",subjfile,".log",sep="")
   curr_cmd = paste("plink --bfile",bfile,
                    "--remove",paste(out_path,subjfile,".txt",sep=''),
+                   ref_allale_line,
                    "--freq --make-bed --out",paste(out_path,newbedfile,sep=''))
   curr_sh_file = paste(out_path,"reduce_subjs",subjfile,".sh",sep="")
   batch_script_prefix = batch_script_func(err_path,log_path,...)

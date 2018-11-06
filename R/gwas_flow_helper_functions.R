@@ -377,6 +377,15 @@ flip_snps_using_plink<-function(bfile,snps,out_path,snpfile,newbedfile,
   system(paste("sbatch",curr_sh_file))
 }
 
+run_plink_command<-function(cmd,out_path,name,batch_script_func=get_sh_default_prefix,...){
+  err_path = paste(out_path,name,".err",sep="")
+  log_path = paste(out_path,name,".log",sep="")
+  curr_sh_file = paste(out_path,name,".sh",sep="")
+  batch_script_prefix = batch_script_func(err_path,log_path,...)
+  print_sh_file(curr_sh_file,batch_script_prefix,cmd)
+  system(paste("sbatch",curr_sh_file))
+}
+
 compute_pc_vs_binary_variable_association_p<-function(pc,y,test=wilcox.test){
   x1 = pc[y==y[1]]
   x2 = pc[y!=y[1]]

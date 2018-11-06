@@ -171,13 +171,14 @@ wait_for_job(waittime = 60)
 # Compare the new two beds
 new_bed_2_bim = read.table(paste(out_path,"new_bed_2.bim",sep=""),stringsAsFactors = F)
 rownames(new_bed_2_bim) = new_bed_2_bim[,2]
-new_bed_2_bim["rs9434469",]
+# new_bed_2_bim["rs9434469",]
 new_bed_1_bim = read.table(paste(out_path,"new_bed_1.bim",sep=""),stringsAsFactors = F)
 rownames(new_bed_1_bim) = new_bed_1_bim[,2]
-table(new_bed_1_bim[,1]==new_bed_2_bim[,1])
-table(new_bed_1_bim[,4]==new_bed_2_bim[,4])
-table(as.character(new_bed_1_bim[,5])==as.character(new_bed_2_bim[,5]))
-table(as.character(new_bed_1_bim[,6])==as.character(new_bed_2_bim[,6]))
+# # Sanity checks: should be all true:
+# table(new_bed_1_bim[,1]==new_bed_2_bim[,1])
+# table(new_bed_1_bim[,4]==new_bed_2_bim[,4])
+# table(as.character(new_bed_1_bim[,5])==as.character(new_bed_2_bim[,5]))
+# table(as.character(new_bed_1_bim[,6])==as.character(new_bed_2_bim[,6]))
 # diff_rows = which(as.character(new_bed_1_bim[,6])!=as.character(new_bed_2_bim[,6]))
 # new_bed_1_bim[diff_rows[1:10],]
 # new_bed_2_bim[diff_rows[1:10],]
@@ -186,11 +187,11 @@ table(as.character(new_bed_1_bim[,6])==as.character(new_bed_2_bim[,6]))
 conv_ids = final_shared_snps[,1];names(conv_ids) = final_shared_snps[,2]
 new_bed_1_bim[,2] = as.character(new_bed_1_bim[,2])
 new_bed_2_bim[,2] = as.character(new_bed_2_bim[,2])
-new_bed_2_bim["rs9434469",]
-new_bed_1_bim["rs9434469",]
+# new_bed_2_bim["rs9434469",]
+# new_bed_1_bim["rs9434469",]
 new_names = conv_ids[new_bed_2_bim[,2]]
 new_bed_2_bim[,2] = new_names
-new_bed_2_bim["rs12725264",]
+# new_bed_2_bim["rs12725264",]
 rownames(new_bed_2_bim) = NULL
 write.table(new_bed_2_bim,file=paste(out_path,"new_bed_2_alt.bim",sep=""),sep="\t",
             row.names=F,col.names=F,quote=F)

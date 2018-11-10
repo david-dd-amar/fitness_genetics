@@ -381,5 +381,23 @@ print_sh_file(paste(chrs_dir,curr_sh_file,sep=''),
 system(paste("sbatch",paste(chrs_dir,curr_sh_file,sep='')))
 wait_for_job(120)
 
+#########################################################
+#########################################################
+#########################################################
+#########################################################
+# QA: compare imputed and directly genotyped
+bfile1 = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl_mega_separate_recalls/1000g/merged_mega_data_autosomal"
+bfile2 = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/mega_eu_imp/impute2_1000gRef_out/check_bim_res/merged_geno"
+
+bim1 = read.table(paste(bfile1,".bim",sep=""),stringsAsFactors = F)
+bim2 = read.table(paste(bfile2,".bim",sep=""),stringsAsFactors = F)
+rownames(bim1) = bim1[,2]
+rownames(bim2) = bim2[,2]
+
+intr = intersect(bim1[,2],bim2[,2])
+x1 = bim1[intr,]
+x2 = bim2[intr,]
+colSums(x1!=x2)
+
 
 

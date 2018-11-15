@@ -10,7 +10,7 @@ external_covars_path = "/oak/stanford/groups/euan/projects/fitness_genetics/ukbb
 our_metadata = "/oak/stanford/groups/euan/projects/fitness_genetics/metadata/merged_metadata_file_stanford3k_elite_cooper.txt"
 try({system(paste("mkdir",out_path))})
 cohorts_to_exclude = ""
-maf_threshold = 0.01
+maf_threshold = 0.05
 
 # The steps of the analysis below
 
@@ -159,6 +159,27 @@ for(cc in unique(cohorts)){
 flipscan_snp_file = paste(out_path,"flipscan_snps.txt",sep="")
 maf_snp_file = paste(out_path,"maf_filter_snps_",maf_threshold,".txt",sep="")
 
+# Add another comparison: look at the MAFs in the controls, take only
+# variants with less than 1% diff in their MAF
+# Look at the freqplot data - comparing mafs to 1000G
+ukbb_1000g_maf_comp = read.table("/oak/stanford/groups/euan/projects/fitness_genetics/ukbb/ukbb_imputed_20k_rand_controls_sex_age/FreqPlot-merged_control_geno-1000G.txt",
+                                 stringsAsFactors = F)
+diffs = abs(ukbb_1000g_maf_comp[,4])
+rownames(ukbb_1000g_maf_comp) = ukbb_1000g_maf_comp[,1]
+table(diffs > 0.01)
+quantile(abs(ukbb_1000g_maf_comp[res_sig_snps,4]))
+low_diff_snps = ukbb_1000g_maf_comp[diffs < 0.01,1]
+intr = read.table(maf_snp_file,stringsAsFactors = F)[,1]
+new_intr = intersect(low_diff_snps,intr)
+write.table(t(t(new_intr)),file=maf_snp_file,row.names = F,quote = F,col.names = F)
+
+####################################################################################################
+####################################################################################################
+####################################################################################################
+# Data filtering and analysis
+flipscan_snp_file = paste(out_path,"flipscan_snps.txt",sep="")
+maf_snp_file = paste(out_path,"maf_filter_snps_",maf_threshold,".txt",sep="")
+
 # LD-prune each chromosome
 for(j in 1:22){
   curr_name = paste("chr",j,"_ld_prune",sep="")
@@ -175,6 +196,12 @@ for(j in 1:22){
                     get_sh_prefix_one_node_specify_cpu_and_mem,Ncpu=4,mem_size=32000)
 }
 wait_for_job(waittime = 120)
+
+# Sanity check: overlap between flipscan and pruned list?
+x1 = read.table(flipscan_snp_file,stringsAsFactors = F)[,1]
+x2 = read.table(paste(out_path,"chr2_ld_prune_filter.bim",sep=""),stringsAsFactors = F)[,2]
+length(intersect(x1,x2))
+
 # For each chromosome keep ld pruned snps and save bed
 out_pruned_beds = c()
 for(j in 1:22){
@@ -209,47 +236,126 @@ curr_cmd = paste("plink --bfile",out_pruned_beds[1],
 )
 run_plink_command(curr_cmd,out_path,"merged_ld_pruned",
                   get_sh_prefix_one_node_specify_cpu_and_mem,Ncpu=4,mem_size=32000)
-wait_for_job(waittime = 60)
-# Run PCA and relatedness
-curr_cmd = paste("plink --bfile",paste(out_path,"merged_ld_pruned",sep=''),
-                 "--genome --min 0.2",
-                 "--pca 40",
-                 "--threads 8",
-                 "--out",paste(out_path,"merged_ld_pruned",sep='')
+
+####################################################################################################
+####################################################################################################
+####################################################################################################
+# Population stratification analysis
+# We test several methods, these will hopefully help in understanding the intra-EU
+# structure that is the best one for doing the GWAS.
+# Tested methods:
+# PLINK PCA, PCAngsd admix, fastStructure, ADMIXTURE
+# Each method is run before and after the manual selection of EU samples
+# we put all data in the same dir
+pop_anal_dir = paste(out_path,"pop_analysis/",sep="")
+system(paste("mkdir",pop_anal_dir))
+# Load clustering of the data (manual or by using a differnt method/script)
+load(paste(out_path,"eu_clustering_elite_data_manual.RData",sep=""))
+bfile_all = paste(out_path,"merged_ld_pruned",sep='')
+bfile_eu = paste(out_path,"filters_cleaned_data",sep='')
+bfiles_pop = list("all" = bfile_all,"eu"=bfile_eu)
+
+curr_cmd = paste("plink --bfile",bfile_all,
+                 "--threads 4",
+                 "--keep",paste(out_path,"filters_cleaned_subjects.txt",sep=''),
+                 "--make-bed",
+                 "--out",paste(out_path,"filters_cleaned_data",sep='')
 )
-run_plink_command(curr_cmd,out_path,"merged_ld_pruned_pca",
-                  get_sh_prefix_one_node_specify_cpu_and_mem,Ncpu=8,mem_size=32000)
-wait_for_job(waittime = 120)
-# Use PCANgsd to get EU samples
-setwd(out_path)
-err_path = paste(out_path,"pcangsd_run.err",sep="")
-log_path = paste(out_path,"pcangsd_run.log",sep="")
-curr_cmd = paste("module load py-scipystack\n",
-                 "python /home/users/davidama/repos/pcangsd/pcangsd.py",
-                 "-plink",paste(out_path,"merged_ld_pruned",sep=''),
-                 "-admix",
-                 "-selection 1",
-                 "-threads 16",
-                 "-o",paste(out_path,"merged_ld_pruned_pcangsd",sep=''))
-curr_sh_file = "pcangsd_run.sh"
-print_sh_file(paste(out_path,curr_sh_file,sep=''),
-              get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,Ncpu=16,mem_size=64000),curr_cmd)
-system(paste("sbatch",paste(out_path,curr_sh_file,sep='')))
+run_plink_command(curr_cmd,out_path,"filtered_bysample_dataset",
+                  get_sh_prefix_one_node_specify_cpu_and_mem,Ncpu=4,mem_size=32000)
 wait_for_job(waittime = 120)
 
-# Analyze the relatedness report
-library("igraph",lib.loc = "~/R/packages")
-genome_rl_file = paste(out_path,"merged_ld_pruned.genome",sep='')
-rl_data = read.table(genome_rl_file,header=T,stringsAsFactors = F)
-rl_edges = as.matrix(rl_data[,c("IID1","IID2")])
-mode(rl_edges) = "character"
-rl_g = igraph::graph_from_edgelist(rl_edges,directed = F)
-rl_clusters = clusters(rl_g)[[1]]
-rl_subjects_to_remove = c()
-for(cl in unique(rl_clusters)){
-  curr_subjects = names(rl_clusters)[rl_clusters==cl]
-  rl_subjects_to_remove = c(rl_subjects_to_remove,curr_subjects[-1])
+for(nn in names(bfiles_pop)){
+  # Run PCA and relatedness 
+  # In theory we should remove rl subjects but we assume that this is not a major issue.
+  # In addition, standard filters will remove most Jap subjects which we do not want for
+  # a global analysis.
+  curr_name = paste("pca_rl_",nn,sep='')
+  curr_cmd = paste("plink --bfile",bfiles_pop[[nn]],
+                   "--genome --min 0.2",
+                   "--threads 16",
+                   "--pca 40",
+                   "--out",paste(pop_anal_dir,curr_name,sep='')
+  )
+  run_plink_command(curr_cmd,pop_anal_dir,curr_name,
+                    get_sh_prefix_one_node_specify_cpu_and_mem,Ncpu=16,mem_size=64000)
+  wait_for_job(waittime = 120)
+  
+  # PCANgsd
+  setwd(pop_anal_dir)
+  err_path = paste(pop_anal_dir,"pcangsd_run_",nn,".err",sep="")
+  log_path = paste(pop_anal_dir,"pcangsd_run_",nn,".log",sep="")
+  curr_cmd = paste("module load py-scipystack\n",
+                   "python /home/users/davidama/repos/pcangsd/pcangsd.py",
+                   "-plink",bfile_all,
+                   "-admix",
+                   "-threads 16",
+                   "-o",paste(pop_anal_dir,"pcangsd_",nn,sep=''))
+  curr_sh_file = paste(pop_anal_dir,"pcangsd_run_",nn,".sh",sep="")
+  print_sh_file(curr_sh_file,
+                get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,Ncpu=16,mem_size=64000,time="12:00:00"),curr_cmd)
+  system(paste("sbatch",curr_sh_file))
+  wait_for_job(waittime = 120)
+  
+  # fastStructure
+  faststruct_name = paste("faststructure_",nn,sep="")
+  faststruct_path = paste(pop_anal_dir,faststruct_name,"/",sep="")
+  system(paste("mkdir",faststruct_path))
+  setwd(faststruct_path)
+  for (k in 1:10){
+    # 1. Run the algorithm on a number of Ks
+    err_path = paste("run_",k,".err",sep="")
+    log_path = paste("run_",k,".log",sep="")
+    curr_cmd = paste("module load py-scipystack\n",
+                     "module load py-cython\n",
+                     "module load gsl\n",
+                     "python /home/users/davidama/apps/fastStructure/structure.py",
+                     "-K",k,
+                     paste("--input=",bfiles_pop[[nn]],sep=''),
+                     "--output=model",
+                     "--full --seed=123 --tol=10e-5"
+    )
+    curr_sh_file = paste("run_",k,".sh",sep="")
+    print_sh_file(curr_sh_file,
+                  get_sh_prefix_one_node_specify_cpu_and_mem(
+                    err_path,log_path,Ncpu=4,mem_size=32000,time="12:00:00"),curr_cmd)
+    system(paste("sbatch",curr_sh_file))  
+  }
+  
+  # ADMIXTURE
+  adm_name = paste("admixture_",nn,sep="")
+  adm_path = paste(pop_anal_dir,adm_name,"/",sep="")
+  system(paste("mkdir",adm_path))
+  setwd(adm_path)
+  for (k in 1:10){
+    # 1. Run the algorithm on a number of Ks
+    err_path = paste("run_",k,".err",sep="")
+    log_path = paste("run_",k,".log",sep="")
+    curr_cmd = paste(
+                     "/home/users/davidama/apps/admixture/admixture_linux-1.3.0/admixture",
+                     paste(bfiles_pop[[nn]],".bed",sep=""), k,"--cv",
+                     "-s 123 -jN4"
+          )
+    curr_sh_file = paste("run_",k,".sh",sep="")
+    print_sh_file(curr_sh_file,
+                  get_sh_prefix_one_node_specify_cpu_and_mem(
+                    err_path,log_path,Ncpu=4,mem_size=32000,time="12:00:00"),curr_cmd)
+    system(paste("sbatch",curr_sh_file))  
+  }
 }
+
+
+
+
+# FastStructure
+
+# ADMIXTURE
+
+
+####################################################################################################
+####################################################################################################
+####################################################################################################
+# Rerun PCA after clustering of prev results (given from manual analysis or external script)
 
 # Load pca results and metadata
 pca_file = paste(out_path,"merged_ld_pruned.eigenvec",sep='')
@@ -257,8 +363,7 @@ pcax = read_pca_res(pca_file)
 d = read.table(paste(out_path,"all_cohorts.phe",sep=''),header=T,stringsAsFactors = F)
 rownames(d) = d$IID
 pcax = pcax[rownames(d),]
-# Load clustering of the data (manual or by using a differnt method/script)
-load(paste(out_path,"eu_clustering_elite_data_manual.RData",sep=""))
+
 
 subjects_for_analysis = rownames(d)[all_filters]
 newd = cbind(d[subjects_for_analysis,],pcax[subjects_for_analysis,])
@@ -281,7 +386,7 @@ wait_for_job(waittime = 120)
 
 pca_file = paste(out_path,"filters_cleaned_pca.eigenvec",sep='')
 new_pcax = read_pca_res(pca_file)
-new_pcax = new_pcax[rownames(newd),]
+newd = d[rownames(new_pcax),]
 
 # Check the new PCs for association with group
 pc_ps = c()
@@ -302,10 +407,13 @@ for(j in 1:40){
 }
 colnames(pc_ps) = c("elite_vs_cooper","elite_vs_ukbb","cooper_vs_ukbb")
 pc_qs = apply(pc_ps,2,p.adjust)
-pc_inds = pc_ps < 0.001
+pc_inds = pc_qs < 0.01
 
 # Write the pheno files for each analysis
+subjects_for_analysis = intersect(rownames(new_pcax),rownames(d))
 newd = cbind(d[subjects_for_analysis,],new_pcax[subjects_for_analysis,])
+write.table(file=paste(out_path,"filters_cleaned_all.phe",sep=''),
+            newd,sep=" ",row.names = F,col.names = T,quote=F)
 newd1 = newd[newd[,"CohortName"] == "elite" | newd[,"CohortName"]=="cooper",]
 newd1$ExerciseGroup = newd1$ExerciseGroup-1
 table(newd1$ExerciseGroup)
@@ -322,25 +430,65 @@ table(newd3$ExerciseGroup)
 write.table(file=paste(out_path,"filters_cleaned_cooper_vs_ukbb.phe",sep=''),
             newd3,sep=" ",row.names = F,col.names = T,quote=F)
 
+# # Write the pheno files for each analysis
+# new_pcax = read.table(paste(out_path,"merged_ld_pruned_pcangsd.K16.a0.qopt",sep=""))
+# fam = read.table(paste(out_path,"filters_cleaned_data.fam",sep=""),stringsAsFactors = F)
+# rownames(new_pcax) = fam[,2]
+# new_pcax = new_pcax[,-ncol(new_pcax)] # last col is linearly dependent on the prev ones
+# colnames(new_pcax) = paste("PC",1:ncol(new_pcax),sep="") # make it in the expected format below
+# d = read.table(paste(out_path,"all_cohorts.phe",sep=''),header=T,stringsAsFactors = F)
+# rownames(d) = d$IID
+# subjects_for_analysis = intersect(rownames(new_pcax),rownames(d))
+# newd = cbind(d[subjects_for_analysis,],new_pcax[subjects_for_analysis,])
+# 
+# write.table(file=paste(out_path,"pcangsd_filters_cleaned_all.phe",sep=''),
+#             newd,sep=" ",row.names = F,col.names = T,quote=F)
+# newd1 = newd[newd[,"CohortName"] == "elite" | newd[,"CohortName"]=="cooper",]
+# newd1$ExerciseGroup = newd1$ExerciseGroup-1
+# table(newd1$ExerciseGroup)
+# write.table(file=paste(out_path,"pcangsd_filters_cleaned_elite_vs_cooper.phe",sep=''),
+#             newd1,sep=" ",row.names = F,col.names = T,quote=F)
+# newd2 = newd[newd[,"CohortName"] == "elite" | newd[,"CohortName"]=="ukbb",]
+# newd2$ExerciseGroup[newd2$ExerciseGroup > 1] = 2
+# table(newd2$ExerciseGroup)
+# write.table(file=paste(out_path,"pcangsd_filters_cleaned_elite_vs_ukbb.phe",sep=''),
+#             newd2,sep=" ",row.names = F,col.names = T,quote=F)
+# newd3 = newd[newd[,"CohortName"] == "cooper" | newd[,"CohortName"]=="ukbb",]
+# newd3$ExerciseGroup[newd3$ExerciseGroup > 1] = 2
+# table(newd3$ExerciseGroup)
+# write.table(file=paste(out_path,"pcangsd_filters_cleaned_cooper_vs_ukbb.phe",sep=''),
+#             newd3,sep=" ",row.names = F,col.names = T,quote=F)
+
+
 ####################################################################################################
 ####################################################################################################
 ####################################################################################################
+# GWAS
+
+flipscan_snp_file = paste(out_path,"flipscan_snps.txt",sep="")
+maf_snp_file = paste(out_path,"maf_filter_snps_",maf_threshold,".txt",sep="")
 
 # Run all GWAS tests
 covar_files = c(
   paste(out_path,"filters_cleaned_elite_vs_cooper.phe",sep=''),
   paste(out_path,"filters_cleaned_elite_vs_ukbb.phe",sep=''),
-  paste(out_path,"filters_cleaned_cooper_vs_ukbb.phe",sep='')
+  paste(out_path,"filters_cleaned_cooper_vs_ukbb.phe",sep=''),
+  paste(out_path,"pcangsd_filters_cleaned_elite_vs_cooper.phe",sep=''),
+  paste(out_path,"pcangsd_filters_cleaned_elite_vs_ukbb.phe",sep=''),
+  paste(out_path,"pcangsd_filters_cleaned_cooper_vs_ukbb.phe",sep='')
 )
 PCs = list(
-  paste("PC",1:4,sep=""),
-  paste("PC",1:4,sep=""),
-  paste("PC",1:4,sep="")
+  paste("PC",1:6,sep=""),
+  paste("PC",1:8,sep=""),
+  paste("PC",c(1:9,14),sep=""),
+  paste("PC",1:15,sep=""),
+  paste("PC",1:15,sep=""),
+  paste("PC",1:15,sep="")
 )
 gwas_dir = paste(out_path,"gwas/",sep="")
 system(paste("mkdir",gwas_dir))
 
-for(i in 1:length(covar_files)){
+for(i in 4:length(covar_files)){
   covar_file = covar_files[i]
   curr_name = gsub(covar_file,pattern = ".phe",replacement = "")
   curr_name = strsplit(curr_name,split="/")[[1]]
@@ -352,30 +500,136 @@ for(i in 1:length(covar_files)){
     curr_cmd = paste("plink2",
                      "--bfile",paste(bfiles,"chr",j,sep=''),
                      "--logistic hide-covar firth-fallback",
-                     "--maf 0.01",
+                     "--exclude",flipscan_snp_file,
+                     "--extract",maf_snp_file,
                      "--threads 4",
                      paste("--pheno",covar_file),
                      paste("--pheno-name ExerciseGroup"),
                      paste("--covar",covar_file),
-                     # ,paste(curr_PCs,collapse=",") # add this below
-                     paste("--covar-name sex,Age,",sep=""),
+                     paste("--covar-name sex,Age,",paste(curr_PCs,collapse=","),sep=""),
                      "--adjust --out",paste(curr_dir,"chr",j,sep=''))
     run_plink_command(curr_cmd,curr_dir,paste("logistic_chr",j,sep=""),
                       get_sh_prefix_one_node_specify_cpu_and_mem,Ncpu=4,mem_size=32000,
                       plink_pkg = "plink/2.0a1")
   }
 }
+
+# Add some PC-GWASs
+all_covars_file = paste(out_path,"filters_cleaned_all.phe",sep='')
+for(i in c(2:3,6)){
+  covar_file = all_covars_file
+  curr_name = paste("PC",i,sep="")
+  curr_dir = paste(gwas_dir,curr_name,"/",sep="")
+  system(paste("mkdir",curr_dir))
+  for(j in 1:22){
+    curr_cmd = paste("plink2",
+                     "--bfile",paste(bfiles,"chr",j,sep=''),
+                     "--linear hide-covar",
+                     "--exclude",flipscan_snp_file,
+                     "--extract",maf_snp_file,
+                     "--threads 4",
+                     "--pheno",covar_file,
+                     "--pheno-name", curr_name,
+                     paste("--covar",covar_file),
+                     "--covar-name sex,Age",
+                     "--adjust --out",paste(curr_dir,"chr",j,sep=''))
+    run_plink_command(curr_cmd,curr_dir,paste("linear_chr",j,sep=""),
+                      get_sh_prefix_one_node_specify_cpu_and_mem,Ncpu=4,mem_size=32000,
+                      plink_pkg = "plink/2.0a1")
+  }
+}
 wait_for_job(waittime = 120)
 
+# # sanity checks
+# res_file = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/mega_vs_ukbb_20k/gwas/PC2/chr1.PC2.glm.linear.adjusted"
+# res = read.table(res_file,stringsAsFactors = F)
+# # Sanity check that there is no flipscan snp in the results
+# x1 = read.table(flipscan_snp_file,stringsAsFactors = F)[,1]
+# x2 = res[,2]
+# length(intersect(x1,x2)) == 0
+# # Sanity check for the PC-based analysis, is this a MAF issue?
+# res_sig_snps = res[res[,3]<1e-10,2]
+# ukbb_mafs = read.table(
+#   "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/mega_vs_ukbb_20k/ukbb_chr1.frq",
+#   stringsAsFactors = F,header=T
+# )
+# rownames(ukbb_mafs) = ukbb_mafs$SNP
+# elite_mafs = read.table(
+#   "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/mega_vs_ukbb_20k/elite_chr1.frq",
+#   stringsAsFactors = F,header=T
+# )
+# rownames(elite_mafs) = elite_mafs$SNP
+# quantile(ukbb_mafs[res_sig_snps,"MAF"])
+# quantile(elite_mafs[res_sig_snps,"MAF"])
+# allele_comparison = ukbb_mafs[,3:4]!=elite_mafs[,3:4]
+# allele_comparison = apply(allele_comparison,1,any)
+# # Look at the freqplot data - comparing mafs to 1000G
+# ukbb_1000g_maf_comp = read.table("/oak/stanford/groups/euan/projects/fitness_genetics/ukbb/ukbb_imputed_20k_rand_controls_sex_age/FreqPlot-merged_control_geno-1000G.txt",
+#                                  stringsAsFactors = F)
+# diffs = abs(ukbb_1000g_maf_comp[,4])
+# rownames(ukbb_1000g_maf_comp) = ukbb_1000g_maf_comp[,1]
+# table(diffs > 0.01)
+# quantile(abs(ukbb_1000g_maf_comp[res_sig_snps,4]))
+# Examples for possible strand flip: rs4970408,rs2072926,rs10909801 (all imputed)
+# Manual checks of these:
+# rs10909801
+# less ../../../mega_eu_imp/impute2_1000gRef_out/check_bim_res/chr1.bim | grep rs10909801
+# 1	rs10909801:3759937:A:G	0	3759937	A	G
+# less ../../../mega_eu_imp/impute2_1000gRef_out/chr1.frq | grep 3759937
+# 1  rs10909801:3759937:A:G    G    A       0.4299     3610
+# less ../../../mega_eu_imp/impute2_1000gRef_out/check_bim_res/merged_geno.bim | grep rs10909801
+# 1	rs10909801:3759937:A:G	0	3759937	A	G
+# less ../../../mega_eu_imp/impute2_1000gRef_out/check_bim_res/merged_geno.frq | grep rs10909801
+# UKBB:
+# less ../../../../ukbb/ukbb_imputed_20k_rand_controls_sex_age/merged_control_geno.frq | grep rs10909801
+# rs10909801    A    G        0.485    39900
+# less ../../../../ukbb/ukbb_imputed_20k_rand_controls_sex_age/merged_control_geno-1000g_updated.bim | grep rs10909801
+# 1	rs10909801	0	3759937	A	G
+# Summary: our dataset shows G-A for the SNP, ukbb shows A G, which is consistent with 1000G
+#
+#
+# rs2072926
+# less ../../../mega_eu_imp/impute2_1000gRef_out/check_bim_res/chr1.bim | grep rs2072926
+# 1	rs2072926:1684758:G:A	0	1684758	G	A
+# less ../../../mega_eu_imp/impute2_1000gRef_out/chr1.frq | grep 1684758
+# 1 :1684758:G:A    A    G       0.4957     2822
+# less ../../../mega_eu_imp/impute2_1000gRef_out/check_bim_res/merged_geno.bim | grep rs2072926
+# 1	rs2072926:1684758:G:A	0	1684758	G	A
+# less ../../../mega_eu_imp/impute2_1000gRef_out/check_bim_res/merged_geno.frq | grep rs2072926
+# UKBB:
+# less ../../../../ukbb/ukbb_imputed_20k_rand_controls_sex_age/merged_control_geno.frq | grep rs2072926
+# rs2072926    A    G       0.4933    39884
+# less ../../../../ukbb/ukbb_imputed_20k_rand_controls_sex_age/merged_control_geno-1000g_updated.bim | grep rs2072926
+# 1	rs2072926	0	1684758	G	A
+# Summary: our dataset shows A G for the SNP, ukbb shows A G, which is consistent with 1000G
+# IMPORTANT: how things look like before the merge in plink:
+# less ../mega_eu_imp/with_ukbb/new_bed_1.frq | grep rs2072926
+# rs2072926    G    A       0.5067
+# less ../mega_eu_imp/with_ukbb/new_bed_2.frq | grep rs2072926
+# rs2072926:1684758:G:A    G    A       0.5043
+#
+# Direct analysis of raw genotypes
+# setwd("/oak/stanford/groups/euan/projects/fitness_genetics/analysis/mega_vs_ukbb_20k/qa_rs2072926")
+# x0 = read.table("tmp.ped")
+# rownames(x0) = x0[,2]
+# x1 = read.table("tmp1.ped")
+# rownames(x1) = x1[,2]
+# x2 = read.table("tmp2.ped")
+# rownames(x2) = x2[,2]
+# table(x0[rownames(x2),7:8]==x2[,7:8])
+
 # Merge all results to a single file
+gwas_dir = paste(out_path,"gwas/",sep="")
 out_folders = list.files(gwas_dir)
-for(i in 1:out_folders){
+for(i in 1:length(out_folders)){
   curr_dir = paste(gwas_dir,out_folders[i],"/",sep="")
+  print(curr_dir)
   curr_files = list.files(curr_dir)
   setwd(curr_dir)
   
-  res_files1 = curr_files[grepl("logistic.hybrid$",curr_files)]
-  res_file1 = paste(curr_dir,"plink_logistic_assoc.txt",sep="")
+  res_files1 = curr_files[grepl("logistic.hybrid$",curr_files) |
+                            grepl("glm.linear$",curr_files)]
+  res_file1 = paste(curr_dir,"plink_all_assoc.txt",sep="")
   for(j in 1:length(res_files1)){
     if(j==1){
       system(paste("less",res_files1[j],">",res_file1))
@@ -386,7 +640,7 @@ for(i in 1:out_folders){
   }
   
   res_files2 = curr_files[grepl("adjusted$",curr_files)]
-  res_file2 = paste(curr_dir,"plink_logistic_assoc_adj.txt",sep="")
+  res_file2 = paste(curr_dir,"plink_all_assoc_adj.txt",sep="")
   for(j in 1:length(res_files2)){
     if(j==1){
       system(paste("less",res_files2[j],">",res_file2))
@@ -398,6 +652,15 @@ for(i in 1:out_folders){
   for(ff in union(res_files2,res_files1)){
     system(paste("rm",ff))
   }
+}
+for(i in 1:length(out_folders)){
+  curr_dir = paste(gwas_dir,out_folders[i],"/",sep="")
+  res_file2 = paste(curr_dir,"plink_all_assoc_adj.txt",sep="")
+  print(res_file2)
+  res = read.table(res_file2)
+  # res = res[,2:3]
+  colnames(res) = c("rsID","P-value")
+  write.table(res,res_file2,row.names = F,col.names = T,quote=F,sep=" ")
 }
 
 ####################################################################################################
@@ -450,6 +713,7 @@ rownames(d) = d$IID
 inds = intersect(rownames(d),rownames(pcax))
 pcax = pcax[inds,]
 d = d[inds,]
+dim(d)
 
 # Analyze the relatedness report
 library("igraph")
@@ -470,7 +734,7 @@ table(rl_clustering,d$CohortName)
 
 outliers_to_rem = rep(F,nrow(d))
 names(outliers_to_rem) = rownames(d)
-for(j in 3:40){
+for(j in 1:40){
   x = pcax[,j]
   x = abs(x-mean(x))/sd(x)
   outliers_to_rem[x>7] = T
@@ -479,6 +743,7 @@ tb = table(outliers_to_rem,d$CohortName)
 for(j in 1:ncol(tb)){
   print(tb[2,j]/sum(tb[,j]))
 }
+table(outliers_to_rem,d$CohortName)
 
 test_inds = 1:nrow(d)
 fisher.test(table(outliers_to_rem[test_inds],
@@ -486,11 +751,11 @@ fisher.test(table(outliers_to_rem[test_inds],
 fisher.test(table(outliers_to_rem[test_inds],
                   d$CohortName[test_inds]=="cooper"),alternative = "g")$p.value
 
-eu_af_clustering = pcax[,2] > 0.02 
+eu_af_clustering = pcax[,2] > -0.02  & pcax[,2] < 0.03 &  pcax[,1] < 0.03 
 table(eu_af_clustering)
 table(eu_af_clustering,d$CohortName)
 
-all_filters = !eu_af_clustering & !rl_clustering & !outliers_to_rem
+all_filters = eu_af_clustering & !rl_clustering & !outliers_to_rem
 names(all_filters) = rownames(d)
 table(all_filters,d$CohortName)
 table(all_filters)
@@ -499,17 +764,17 @@ save(eu_af_clustering,rl_clustering,outliers_to_rem,all_filters,file="eu_cluster
 inds = rownames(d)
 res = two_d_plot_visualize_covariate(pcax[inds,1],pcax[inds,2],all_filters[inds],all_filters[inds],
       main = "All filters",xlab="PC1",ylab="PC2",lwd=2)
-legend(x="topleft",names(res[[1]]),fill = res[[1]])
+legend(x="topright",names(res[[1]]),fill = res[[1]])
 
 inds = rownames(d)
 res = two_d_plot_visualize_covariate(pcax[inds,1],pcax[inds,2],eu_af_clustering[inds],eu_af_clustering[inds],
     main = "Non-Asian clustering",xlab="PC1",ylab="PC2",lwd=2)
-legend(x="topleft",names(res[[1]]),fill = res[[1]])
+legend(x="topright",names(res[[1]]),fill = res[[1]])
 
 inds = rownames(d)
 res = two_d_plot_visualize_covariate(pcax[inds,1],pcax[inds,2],d[inds,]$CohortName,d[inds,]$CohortName,
-    main = "By cohort",xlab="PC1",ylab="PC2")
-legend(x="bottomleft",names(res[[1]]),fill = res[[1]])
+    main = "By cohort",xlab="PC1",ylab="PC2",lwd=2)
+legend(x="bottomright",names(res[[1]]),fill = res[[1]])
 
 par(mfrow=c(1,2))
 inds = rownames(d)
@@ -526,16 +791,118 @@ res = two_d_plot_visualize_covariate(pcax[inds,22],pcax[inds,22],outliers_to_rem
     main = "Outliers",xlab="PC1",ylab="PC2",lwd=2)
 legend(x="topleft",names(res[[1]]),fill = res[[1]])
 
-simple_cl = abs(pcax[inds,22]-mean(pcax[inds,22]))/sd(pcax[inds,22]) > 6
-res = two_d_plot_visualize_covariate(pcax[inds,22],pcax[inds,22],simple_cl,simple_cl,
+simple_cl = abs(pcax[inds,21]-mean(pcax[inds,22]))/sd(pcax[inds,22]) > 6
+res = two_d_plot_visualize_covariate(pcax[inds,21],pcax[inds,22],simple_cl,simple_cl,
     main = "Outliers",xlab="PC1",ylab="PC2",lwd=2)
 legend(x="topleft",names(res[[1]]),fill = res[[1]])
 
 par(mfrow=c(2,2))
-for(j in seq(1,8,by=2)){
+for(j in seq(9,16,by=2)){
   inds = rownames(d)
   res = two_d_plot_visualize_covariate(pcax[inds,j],pcax[inds,j+1],d[inds,]$CohortName,d[inds,]$CohortName,
-      main = "By cohort",xlab=j,ylab=j+1)
-  legend(x="topleft",names(res[[1]]),fill = res[[1]],cex=0.5)
-  
+      xlab=j,ylab=j+1,lwd=2)
+  # legend(x="topleft",names(res[[1]]),fill = res[[1]],cex=0.8)
 }
+dev.off()
+res = two_d_plot_visualize_covariate(pcax[inds,21],pcax[inds,1],d[inds,]$CohortName,d[inds,]$CohortName,
+    main = "By cohort",xlab=2,ylab=3)
+
+
+# Check the new PCs for association with group
+pc_ps = c()
+for(j in 1:40){
+  curr_inds = d[,"CohortName"] == "elite" | d[,"CohortName"]=="cooper"
+  p1 = compute_pc_vs_binary_variable_association_p(
+    pc = pcax[curr_inds,paste("PC",j,sep="")],y = d[curr_inds,"CohortName"]
+  )
+  curr_inds = d[,"CohortName"] == "elite" | d[,"CohortName"]=="ukbb"
+  p2 = compute_pc_vs_binary_variable_association_p(
+    pc = pcax[curr_inds,paste("PC",j,sep="")],y = d[curr_inds,"CohortName"]
+  )
+  curr_inds = d[,"CohortName"] == "cooper" | d[,"CohortName"]=="ukbb"
+  p3 = compute_pc_vs_binary_variable_association_p(
+    pc = pcax[curr_inds,paste("PC",j,sep="")],y = d[curr_inds,"CohortName"]
+  )
+  pc_ps = rbind(pc_ps,c(p1,p2,p3))
+}
+colnames(pc_ps) = c("elite_vs_cooper","elite_vs_ukbb","cooper_vs_ukbb")
+pc_qs = apply(pc_ps,2,p.adjust)
+pc_inds = pc_qs < 0.01
+
+# Check the new PCs for association with group
+pc_rocs = c()
+for(j in 1:40){
+  curr_inds = d[,"CohortName"] == "elite" | d[,"CohortName"]=="cooper"
+  p1 = compute_pc_vs_binary_variable_association_roc(
+    pc = pcax[curr_inds,paste("PC",j,sep="")],y = d[curr_inds,"CohortName"]
+  )
+  curr_inds = d[,"CohortName"] == "elite" | d[,"CohortName"]=="ukbb"
+  p2 = compute_pc_vs_binary_variable_association_roc(
+    pc = pcax[curr_inds,paste("PC",j,sep="")],y = d[curr_inds,"CohortName"]
+  )
+  curr_inds = d[,"CohortName"] == "cooper" | d[,"CohortName"]=="ukbb"
+  p3 = compute_pc_vs_binary_variable_association_roc(
+    pc = pcax[curr_inds,paste("PC",j,sep="")],y = d[curr_inds,"CohortName"]
+  )
+  pc_rocs = rbind(pc_rocs,c(p1,p2,p3))
+}
+pc_rocs > 0.75
+
+inds = d[,"CohortName"] == "elite" | d[,"CohortName"]=="cooper"
+inds = rownames(d)
+inds = d[,"CohortName"] == "cooper" | d[,"CohortName"]=="ukbb"
+inds = d[,"CohortName"] == "cooper"
+inds =  d[,"CohortName"]=="ukbb"
+table(inds)
+res = two_d_plot_visualize_covariate(pcax[inds,2],pcax[inds,6],d[inds,]$CohortName,d[inds,]$CohortName,
+    main = "By cohort",xlab="PC2",ylab="PC6",lwd=2)
+legend(x="bottomright",names(res[[1]]),fill = res[[1]])
+
+# Plot fastStructure results
+fam = read.table("filters_cleaned_data.fam",stringsAsFactors = F)
+clust_res = read.table("5.5.meanQ")
+
+# Plot PCANGSD results 
+clust_res = read.table("merged_ld_pruned_pcangsd.K16.a0.qopt")
+fam = read.table("filters_cleaned_data.fam",stringsAsFactors = F)
+
+
+colSums(clust_res > 0.1)
+cor(clust_res)
+table(rowSums(clust_res > 0.1))
+curr_clust = clust_res[,14] > 0.05
+table(curr_clust)
+inds = fam[,2]
+names(curr_clust) = inds
+table(curr_clust,d[inds,"CohortName"])
+chisq.test(table(curr_clust,d[inds,"CohortName"]))$p.value
+res = two_d_plot_visualize_covariate(pcax[inds,1],pcax[inds,2],curr_clust,curr_clust,
+    main = "By cohort",xlab="PC2",ylab="PC6",lwd=2)
+res = two_d_plot_visualize_covariate(pcax[inds,3],pcax[inds,4],curr_clust,curr_clust,
+    main = "By cohort",xlab="PC2",ylab="PC6",lwd=2)
+res = two_d_plot_visualize_covariate(pcax[inds,5],pcax[inds,6],curr_clust,curr_clust,
+    main = "By cohort",xlab="PC2",ylab="PC6",lwd=2)
+
+ages = as.numeric(d[inds,"Age"])
+cor.test(clust_res[!is.na(ages),5],ages[!is.na(ages)])
+
+all(rownames(pcax)==fam[,1])
+library(corrplot)
+corrplot(cor(pcax[inds,1:20],clust_res))
+
+yy = pcax[inds,5]
+xx = as.matrix(clust_res[,1:15])
+summary(lm(yy~xx))
+
+# # redu pca directly from pcax
+# lambdas = read.table("merged_ld_pruned.eigenval",stringsAsFactors = F)[,1]
+# xx = pcax
+# for(j in 1:40){
+#   xx[,j]=xx[,j]*sqrt(lambdas[j])
+# }
+# xx = xx[all_filters,]
+# dim(xx)
+# new_xx = princomp(xx,scores = T)$scores
+# pcax = new_xx
+# colnames(pcax) = paste("PC",1:40,sep="")
+

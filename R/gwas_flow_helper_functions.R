@@ -2,12 +2,12 @@
 ####################################################################################################
 ####################################################################################################
 ######## Some useful functions
-get_sh_default_prefix<-function(err="",log=""){
+get_sh_default_prefix<-function(err="",log="",time="6:00:00"){
   return(
     c(
       "#!/bin/bash",
       "#",
-      "#SBATCH --time=6:00:00",
+      paste("#SBATCH --time=",time,sep=""),
       "#SBATCH --partition=euan,mrivas,normal,owners",
       "#SBATCH --nodes=1",
       "#SBATCH --cpus-per-task=2",
@@ -386,7 +386,7 @@ run_plink_command<-function(cmd,out_path,name,batch_script_func=get_sh_default_p
   system(paste("sbatch",curr_sh_file))
 }
 
-compute_pc_vs_binary_variable_association_p<-function(pc,y,test=wilcox.test){
+compute_pc_vs_binary_variable_association_p<-function(pc,y,test=t.test){
   x1 = pc[y==y[1]]
   x2 = pc[y!=y[1]]
   return(test(x1,x2)$p.value)
@@ -395,7 +395,8 @@ compute_pc_vs_binary_variable_association_roc<-function(pc,y){
   x1 = pc[y==y[1]]
   x2 = pc[y!=y[1]]
   W = unname(wilcox.test(x1,x2)$statistic)
-  return(W/(length(x1)*length(x2)))
+  roc = W/(length(x1)*length(x2))
+  return(max(roc,1-roc))
 }
 
 compute_pc_vs_discrete_variable_association_p<-function(pc,y,cuts=5){

@@ -269,6 +269,7 @@ if(!use_qctool){
                      "--bim",paste(out_path,"new_bed_2_alt.bim",sep=''),
                      "--fam", paste(out_path,"new_bed_2.fam",sep=''),
                      "--bmerge",paste(out_path,"new_bed_1",sep=''),
+                     "--reference-allele",paste(out_path,"force_allele1.txt",sep=""),
                      "--chr",j,
                      "--threads 4",
                      "--make-bed --out",paste(out_path,"chr",j,sep=''))

@@ -14,6 +14,7 @@ get_sh_default_prefix<-function(err="",log="",time="6:00:00"){
       "#SBATCH --mem=16000",
       paste("#SBATCH --error",err),
       paste("#SBATCH --out",log),
+      "#SBATCH -x sh-113-15",
       "",
       "module load biology",
       "module load plink/1.90b5.3"
@@ -38,6 +39,7 @@ get_sh_prefix_one_node_specify_cpu_and_mem<-function(err="",log="",plink_pkg = "
       paste("#SBATCH --mem=",mem_size,sep=""),
       paste("#SBATCH --error",err),
       paste("#SBATCH --out",log),
+      "#SBATCH -x sh-113-15",
       "",
       "module load biology",
       paste("module load",plink_pkg)
@@ -56,6 +58,7 @@ get_sh_prefix_bigmem<-function(err="",log="",plink_pkg = "plink/1.90b5.3",Ncpu=1
       paste("#SBATCH --mem=",mem_size,sep=""),
       paste("#SBATCH --error",err),
       paste("#SBATCH --out",log),
+      "#SBATCH -x sh-113-15",
       "",
       "module load biology",
       paste("module load",plink_pkg)

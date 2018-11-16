@@ -327,14 +327,14 @@ for(nn in names(bfiles_pop)){
   adm_path = paste(pop_anal_dir,adm_name,"/",sep="")
   system(paste("mkdir",adm_path))
   setwd(adm_path)
-  for (k in 1:10){
+  for (k in 4:10){
     # 1. Run the algorithm on a number of Ks
     err_path = paste("run_",k,".err",sep="")
     log_path = paste("run_",k,".log",sep="")
     curr_cmd = paste(
                      "/home/users/davidama/apps/admixture/admixture_linux-1.3.0/admixture",
                      paste(bfiles_pop[[nn]],".bed",sep=""), k,"--cv",
-                     "-s 123 -jN4"
+                     "-s 123 -j4"
           )
     curr_sh_file = paste("run_",k,".sh",sep="")
     print_sh_file(curr_sh_file,

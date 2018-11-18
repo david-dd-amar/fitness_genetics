@@ -2,7 +2,6 @@
 # Define input for flow
 script_file = "/home/users/davidama/repos/fitness_genetics/R/gwas_flow_helper_functions.R"
 source(script_file)
-job_dir = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/mega_eu_imp/"
 our_data_bed_path = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl_mega_separate_recalls/1000g/merged_mega_data_autosomal"
 map_files_path = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/mega_eu_imp/1000g_data/1000GP_Phase3/"
 shapeit_path = "/home/users/davidama/apps/shapeit.v2.904.3.10.0-693.11.6.el7.x86_64/bin/shapeit"
@@ -10,22 +9,34 @@ impute2_path = "/home/users/davidama/apps/impute2/impute_v2.3.2_x86_64_static/im
 impute2_size = 5000000
 ref_for_phasing = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/mega_eu_imp/1000g_data/1000GP_Phase3/"
 
+# Include our direct geno as is
+job_dir = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/mega_eu_imp/"
+# Exclude JHU
+job_dir = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/mega_eu_imp_wo_jhu/"
+
+system(paste("mkdir",job_dir))
+
+our_bim = read.table(paste(our_data_bed_path,".bim",sep=""),stringsAsFactors = F)
+JHUs = our_bim[grepl("JHU",our_bim[,2]),2]
+write.table(t(t(JHUs)),file=paste(job_dir,"JHUs.txt",sep=""),row.names = F,
+            col.names = F,quote = F)
 
 # Split our data by chromosome
 direct_geno_path = paste(job_dir,"direct_geno/",sep="")
-# # Create a dir with bed file per chromosome
-# system(paste("mkdir",direct_geno_path))
-# setwd(direct_geno_path)
-# for (j in 1:22){
-#   err_path = paste("split",j,".err",sep="")
-#   log_path = paste("split",j,".log",sep="")
-#   curr_cmd = paste("plink --bfile",our_data_bed_path,
-#                    "--chr",j,
-#                    "--make-bed --out",paste(j,sep=''))
-#   curr_sh_file = paste("split",j,".sh",sep="")
-#   print_sh_file(curr_sh_file,get_sh_default_prefix(err_path,log_path),curr_cmd)
-#   system(paste("sbatch",paste(curr_sh_file,sep='')))
-# }
+# Create a dir with bed file per chromosome
+system(paste("mkdir",direct_geno_path))
+setwd(direct_geno_path)
+for (j in 1:22){
+  err_path = paste("split",j,".err",sep="")
+  log_path = paste("split",j,".log",sep="")
+  curr_cmd = paste("plink --bfile",our_data_bed_path,
+                   "--chr",j,
+                   "--exclude",paste(job_dir,"JHUs.txt",sep=""),
+                   "--make-bed --out",paste(j,sep=''))
+  curr_sh_file = paste("split",j,".sh",sep="")
+  print_sh_file(curr_sh_file,get_sh_default_prefix(err_path,log_path),curr_cmd)
+  system(paste("sbatch",paste(curr_sh_file,sep='')))
+}
 
 map_files = list.files(map_files_path)
 map_files = map_files[grepl("^genetic_map",map_files)]
@@ -118,7 +129,7 @@ if(!is.null(ref_for_phasing)){
   }
 }
 
-# Option 2: shapeit with 1000G as ref
+# Impute data from shapeit with 1000G as ref
 shapeit_out_path = paste(job_dir,"shapeit_1000gRef_out/",sep="")
 impute2_out_path = paste(job_dir,"impute2_1000gRef_out/",sep="")
 system(paste("mkdir",impute2_out_path))
@@ -209,6 +220,16 @@ for(j in 1:22){
   if(length(chunk2out)==0){next}
   # put all imputed in one file
   system(paste(paste(c("cat",chunk2out),collapse = " "),paste("> chr",j,".imputed",sep="")))
+}
+
+# Remove "chunck" files
+for(j in 1:22){
+  print(j)
+  chunk2out = tmp_chunck_files_per_chr[[j]]
+  chunk2out = chunk2out[grepl("imputed$",chunk2out)]
+  chunk2out = intersect(chunk2out,list.files(getwd()))
+  if(length(chunk2out)==0){next}
+  # Remove the chunck result files
   for(chunk in chunk2out){
     system(paste("rm",chunk))
   }
@@ -227,9 +248,12 @@ for(j in 1:22){
 
 # 4. gzip the imputation files
 for(j in 1:22){
-  print(j)
-  system(paste("gzip",paste("chr",j,".imputed &",sep="")))
+  curr_cmd = paste(paste("gzip",paste("chr",j,".imputed",sep="")))
+  run_plink_command(curr_cmd,impute2_out_path,paste("gzip_chr",j,sep=""),
+                    get_sh_prefix_one_node_specify_cpu_and_mem,Ncpu=2,mem_size=16000)
 }
+wait_for_job(120)
+system("rm gzip_*")
 
 # 5. create the sample file
 fam = read.table(paste(our_data_bed_path,".fam",sep=""))
@@ -270,7 +294,7 @@ wait_for_job(waittime = 120)
 
 # Exclude SNPs that are from our data and have low concodrance score
 # Exclude imputed SNPs with a low certainty score
-load(paste(info_dir,"our_data_info.RData",sep=""))
+load(paste(impute2_out_path,"our_data_info.RData",sep=""))
 rownames(our_data_info) = our_data_info$rs_id
 # # Examine our concordance scores for "zero" pval snps
 # gwas_res = read.table(
@@ -337,7 +361,7 @@ wait_for_job(waittime = 120)
 setwd(impute2_out_path)
 chrs_dir = paste(impute2_out_path,"check_bim_res/",sep="")
 system(paste("mkdir",chrs_dir))
-for (j in 1:21){
+for (j in 1:22){
   curr_fs = paste(impute2_out_path,"check_bim_chr",j,'/',"chr",j,"*",sep="")
   system(paste("mv",curr_fs,chrs_dir))  
 }
@@ -367,12 +391,13 @@ for (j in 1:22){
     system(paste("less",curr_file,">>",out_force_allele_file))
   }
 }
-
+# Run the merge
 err_path = paste(chrs_dir,"merge_beds.err",sep="")
 log_path = paste(chrs_dir,"merge_beds.log",sep="")
 curr_cmd = paste("plink --bfile",all_out_bed_files[1],
                  "--merge-list",allfiles_path,
                  "--reference-allele",out_force_allele_file,
+                 "--freq",
                  "--threads 8",
                  "--make-bed --out",paste(chrs_dir,"merged_geno",sep=''))
 curr_sh_file = "merged_beds.sh"

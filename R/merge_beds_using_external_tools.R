@@ -38,10 +38,15 @@
 # bfile2 = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl_mega_separate_recalls/1000g/merged_mega_data_autosomal_after_maf_after_pca"
 # out_path = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl_mega_separate_recalls/with_ukbb_1000g_sanity/"
 
-# Nov 2018: Merge imputed data
+# # Nov 2018: Merge imputed data
+# bfile1 = "/oak/stanford/groups/euan/projects/fitness_genetics/ukbb/ukbb_imputed_20k_rand_controls_sex_age/merged_control_geno-1000g_updated"
+# bfile2 = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/mega_eu_imp/impute2_1000gRef_out/check_bim_res/merged_geno"
+# out_path = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/mega_eu_imp/with_ukbb/"
+
+# Nov 2018: same as above but without JHUs
 bfile1 = "/oak/stanford/groups/euan/projects/fitness_genetics/ukbb/ukbb_imputed_20k_rand_controls_sex_age/merged_control_geno-1000g_updated"
-bfile2 = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/mega_eu_imp/impute2_1000gRef_out/check_bim_res/merged_geno"
-out_path = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/mega_eu_imp/with_ukbb/"
+bfile2 = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/mega_eu_imp_wo_jhu/impute2_1000gRef_out/check_bim_res/merged_geno"
+out_path = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/mega_eu_imp_wo_jhu/with_ukbb/"
 
 try(system(paste("mkdir",out_path)))
 

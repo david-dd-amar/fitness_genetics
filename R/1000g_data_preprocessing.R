@@ -27,6 +27,6 @@ wait_for_job(waittime = 120)
 for(chr in 1:22){
   fam = read.table(paste("chr",chr,".fam",sep=""),stringsAsFactors = F)
   fam[,1] = fam[,2]
-  write.table(fam,paste("chr",chr,".fam",sep=""),sep="\t",row.names = F,col.names = F,
-              quote=F)
+  write.table(fam,paste("chr",chr,".fam",sep=""),sep="\t",
+  	row.names = F,col.names = F, quote=F)
 }

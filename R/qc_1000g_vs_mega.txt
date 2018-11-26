@@ -1,0 +1,225 @@
+# We do a quick QC analysis of selected chromosomes
+# Our goal is to illustrate that intra-eur population structure
+# is crucial for the analysis of our dataset
+# The analysis here is straightforward. We select data from three chromosomes,
+# take only snps that are not palindromic and appear in both datasets.
+# We then merge the datasets and do PCA.
+# All analyses are done using plink.
+
+# ASSUMPTIONS: dataset1 is 1000g, dataset2 is mega-related dataset AFTER running
+# check_bim. Thus, most alleles should be matched by now.
+
+# Load auxiliary functions
+script_file = "~/repos/fitness_genetics/R/gwas_flow_helper_functions.R"
+source(script_file)
+# Define the datasets to be analyzed
+dataset1 = "/oak/stanford/groups/euan/projects/fitness_genetics/1000g/"
+dataset2 = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/mega_eu_imp_wo_jhu/with_ukbb/"
+chrs = paste("chr",c(1:3),sep="")
+# define the output path
+out_path = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/qc/1000g_pop/"
+system(paste("mkdir",out_path))
+
+is_snp_paly<-function(x){
+	return(x=="AT" || x=="TA" || x=="CG" || x=="GC")
+}
+
+# Analyze the datasets and prepare for a merge
+for(chr in chrs){
+	bim1 = read.table(paste(dataset1,chr,".bim",sep=""),stringsAsFactors=F)
+	bim2 = read.table(paste(dataset2,chr,".bim",sep=""),stringsAsFactors=F)
+	raw_id_intersect = intersect(bim1[,2],bim2[,2])
+	bim1_dups = names(which(table(bim1[,2])>1))
+	bim2_dups = names(which(table(bim2[,2])>1))
+	raw_id_intersect = setdiff(raw_id_intersect,bim1_dups)
+	raw_id_intersect = setdiff(raw_id_intersect,bim2_dups)
+	bim1 = bim1[is.element(bim1[,2],set=raw_id_intersect),]
+	bim2 = bim2[is.element(bim2[,2],set=raw_id_intersect),]
+	rownames(bim1) = bim1[,2]
+	rownames(bim2) = bim2[,2]
+	bim1 = bim1[raw_id_intersect,]
+	bim2 = bim2[raw_id_intersect,]
+	all(bim1[,2]==bim2[,2]) # sanity check
+	
+	# Exclude palindromic SNPs
+	alleles2 = paste(bim2[,5],bim2[,6],sep="")
+	pali_snps = raw_id_intersect[sapply(alleles2,is_snp_paly)]
+	raw_id_intersect = setdiff(raw_id_intersect,pali_snps)
+	bim1 = bim1[raw_id_intersect,]
+	bim2 = bim2[raw_id_intersect,]
+	
+	alleles1 = paste(bim1[,5],bim1[,6],sep="")
+	rev_alleles1 = paste(bim1[,6],bim1[,5],sep="")
+	alleles2 = paste(bim2[,5],bim2[,6],sep="")
+	table(rev_alleles1 == alleles2) # almost all should be TRUE
+	
+	# NOTE: if we want to add the ability to handle snp flip for the merge
+	# then we need another file with a list of snps to flip in one of the files
+	# this will also include matching the alleles to make sure we get the correct
+	# ones for the flip
+	snps_to_take = raw_id_intersect[rev_alleles1 == alleles2 | alleles1 == alleles2]
+	curr_snps_file = paste(out_path,chr,"_curr_snps.txt",sep="")
+	write.table(t(t(snps_to_take)),file=curr_snps_file,row.names=F,col.names=F,quote=F)
+	
+	# create a bed from dataset1
+	curr_name = paste("dataset1_",chr,"_make_bed",sep='')
+  	curr_cmd = paste("plink --bfile",paste(dataset1,chr,sep=""),
+                   "--extract",curr_snps_file,
+                   "--threads 4",
+                   "--make-bed --out",paste(out_path,"dataset1_",chr,sep='')
+  	)
+  	run_plink_command(curr_cmd,out_path,curr_name,
+                    get_sh_prefix_one_node_specify_cpu_and_mem,Ncpu=4,mem_size=32000)
+    
+    # create a bed from dataset2
+    curr_name = paste("dataset2_",chr,"_make_bed",sep='')
+  	curr_cmd = paste("plink --bfile",paste(dataset2,chr,sep=""),
+                   "--extract",curr_snps_file,
+                   "--threads 4",
+                   "--make-bed --out",paste(out_path,"dataset2_",chr,sep='')
+  	)
+  	run_plink_command(curr_cmd,out_path,curr_name,
+                    get_sh_prefix_one_node_specify_cpu_and_mem,Ncpu=4,mem_size=32000)
+}
+
+# Merge all bed files into a single one
+all_bfiles = c(paste("dataset1_",chrs,sep=""),paste("dataset2_",chrs,sep=""))
+all_bfiles = paste(out_path,all_bfiles,sep="")
+write.table(t(t(all_bfiles[-1])),file=paste(out_path,"all_bfiles.txt",sep=""),
+	row.names=F,col.names=F,quote=F)
+curr_name = paste("merge_beds",sep='')
+curr_cmd = paste("plink --bfile",all_bfiles[1],
+                   "--merge-list",paste(out_path,"all_bfiles.txt",sep=""),
+                   "--threads 4",
+                   "--make-bed --out",paste(out_path,"merged_dataset",sep='')
+)
+run_plink_command(curr_cmd,out_path,curr_name,
+                get_sh_prefix_one_node_specify_cpu_and_mem,Ncpu=4,mem_size=32000)
+
+# LD prune
+curr_name = paste("ld_prune",sep='')
+curr_cmd = paste("plink --bfile",paste(out_path,"merged_dataset",sep=''),
+                   "--indep-pairwise 500 10",0.1,
+                   "--threads 8",
+                   "--out",paste(out_path,"merged_dataset",sep='')
+)
+run_plink_command(curr_cmd,out_path,curr_name,
+                get_sh_prefix_one_node_specify_cpu_and_mem,Ncpu=8,mem_size=64000)
+
+# PCA 
+curr_name = "run_pca"
+curr_cmd = paste("plink --bfile",paste(out_path,"merged_dataset",sep=''),
+				"--extract",paste(out_path,"merged_dataset.prune.in",sep=""),
+        	    "--threads 16",
+                "--pca 40",
+                "--out",paste(out_path,curr_name,sep='')
+)
+run_plink_command(curr_cmd,out_path,curr_name,
+                    get_sh_prefix_one_node_specify_cpu_and_mem,Ncpu=16,mem_size=64000)
+
+
+####################################################################################################
+####################################################################################################
+####################################################################################################
+####################################################################################################
+####################################################################################################
+####################################################################################################
+# Locally
+setwd("/Users/David/Desktop/elite/november2018_analysis/qc_1000g/")
+source("~/Desktop/repos/fitness_genetics/R/gwas_flow_helper_functions.R")
+
+pcax = read_pca_res("run_pca.eigenvec")
+d = read.table("all_cohorts.phe",header=T,stringsAsFactors = F)
+rownames(d) = d$IID
+inds = intersect(rownames(d),rownames(pcax))
+d = d[inds,]
+dim(d)
+d2 = read.table("integrated_call_samples_v3.20130502.ALL.panel",stringsAsFactors=F,header=T)
+
+cohorts1 = c(d$CohortName,d2[,2])
+names(cohorts1) = c(rownames(d),d2[,1])
+cohorts2 = c(d$CohortName,d2[,3])
+names(cohorts2) = c(rownames(d),d2[,1])
+cohorts3 = c(d$CohortName,rep("1000g",nrow(d2)))
+names(cohorts3) = c(rownames(d),d2[,1])
+pcax = pcax[names(cohorts1),]
+
+# PCA plots
+inds = rownames(pcax)
+res = two_d_plot_visualize_covariate(pcax[inds,1],pcax[inds,2],cohorts3[inds],cohorts3[inds],
+      main = "All filters",xlab="PC1",ylab="PC2",lwd=2)
+legend(x="topleft",names(res[[1]]),fill = res[[1]])
+
+res = two_d_plot_visualize_covariate(pcax[inds,3],pcax[inds,4],cohorts3[inds],cohorts3[inds],
+      main = "All filters",xlab="PC3",ylab="PC4",lwd=2)
+legend(x="topleft",names(res[[1]]),fill = res[[1]])
+
+res = two_d_plot_visualize_covariate(pcax[inds,5],pcax[inds,6],cohorts3[inds],cohorts3[inds],
+      main = "All filters",xlab="PC5",ylab="PC6",lwd=2)
+legend(x="topleft",names(res[[1]]),fill = res[[1]])
+
+# Do the pcs perfectly predict the group?
+y = as.factor(cohorts3=="ukbb")
+y = as.factor(cohorts3=="elite")
+x = pcax[,1:10]
+logistic_d = data.frame(y,x)
+cv_res = c()
+folds = sample(rep(1:10,length(y)/10))[1:length(y)]
+for(i in 1:10){
+  tr = logistic_d[folds!=i,]
+  te = x[folds==i,]
+  tey = y[folds==i]
+  m = glm(y~.,family = "binomial",data=tr)
+  preds = predict(m,newdata=data.frame(logistic_d[folds==i,]),type="response")
+  cv_res = rbind(cv_res,cbind(preds,tey))
+}
+table(cv_res[,1]>0.5,cv_res[,2])
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

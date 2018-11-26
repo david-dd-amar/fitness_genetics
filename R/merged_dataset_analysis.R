@@ -290,6 +290,25 @@ for(nn in names(bfiles_pop)){
                     get_sh_prefix_one_node_specify_cpu_and_mem,Ncpu=16,mem_size=64000)
   # wait_for_job(waittime = 120)
   
+  # PCA without palindromic snps (good for qc)
+  curr_bim = read.table(paste(bfiles_pop[[nn]],".bim",sep=""),stringsAsFactors=F)
+  curr_alleles = paste(curr_bim[,5],curr_bim[,6],sep="")
+  curr_pali = curr_alleles == "AT" | curr_alleles=="TA" | curr_alleles=="GC" | curr_alleles == "CG"
+  curr_pali_file = paste(pop_anal_dir,"pali_snps_",nn,".txt",sep="")
+  write.table(t(t(curr_bim[curr_pali,2])),file=curr_pali_file,
+  				row.names=F,quote=F,col.names=F)
+  
+  curr_name = paste("pca_rl_wo_pali_",nn,sep='')
+  curr_cmd = paste("plink --bfile",bfiles_pop[[nn]],
+                   "--threads 16",
+                   "--exclude",curr_pali_file,
+                   "--pca 40",
+                   "--out",paste(pop_anal_dir,curr_name,sep='')
+  )
+  run_plink_command(curr_cmd,pop_anal_dir,curr_name,
+                    get_sh_prefix_one_node_specify_cpu_and_mem,Ncpu=16,mem_size=64000)
+
+  
   # PCANgsd
   setwd(pop_anal_dir)
   err_path = paste(pop_anal_dir,"pcangsd_run_",nn,".err",sep="")
@@ -724,6 +743,7 @@ pcax = read_pca_res("filters_cleaned_pca.eigenvec")
 # WO JHU analysis:
 pcax = read_pca_res("pca_rl_all.eigenvec")
 pcax = read_pca_res("pca_rl_eu.eigenvec")
+pcax = read_pca_res("pca_rl_wo_pali_all.eigenvec")
 
 d = read.table("all_cohorts.phe",header=T,stringsAsFactors = F)
 rownames(d) = d$IID
@@ -824,7 +844,7 @@ dev.off()
 inds = rownames(d)
 res = two_d_plot_visualize_covariate(pcax[inds,5],pcax[inds,6],d[inds,]$CohortName,d[inds,]$CohortName,
     main = "By cohort",xlab=2,ylab=3)
-table(d[inds,]$CohortName,pcax[inds,6]<0.02 & pcax[inds,6] > -0.02)
+table(d[inds,]$CohortName,pcax[inds,6]<0.02 & pcax[inds,6] > -0.01)
 par(mfrow=c(1,2))
 inds = rownames(d)[d$CohortName!="ukbb"]
 res = two_d_plot_visualize_covariate(pcax[inds,1],pcax[inds,2],d[inds,]$CohortName,d[inds,]$CohortName,

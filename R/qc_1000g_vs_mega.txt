@@ -15,7 +15,7 @@ source(script_file)
 # Define the datasets to be analyzed
 dataset1 = "/oak/stanford/groups/euan/projects/fitness_genetics/1000g/"
 dataset2 = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/mega_eu_imp_wo_jhu/with_ukbb/"
-chrs = paste("chr",c(1:3),sep="")
+chrs = paste("chr",c(1:22),sep="")
 # define the output path
 out_path = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/qc/1000g_pop/"
 system(paste("mkdir",out_path))
@@ -81,10 +81,68 @@ for(chr in chrs){
   	run_plink_command(curr_cmd,out_path,curr_name,
                     get_sh_prefix_one_node_specify_cpu_and_mem,Ncpu=4,mem_size=32000)
 }
+wait_for_job(240)
 
-# Merge all bed files into a single one
-all_bfiles = c(paste("dataset1_",chrs,sep=""),paste("dataset2_",chrs,sep=""))
-all_bfiles = paste(out_path,all_bfiles,sep="")
+# Compute freqs
+for(chr in chrs){
+	f1 = paste(out_path,"dataset1_",chr,sep='')
+	f2 = paste(out_path,"dataset2_",chr,sep='')
+	
+	curr_name = paste("dataset1_",chr,"_frq",sep='')
+  	curr_cmd = paste("plink --bfile",f1,
+                   "--freq","--threads 4",
+                   "--out",f1)
+  	run_plink_command(curr_cmd,out_path,curr_name,
+                    get_sh_prefix_one_node_specify_cpu_and_mem,Ncpu=4,mem_size=32000)
+    
+	curr_name = paste("dataset2_",chr,"_frq",sep='')
+  	curr_cmd = paste("plink --bfile",f2,
+                   "--freq","--threads 4",
+                   "--out",f2)
+  	run_plink_command(curr_cmd,out_path,curr_name,
+                    get_sh_prefix_one_node_specify_cpu_and_mem,Ncpu=4,mem_size=32000)	
+}
+
+# Merge each chromosome data
+for(chr in chrs){
+	f1 = paste(out_path,"dataset1_",chr,sep='')
+	f2 = paste(out_path,"dataset2_",chr,sep='')
+	curr_name = paste("merge_",chr,sep='')
+	curr_cmd = paste("plink --bfile",f1,
+                   "--bmerge",f2,"--threads 8",
+                   "--make-bed --out",paste(out_path,"merged_",chr,sep='')
+	)
+	run_plink_command(curr_cmd,out_path,curr_name,
+                get_sh_prefix_one_node_specify_cpu_and_mem,Ncpu=8,mem_size=64000)
+}
+
+# Run LD prunning on each new file
+for(chr in chrs){
+	curr_name = paste("ld_",chr,sep='')
+	curr_cmd = paste("plink --bfile",paste(out_path,"merged_",chr,sep=''),
+                   "--threads 8",
+                   "--maf 0.05",
+                   "--indep-pairwise 500 10",0.1,
+                   "--out",paste(out_path,"merged_",chr,sep='')
+	)
+	run_plink_command(curr_cmd,out_path,curr_name,
+                get_sh_prefix_one_node_specify_cpu_and_mem,Ncpu=8,mem_size=64000)
+}
+
+# Extract LD-pruned beds
+for(chr in chrs){
+	curr_name = paste("ld_extract_",chr,sep='')
+	curr_cmd = paste("plink --bfile",paste(out_path,"merged_",chr,sep=''),
+                   "--threads 8",
+                   "--extract", paste(out_path,"merged_",chr,".prune.in",sep=''),
+                   "--make-bed --out",paste(out_path,"merged_ld_pruned_",chr,sep='')
+	)
+	run_plink_command(curr_cmd,out_path,curr_name,
+                get_sh_prefix_one_node_specify_cpu_and_mem,Ncpu=8,mem_size=64000)
+}
+
+# Merge all resulting bed files into a single one
+all_bfiles = paste(out_path,"merged_ld_pruned_",chrs,sep='')
 write.table(t(t(all_bfiles[-1])),file=paste(out_path,"all_bfiles.txt",sep=""),
 	row.names=F,col.names=F,quote=F)
 curr_name = paste("merge_beds",sep='')
@@ -94,22 +152,11 @@ curr_cmd = paste("plink --bfile",all_bfiles[1],
                    "--make-bed --out",paste(out_path,"merged_dataset",sep='')
 )
 run_plink_command(curr_cmd,out_path,curr_name,
-                get_sh_prefix_one_node_specify_cpu_and_mem,Ncpu=4,mem_size=32000)
-
-# LD prune
-curr_name = paste("ld_prune",sep='')
-curr_cmd = paste("plink --bfile",paste(out_path,"merged_dataset",sep=''),
-                   "--indep-pairwise 500 10",0.1,
-                   "--threads 8",
-                   "--out",paste(out_path,"merged_dataset",sep='')
-)
-run_plink_command(curr_cmd,out_path,curr_name,
                 get_sh_prefix_one_node_specify_cpu_and_mem,Ncpu=8,mem_size=64000)
 
-# PCA 
+# Run PCA 
 curr_name = "run_pca"
 curr_cmd = paste("plink --bfile",paste(out_path,"merged_dataset",sep=''),
-				"--extract",paste(out_path,"merged_dataset.prune.in",sep=""),
         	    "--threads 16",
                 "--pca 40",
                 "--out",paste(out_path,curr_name,sep='')

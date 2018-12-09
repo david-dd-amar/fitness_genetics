@@ -154,16 +154,6 @@ curr_cmd = paste("plink --bfile",all_bfiles[1],
 run_plink_command(curr_cmd,out_path,curr_name,
                 get_sh_prefix_one_node_specify_cpu_and_mem,Ncpu=8,mem_size=64000)
 
-# Run PCA 
-curr_name = "run_pca"
-curr_cmd = paste("plink --bfile",paste(out_path,"merged_dataset",sep=''),
-        	    "--threads 16",
-                "--pca 40",
-                "--out",paste(out_path,curr_name,sep='')
-)
-run_plink_command(curr_cmd,out_path,curr_name,
-                    get_sh_prefix_one_node_specify_cpu_and_mem,Ncpu=16,mem_size=64000)
-
 
 ####################################################################################################
 ####################################################################################################

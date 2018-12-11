@@ -36,6 +36,8 @@ source(script_file)
 # job_dir = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/elite_only/our_prepro/"
 # September 2018
 job_dir = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl_mega_separate_recalls/"
+# Dec 2018: add Genepool
+job_dir = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/mega_with_genepool/"
 # set the job's directory
 try({system(paste("mkdir",job_dir),wait = T)})
 setwd(job_dir)
@@ -66,10 +68,15 @@ bad_snps_file = "/oak/stanford/groups/euan/projects/fitness_genetics/bad_mega_sn
 sample_metadata = "/oak/stanford/groups/euan/projects/fitness_genetics/metadata/merged_metadata_file_stanford3k_elite_cooper.txt"
 sample_metadata_raw = read.delim(sample_metadata,stringsAsFactors = F)
 sample_metadata_raw = correct_dups_in_sample_metadata(sample_metadata_raw)
-# As of September 2018 we do not have genepool's metadata: we ignore this until we get it
+
+# September 2018 we do not have genepool's metadata: we ignore this until we get it
+# This filter was later ignored during the Dec 2018 preprocessing
 sample_metadata_raw = sample_metadata_raw[sample_metadata_raw$Cohort!="genepool",]
 sample_metadata_raw = sample_metadata_raw[!is.na(sample_metadata_raw[,1]),]
 rownames(sample_metadata_raw) = apply(sample_metadata_raw[,1:2],1,paste,collapse="_")
+
+# Dec 2018: get some stats for genepool samples
+gp_samples = sample_metadata_raw[sample_metadata_raw$Cohort=="genepool",]
 
 ####################################################################################################
 ####################################################################################################
@@ -182,7 +189,7 @@ curr_sh_file = "prepare_bfile1.sh"
 print_sh_file(paste(job_dir,curr_sh_file,sep=''),
               get_sh_default_prefix(err_path,log_path),curr_cmd)
 system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
-wait_for_job()
+wait_for_job(60)
 
 err_path = paste(job_dir,"update_ids_bfile1.err",sep="")
 log_path = paste(job_dir,"update_ids_bfile1.log",sep="")
@@ -205,7 +212,21 @@ ids1 = read.table(paste(job_dir,"bfile1.fam",sep=""),stringsAsFactors = F)[,2]
 ids2 = read.table(paste(job_dir,"bfile2.fam",sep=""),stringsAsFactors = F)[,2]
 print(paste("number of subjects in both files:",length(intersect(ids1,ids2))))
 
-# Subject QC:
+# Compare the bim files
+bim1 = read.table(paste(job_dir,"bfile1.bim",sep=""),stringsAsFactors = F,row.names = 2)
+bim2 = read.table(paste(job_dir,"bfile2.bim",sep=""),stringsAsFactors = F,row.names = 2)
+all(dim(bim1)==dim(bim2))
+length(intersect(rownames(bim1),rownames(bim2))) == nrow(bim1)
+bim2 = bim2[rownames(bim1),]
+table(bim1[,5]==bim2[,5])
+same_snps = bim1[,5]==bim2[,5] & bim1[,4]==bim2[,4]
+same_snps_diff_maf = bim1[,5]==bim2[,4] & bim1[,4]==bim2[,5]
+zero_maf1 = bim1[,4]=="0"
+zero_maf2 = bim2[,4]=="0"
+maybe_rev_snps = !(same_snps | zero_maf2 | zero_maf1 | same_snps_diff_maf)
+sum(maybe_rev_snps) == 0 # should be true
+
+# Subject QC
 # File 1
 err_path = paste(job_dir,"subj_qc_bfile1.err",sep="")
 log_path = paste(job_dir,"subj_qc_bfile1.log",sep="")
@@ -226,7 +247,7 @@ curr_sh_file = "subj_qc_bfile2.sh"
 print_sh_file(paste(job_dir,curr_sh_file,sep=''),
               get_sh_default_prefix(err_path,log_path),curr_cmd)
 system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
-wait_for_job()
+wait_for_job(60)
 
 # Analyze the results
 # Subject call rates:
@@ -242,7 +263,7 @@ remove_subjects_using_plink(paste(job_dir,"bfile2",sep=""),to_rem2,job_dir,"file
                                       batch_script_func=get_sh_default_prefix)
 remove_subjects_using_plink(paste(job_dir,"bfile1",sep=""),to_rem1,job_dir,"file1_initial_subj_qc","bfile1",
                             batch_script_func=get_sh_default_prefix)
-wait_for_job()
+wait_for_job(60)
 print("After initial qc, datas sizes are:")
 print(paste("number of samples, file 1:",length(readLines(paste(job_dir,"bfile1.fam",sep="")))))
 print(paste("number of snps, file 1:",length(readLines(paste(job_dir,"bfile1.bim",sep="")))))
@@ -275,7 +296,7 @@ curr_sh_file = "snp_c_bfile2.sh"
 print_sh_file(paste(job_dir,curr_sh_file,sep=''),
               get_sh_default_prefix(err_path,log_path),curr_cmd)
 system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
-wait_for_job()
+wait_for_job(60)
 
 # Analyze the SNP QC results
 miss1 = read.table(paste(job_dir,"bfile1.lmiss",sep=""),stringsAsFactors = F,header=T)
@@ -331,26 +352,33 @@ print(paste("removed samples in previous step, by cohort",table(sample_metadata_
 bim1 = read.table(paste(job_dir,"bfile1.bim",sep=""),stringsAsFactors = F)
 bim2 = read.table(paste(job_dir,"bfile2.bim",sep=""),stringsAsFactors = F)
 rownames(bim1) = bim1[,2];rownames(bim2) = bim2[,2]
+all(bim1[,2]==bim2[,2])
 bim1 = bim1[rownames(bim2),]
 
 xx = cbind(bim1[,5:6],bim2[,5:6])
 all_num_alleles = apply(xx,1,get_num_alleles)
-one_allele_appears_as_two<-function(x){
-  return(get_num_alleles(x)==2 & sum(x=="0")==2)
-}
+one_allele_appears_as_two<-function(x){return(get_num_alleles(x)==2 & sum(x=="0")==2)}
 is_one_allele_appears_as_two = apply(xx,1,one_allele_appears_as_two)
+xx[is_one_allele_appears_as_two,]
 snps_to_flip = rownames(bim1)[is_one_allele_appears_as_two | all_num_alleles>2]
-print(paste("comparing the two bim files, these should be flipped:",length(snps_to_flip)))
-
-repl = apply(xx[snps_to_flip,1:2],1,flip_snp_info)
-xx[snps_to_flip,1] = repl[1,]
-xx[snps_to_flip,2] = repl[2,]
-all_num_alleles2 = apply(xx,1,get_num_alleles)
-table(all_num_alleles2)
-all(is.na(bim1[all_num_alleles2==0,][1:10,])) # should be all NAs because there are no such snps
-flip_snps_using_plink(paste(job_dir,"bfile1",sep=""),snps_to_flip,job_dir,"final_snps_to_flip","bfile1",
+print(paste("comparing the two bim files, these should be removed or flipped:",length(snps_to_flip)))
+# Dec 2018: the snps discovered above have alleles marked as "0 0" in one of the files. Exclude and do not flip.
+snps_to_keep = setdiff(snps_to_keep,snps_to_flip)
+extract_snps_using_plink(paste(job_dir,"bfile1",sep=""),snps_to_keep,job_dir,"final_snps_to_keep","bfile1",
                          batch_script_func=get_sh_default_prefix)
-wait_for_job()
+extract_snps_using_plink(paste(job_dir,"bfile2",sep=""),snps_to_keep,job_dir,"final_snps_to_keep","bfile2",
+                         batch_script_func=get_sh_default_prefix)
+wait_for_job(60)
+
+# repl = apply(xx[snps_to_flip,1:2],1,flip_snp_info)
+# xx[snps_to_flip,1] = repl[1,]
+# xx[snps_to_flip,2] = repl[2,]
+# all_num_alleles2 = apply(xx,1,get_num_alleles)
+# table(all_num_alleles2)
+# all(is.na(bim1[all_num_alleles2==0,][1:10,])) # should be all NAs because there are no such snps
+# flip_snps_using_plink(paste(job_dir,"bfile1",sep=""),snps_to_flip,job_dir,"final_snps_to_flip","bfile1",
+#                          batch_script_func=get_sh_default_prefix)
+# wait_for_job()
 
 ####################################################################################################
 ####################################################################################################
@@ -402,7 +430,7 @@ curr_sh_file = "merge_plink.sh"
 print_sh_file(paste(job_dir,curr_sh_file,sep=''),
               get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,Ncpu=2,mem_size=16000),curr_cmd)
 system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
-wait_for_job()
+wait_for_job(60)
 print("After merge, data sizes are:")
 print(paste("number of samples:",length(readLines(paste(job_dir,"merged_mega_data.fam",sep="")))))
 print(paste("number of snps:",length(readLines(paste(job_dir,"merged_mega_data.bim",sep="")))))
@@ -432,7 +460,7 @@ curr_sh_file = "mega_flipscan.sh"
 print_sh_file(paste(job_dir,curr_sh_file,sep=''),
               get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,Ncpu=2,mem_size=16000),curr_cmd)
 system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
-wait_for_job()
+wait_for_job(120)
 
 flipscan_res = readLines(paste(job_dir,"merged_mega_data.flipscan",sep=""))
 arrs = strsplit(flipscan_res[-1],split="\\s+")
@@ -440,14 +468,14 @@ names(arrs) = sapply(arrs,function(x)x[3])
 table(sapply(arrs,length))
 flipscan_failures = sapply(arrs,length) > 11
 flipscan_failures = sapply(arrs[flipscan_failures],function(x)x[3])
-sapply(arrs[flipscan_failures],function(x)x[2])
+# sapply(arrs[flipscan_failures],function(x)x[2])
 bim = read.table(paste(job_dir,"merged_mega_data.bim",sep=""),stringsAsFactors = F)
 snps_to_keep = setdiff(bim[,2],flipscan_failures)
 print(paste("Flipscan check, number of variants to remove:",length(flipscan_failures)))
 extract_snps_using_plink(paste(job_dir,"merged_mega_data",sep=""),snps_to_keep,job_dir,
                          "_final_snps_to_keep_after_flipscan","merged_mega_data",
                          batch_script_func=get_sh_default_prefix)
-wait_for_job()
+wait_for_job(60)
 
 print("After flipscan, data sizes are:")
 print(paste("number of samples:",length(readLines(paste(job_dir,"merged_mega_data.fam",sep="")))))

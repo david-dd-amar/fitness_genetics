@@ -271,7 +271,7 @@ colnames(covs)[1:2] = c("FID","IID")
 covs_file = "our_subjects_covs.phe"
 write.table(covs,file=paste(curr_path,covs_file,sep=""),
             row.names = F,col.names = T,quote=F,sep=" ")
-covs_file = paste(curr_path,covs_file,sep="")
+covs_file = paste(curr_path,"our_subjects_covs.phe",sep="")
 
 # Run the GWAS
 for(chr in chrs){
@@ -280,7 +280,8 @@ for(chr in chrs){
                    "--pheno",covs_file,
                    "--pheno-name cooper_col",
                    "--covar",covs_file,
-                   "--covar-name sex,PC1,PC2,PC3,PC4,PC5",
+                   "--maf 0.01",
+                   "--covar-name sex,PC1,PC2,PC3,PC4,PC5,PC6,PC7,PC8,PC9,PC10",
                    "--allow-no-sex --adjust",
                    "--threads",4,
                    "--out",paste(curr_path,"cooper_gwas_res_",chr,sep="")
@@ -294,7 +295,8 @@ for(chr in chrs){
                    "--pheno",covs_file,
                    "--pheno-name elite_col",
                    "--covar",covs_file,
-                   "--covar-name sex,PC1,PC2,PC3,PC4,PC5",
+                   "--maf 0.01",
+                   "--covar-name sex,PC1,PC2,PC3,PC4,PC5,PC6,PC7,PC8,PC9,PC10",
                    "--allow-no-sex --adjust",
                    "--threads",4,
                    "--out",paste(curr_path,"elite_gwas_res_",chr,sep="")
@@ -329,6 +331,7 @@ for(j in 1:length(res_files)){
 res_file = paste(curr_path,"elite_gwas_res_all.assoc",sep="")
 res_file2 = paste(curr_path,"fuma_elite_gwas_res_all.assoc",sep="")
 res = read.table(res_file,header=T,stringsAsFactors = F)
+res_elite=res
 res = res[,c("SNP","P")]
 colnames(res) = c("rsID","P-value")
 write.table(res,file=res_file2,col.names = T,row.names = F,quote = F,sep=" ")
@@ -336,10 +339,33 @@ write.table(res,file=res_file2,col.names = T,row.names = F,quote = F,sep=" ")
 res_file = paste(curr_path,"cooper_gwas_res_all.assoc",sep="")
 res_file2 = paste(curr_path,"fuma_cooper_gwas_res_all.assoc",sep="")
 res = read.table(res_file,header=T,stringsAsFactors = F)
+res_cooper=res
 res = res[,c("SNP","P")]
 colnames(res) = c("rsID","P-value")
 write.table(res,file=res_file2,col.names = T,row.names = F,quote = F,sep=" ")
 
+rownames(res_cooper) = res_cooper$SNP
+rownames(res_elite) = res_elite$SNP
+snps = intersect(res_cooper$SNP,res_elite$SNP)
+x1 = res_cooper[snps,"P"]
+x2 = res_elite[snps,"P"]
+table(x1<1e-5,x2<1e-5)
+
+d = read.table(paste(curr_path,"our_subjects_covs.phe",sep=""),header=T)
+pc_rocs = c()
+for(j in 1:40){
+  curr_inds = !is.na(d[,"elite_col"]) 
+  p1 = compute_pc_vs_binary_variable_association_roc(
+    pc = d[curr_inds,paste("PC",j,sep="")],y = d[curr_inds,"elite_col"]
+  )
+  curr_inds = !is.na(d[,"cooper_col"]) 
+  p2 = compute_pc_vs_binary_variable_association_roc(
+    pc = d[curr_inds,paste("PC",j,sep="")],y = d[curr_inds,"cooper_col"]
+  )
+  pc_rocs = rbind(pc_ps,c(p1,p2))
+}
+pc_qs = apply(pc_ps,2,p.adjust)
+pc_inds = pc_qs < 0.01
 
 #####################################################################################
 #####################################################################################
@@ -473,10 +499,28 @@ for(i in 1:10){
 }
 table(cv_res[,1]>0.5,cv_res[,2])
 
+res_cooper = read.table("fuma_cooper_gwas_res_all.assoc",stringsAsFactors = F,header=T,row.names = 1)
+res_elite = read.table("fuma_elite_gwas_res_all.assoc",stringsAsFactors = F,header=T,row.names = 1)
+inds = intersect(rownames(res_cooper),rownames(res_elite))
 
+qqplot(y=-log(res_cooper$P.value,10),x=-log(runif(100000),10),pch=20,
+       ylab="Sample quantiles",xlab="Theoretic quantiles");abline(0,1)
+qqplot(y=-log(res_elite$P.value,10),x=-log(runif(100000),10),pch=20,
+       ylab="Sample quantiles",xlab="Theoretic quantiles");abline(0,1)
 
+plot(y=-log(res_elite[inds,"P.value"],10),x=-log(res_cooper[inds,"P.value"],10),pch=20,
+       ylab="ELITE p-value",xlab="Cooper p-value");abline(0,1)
 
+# qqplot(y=-log(res_cooper$P.value,10),x=-log(runif(100000),10),pch=20,
+#        ylab="Sample quantiles",xlab="Theoretic quantiles",
+#        xlim=c(0,20),ylim=c(0,20));abline(0,1)
 
+# library(lattice);
+# x=res$P
+# qqmath(~-log10(na.omit(x)),
+#        distribution=function(x){-log10(qunif(1-x))}
+# )
+# abline(0,1,add=T)
 
 
 

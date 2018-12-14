@@ -15,14 +15,16 @@ source(script_file)
 # Define the datasets to be analyzed
 dataset1 = "/oak/stanford/groups/euan/projects/fitness_genetics/1000g/"
 # dataset2 = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/mega_eu_imp_wo_jhu/with_ukbb/"
-dataset2 = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl_mega_separate_recalls/by_chr/"
+# dataset2 = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl_mega_separate_recalls/by_chr/"
+dataset2 = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/mega_with_genepool/by_chr/"
 chrs = paste("chr",c(1:22),sep="")
 # define the output path
 out_path = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/qc/1000g_pop/"
 out_path = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/qc/1000g_vs_direct_mega/"
 system(paste("mkdir",out_path))
 
-mega_covars_path = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl_mega_separate_recalls/integrated_sample_metadata_and_covariates.phe"
+# mega_covars_path = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl_mega_separate_recalls/integrated_sample_metadata_and_covariates.phe"
+mega_covars_path = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/mega_with_genepool/integrated_sample_metadata_and_covariates.phe"
 
 
 is_snp_paly<-function(x){

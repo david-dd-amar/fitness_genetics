@@ -941,7 +941,45 @@ cooper_vs_gp[cooper_vs_gp=="1"] = 2
 cooper_vs_gp[cooper_vs_gp=="genepool"] = 1
 table(cooper_vs_gp)
 covariate_matrix = cbind(covariate_matrix,elite_vs_gp,cooper_vs_gp)
-write.table(covariate_matrix,file)
+
+new_pca = read_pca_res(paste(curr_dir,"merged_mega_data_autosomal.eigenvec",sep=""))
+# sanity check
+nrow(new_pca) == length(intersect(rownames(new_pca),rownames(covariate_matrix)))
+new_pca = new_pca[rownames(covariate_matrix),]
+covariate_matrix[,paste("PC",1:40,sep="")] = new_pca
+
+write.table(covariate_matrix,file=paste(curr_dir,"all_covs_and_pheno.phe",sep=""),row.names=F,
+                                        col.names = T,sep=" ",quote=F)
+
+# Run the GWASs
+covs_file = paste(curr_dir,"all_covs_and_pheno.phe",sep="")
+curr_cmd = paste("plink --bfile",paste(job_dir,"merged_mega_data_autosomal_eu_selected",sep=''),
+                 "--logistic hide-covar",
+                 "--pheno",covs_file,
+                 "--pheno-name elite_vs_gp",
+                 "--covar",covs_file,
+                 "--maf 0.01",
+                 "--covar-name sex,PC1,PC2,PC3,PC4,PC5,PC6,PC7,PC8,PC9,PC10",
+                 "--allow-no-sex --adjust",
+                 "--threads",8,
+                 "--out",paste(curr_dir,"elite_vs_gp_gwas_res",sep="")
+)
+run_plink_command(curr_cmd,curr_dir,paste("elite_vs_gp_gwas_res",sep=""),
+                  get_sh_prefix_one_node_specify_cpu_and_mem,Ncpu=8,mem_size=32000)
+
+curr_cmd = paste("plink --bfile",paste(job_dir,"merged_mega_data_autosomal_eu_selected",sep=''),
+                 "--logistic hide-covar",
+                 "--pheno",covs_file,
+                 "--pheno-name cooper_vs_gp",
+                 "--covar",covs_file,
+                 "--maf 0.01",
+                 "--covar-name sex,PC1,PC2,PC3,PC4,PC5,PC6,PC7,PC8,PC9,PC10",
+                 "--allow-no-sex --adjust",
+                 "--threads",8,
+                 "--out",paste(curr_dir,"cooper_vs_gp_gwas_res",sep="")
+)
+run_plink_command(curr_cmd,curr_dir,paste("cooper_vs_gp_gwas_res",sep=""),
+                  get_sh_prefix_one_node_specify_cpu_and_mem,Ncpu=8,mem_size=32000)
 
 ####################################################################################################
 ####################################################################################################

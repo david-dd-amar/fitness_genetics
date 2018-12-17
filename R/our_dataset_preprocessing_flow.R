@@ -981,6 +981,80 @@ curr_cmd = paste("plink --bfile",paste(job_dir,"merged_mega_data_autosomal_eu_se
 run_plink_command(curr_cmd,curr_dir,paste("cooper_vs_gp_gwas_res",sep=""),
                   get_sh_prefix_one_node_specify_cpu_and_mem,Ncpu=8,mem_size=32000)
 
+# Print in fuma-compatible format
+out_files = list.files(curr_dir)
+out_files = out_files[grepl("logistic$",out_files)]
+for(ff in out_files){
+  res = read.table(paste(curr_dir,ff,sep=""),stringsAsFactors = F,header=T)
+  fuma_res = res[,c("CHR","BP","P")]
+  colnames(fuma_res) = c("chromosome","position","P-value")
+  write.table(fuma_res,file=paste(curr_dir,"fuma_",ff,sep=""),quote=F,col.names = T,row.names = F,
+              sep=" ")
+}
+
+####################################################################################################
+####################################################################################################
+####################################################################################################
+# Take the mega direct geno as is, EU samples and run GWAS for each PC
+curr_dir = paste(job_dir,"eu_gwas/",sep="")
+covs_file = paste(curr_dir,"all_covs_and_pheno.phe",sep="")
+curr_bfile = paste(job_dir,"merged_mega_data_autosomal_eu_selected",sep='')
+for (j in 1:10){
+  currname = paste("PC",j,sep="")
+  curr_cmd = paste("plink --bfile",curr_bfile,
+                   "--linear hide-covar",
+                   "--pheno",covs_file,
+                   "--pheno-name", paste("PC",j,sep=""),
+                   "--covar",covs_file,
+                   "--maf 0.01",
+                   "--covar-name sex",
+                   "--allow-no-sex --adjust",
+                   "--threads",4,
+                   "--out",paste(curr_dir,currname,sep="")
+  )
+  run_plink_command(curr_cmd,curr_dir,currname,
+                    get_sh_prefix_one_node_specify_cpu_and_mem,Ncpu=4,mem_size=16000)
+}
+
+# Create FUMA files
+out_files = list.files(curr_dir)
+out_files = out_files[grepl("linear$",out_files)]
+out_files = out_files[!grepl("fuma",out_files)]
+for(ff in out_files){
+  res = read.table(paste(curr_dir,ff,sep=""),stringsAsFactors = F,header=T)
+  fuma_res = res[,c("CHR","BP","P")]
+  colnames(fuma_res) = c("chromosome","position","P-value")
+  write.table(fuma_res,file=paste(curr_dir,"fuma_",ff,sep=""),quote=F,col.names = T,row.names = F,
+              sep=" ")
+  print(ff)
+}
+
+# Check the association with the cohort
+d = read.table(covs_file,header=T)
+pc_ps = c()
+for(j in 1:40){
+  curr_inds = d[,"Cohort"] == "2" | d[,"Cohort"]=="1"
+  p1 = compute_pc_vs_binary_variable_association_p(
+    pc = d[curr_inds,paste("PC",j,sep="")],y = d[curr_inds,"Cohort"],
+    test=wilcox.test
+  )
+  curr_inds = d[,"Cohort"] == "2" | d[,"Cohort"]=="genepool"
+  p2 = compute_pc_vs_binary_variable_association_p(
+    pc = d[curr_inds,paste("PC",j,sep="")],y = d[curr_inds,"Cohort"],
+    test=wilcox.test
+  )
+  curr_inds = d[,"Cohort"] == "1" | d[,"Cohort"]=="genepool"
+  p3 = compute_pc_vs_binary_variable_association_p(
+    pc = d[curr_inds,paste("PC",j,sep="")],y = d[curr_inds,"Cohort"],
+    test=wilcox.test
+  )
+  pc_ps = rbind(pc_ps,c(p1,p2,p3))
+}
+
+####################################################################################################
+####################################################################################################
+####################################################################################################
+
 ####################################################################################################
 ####################################################################################################
 ####################################################################################################

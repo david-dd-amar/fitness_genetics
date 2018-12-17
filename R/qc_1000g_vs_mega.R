@@ -128,6 +128,7 @@ for(chr in chrs){
                        inds[(x1 >=maf_thr2 & x2 < maf_thr1) | (x1 < maf_thr1 & x2 >= maf_thr2)]
   )
 }
+length(problematic_snps)
 
 # Merge each chromosome data
 for(chr in chrs){
@@ -215,7 +216,7 @@ cohorts2[rownames(d2)] = d2[,1]
 
 
 # Define EUR-descendants manually
-yy = pcax[,1] < 0 & pcax[,2]< -0.002
+yy = pcax[,1] < 0 & pcax[,2]< 0
 table(yy)
 table(yy,cohorts2[names(yy)])
 
@@ -262,13 +263,17 @@ curr_cohorts = cohorts2[rownames(new_pcax)]
 cooper_col = rep(NA,nrow(new_pcax))
 names(cooper_col) = rownames(new_pcax)
 cooper_col[curr_cohorts=="1"]  = 1
-cooper_col[curr_cohorts !="1" & curr_cohorts!= "2"]  = 2
+cooper_col[curr_cohorts !="1" & curr_cohorts!= "2" & curr_cohorts!= "3"]  = 2
 elite_col = rep(NA,nrow(new_pcax))
 names(elite_col) = rownames(new_pcax)
 elite_col[curr_cohorts=="2"]  = 1
-elite_col[curr_cohorts !="1" & curr_cohorts!= "2"]  = 2
+elite_col[curr_cohorts !="1" & curr_cohorts!= "2" & curr_cohorts!= "3"]  = 2
+gp_col = rep(NA,nrow(new_pcax))
+names(gp_col) = rownames(gp_col)
+gp_col[curr_cohorts=="3"]  = 1
+gp_col[curr_cohorts !="1" & curr_cohorts!= "2" & curr_cohorts!= "3"]  = 2
 
-covs = cbind(curr_fam[rownames(new_pcax),],sex,new_pcax,cooper_col,elite_col)
+covs = cbind(curr_fam[rownames(new_pcax),],sex,new_pcax,cooper_col,elite_col,gp_col)
 colnames(covs)[1:2] = c("FID","IID")
 covs_file = "our_subjects_covs.phe"
 write.table(covs,file=paste(curr_path,covs_file,sep=""),
@@ -306,6 +311,21 @@ for(chr in chrs){
   run_plink_command(curr_cmd,curr_path,paste("elite_gwas_res_",chr,sep=""),
                     get_sh_prefix_one_node_specify_cpu_and_mem,Ncpu=4,mem_size=16000)
 }
+for(chr in chrs){
+  curr_cmd = paste("plink --bfile",paste(out_path,"merged_",chr,sep=''),
+                   "--logistic hide-covar",
+                   "--pheno",covs_file,
+                   "--pheno-name gp_col",
+                   "--covar",covs_file,
+                   "--maf 0.01",
+                   "--covar-name sex,PC1,PC2,PC3,PC4,PC5,PC6,PC7,PC8,PC9,PC10",
+                   "--allow-no-sex --adjust",
+                   "--threads",4,
+                   "--out",paste(curr_path,"gp_gwas_res_",chr,sep="")
+  )
+  run_plink_command(curr_cmd,curr_path,paste("gp_gwas_res_",chr,sep=""),
+                    get_sh_prefix_one_node_specify_cpu_and_mem,Ncpu=4,mem_size=16000)
+}
 
 # Merge the results into single files
 res_files = paste(curr_path,"elite_gwas_res_",chrs,".assoc.logistic",sep="")
@@ -321,6 +341,17 @@ for(j in 1:length(res_files)){
 # Merge the results into single files
 res_files = paste(curr_path,"cooper_gwas_res_",chrs,".assoc.logistic",sep="")
 res_file = paste(curr_path,"cooper_gwas_res_all.assoc",sep="")
+for(j in 1:length(res_files)){
+  if(j==1){
+    system(paste("less",res_files[j],">",res_file))
+  }
+  if(j>1){
+    system(paste("less",res_files[j],"| grep -v SNP >>",res_file))
+  }
+}
+# GP: Merge the results into single files
+res_files = paste(curr_path,"gp_gwas_res_",chrs,".assoc.logistic",sep="")
+res_file = paste(curr_path,"gp_gwas_res_all.assoc",sep="")
 for(j in 1:length(res_files)){
   if(j==1){
     system(paste("less",res_files[j],">",res_file))
@@ -346,11 +377,21 @@ res = res[,c("SNP","P")]
 colnames(res) = c("rsID","P-value")
 write.table(res,file=res_file2,col.names = T,row.names = F,quote = F,sep=" ")
 
+res_file = paste(curr_path,"gp_gwas_res_all.assoc",sep="")
+res_file2 = paste(curr_path,"fuma_gp_gwas_res_all.assoc",sep="")
+res = read.table(res_file,header=T,stringsAsFactors = F)
+res_gp=res
+res = res[,c("SNP","P")]
+colnames(res) = c("rsID","P-value")
+write.table(res,file=res_file2,col.names = T,row.names = F,quote = F,sep=" ")
+
 rownames(res_cooper) = res_cooper$SNP
 rownames(res_elite) = res_elite$SNP
-snps = intersect(res_cooper$SNP,res_elite$SNP)
+rownames(res_gp) = res_gp$SNP
+snps = intersect(res_gp$SNP,res_elite$SNP)
 x1 = res_cooper[snps,"P"]
 x2 = res_elite[snps,"P"]
+x2 = res_gp[snps,"P"]
 table(x1<1e-5,x2<1e-5)
 
 d = read.table(paste(curr_path,"our_subjects_covs.phe",sep=""),header=T)
@@ -425,12 +466,20 @@ source("~/Desktop/repos/fitness_genetics/R/gwas_flow_helper_functions.R")
 
 pcax = read_pca_res("run_pca.eigenvec")
 d = read.table("/Users/David/Desktop/elite/november2018_analysis/qc_1000g/all_cohorts.phe",header=T,stringsAsFactors = F)
+d = read.table("integrated_sample_metadata_and_covariates.phe",header=T,stringsAsFactors = F)
 rownames(d) = d$IID
+d2 = read.table("/Users/David/Desktop/elite/november2018_analysis/qc_1000g/integrated_call_samples_v3.20130502.ALL.panel"
+                ,stringsAsFactors=F,header=T)
 inds = intersect(rownames(d),rownames(pcax))
 d = d[inds,]
 dim(d)
-d2 = read.table("/Users/David/Desktop/elite/november2018_analysis/qc_1000g/integrated_call_samples_v3.20130502.ALL.panel"
-                ,stringsAsFactors=F,header=T)
+
+CohortName = d$Cohort
+table(CohortName)
+CohortName[CohortName=="1"]="Cooper"
+CohortName[CohortName=="2"]="ELITE"
+d = cbind(d,CohortName)
+d$CohortName = as.character(d$CohortName)
 
 cohorts1 = c(d$CohortName,d2[,2])
 names(cohorts1) = c(rownames(d),d2[,1])
@@ -442,7 +491,7 @@ pcax = pcax[names(cohorts1),]
 
 # PCA plots
 inds = rownames(pcax)
-inds = names(cohorts2)[cohorts2=="elite" | cohorts2=="cooper" | cohorts2=="EUR"]
+# inds = names(cohorts2)[cohorts2=="elite" | cohorts2=="cooper" | cohorts2=="EUR"]
 res = two_d_plot_visualize_covariate(pcax[inds,1],pcax[inds,2],cohorts2[inds],cohorts2[inds],
       main = "All filters",xlab="PC1",ylab="PC2",lwd=2)
 legend(x="topright",names(res[[1]]),fill = res[[1]])
@@ -503,15 +552,27 @@ table(cv_res[,1]>0.5,cv_res[,2])
 
 res_cooper = read.table("fuma_cooper_gwas_res_all.assoc",stringsAsFactors = F,header=T,row.names = 1)
 res_elite = read.table("fuma_elite_gwas_res_all.assoc",stringsAsFactors = F,header=T,row.names = 1)
-inds = intersect(rownames(res_cooper),rownames(res_elite))
+res_gp = read.table("fuma_gp_gwas_res_all.assoc",stringsAsFactors = F,header=T,row.names = 1)
 
+inds = intersect(rownames(res_cooper),rownames(res_elite))
 qqplot(y=-log(res_cooper$P.value,10),x=-log(runif(100000),10),pch=20,
        ylab="Sample quantiles",xlab="Theoretic quantiles");abline(0,1)
 qqplot(y=-log(res_elite$P.value,10),x=-log(runif(100000),10),pch=20,
        ylab="Sample quantiles",xlab="Theoretic quantiles");abline(0,1)
 
-plot(y=-log(res_elite[inds,"P.value"],10),x=-log(res_cooper[inds,"P.value"],10),pch=20,
-       ylab="ELITE p-value",xlab="Cooper p-value");abline(0,1)
+inds = intersect(inds,rownames(res_gp))
+qqplot(y=-log(res_cooper$P.value,10),x=-log(runif(100000),10),pch=20,
+       ylab="Sample quantiles",xlab="Theoretic quantiles");abline(0,1)
+qqplot(y=-log(res_elite$P.value,10),x=-log(runif(100000),10),pch=20,
+       ylab="Sample quantiles",xlab="Theoretic quantiles");abline(0,1)
+qqplot(y=-log(res_gp$P.value,10),x=-log(runif(100000),10),pch=20,
+       ylab="Sample quantiles",xlab="Theoretic quantiles");abline(0,1)
+
+plot(y=-log(res_gp[inds,"P.value"],10),x=-log(res_elite[inds,"P.value"],10),pch=20,
+       ylab="GP p-value",xlab="ELITE p-value");abline(0,1)
+
+table(res_gp[inds,"P.value"] < 10^-5,res_elite[inds,"P.value"]<10^-5 )
+na.omit(inds[res_gp[inds,"P.value"] < 10^-5])
 
 # qqplot(y=-log(res_cooper$P.value,10),x=-log(runif(100000),10),pch=20,
 #        ylab="Sample quantiles",xlab="Theoretic quantiles",

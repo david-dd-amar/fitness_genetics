@@ -1,29 +1,39 @@
-# We do a quick QC analysis of selected chromosomes
-# Our goal is to illustrate that intra-eur population structure
-# is crucial for the analysis of our dataset
-# The analysis here is straightforward. We select data from three chromosomes,
-# take only snps that are not palindromic and appear in both datasets.
-# We then merge the datasets and do PCA.
-# All analyses are done using plink.
-
-# ASSUMPTIONS: dataset1 is 1000g, dataset2 is mega-related dataset AFTER running
-# check_bim. Thus, most alleles should be matched by now.
+# This script implements what we call "QC1" in our flow (see the presentation).
+# The goal here is to perform the safest analysis possible when comparing
+# our MEGA data to external databases (1000G and UKBB).
+#
+# The current analysis is semi-manual, comments within the code are very important.
+# In the future, if needed, we shall transform this into an automatic analysis.
+#
+# Briefly, we do a quick QC analysis. We match datasets by looking at
+# SNP ids only, we exclude SNPs that may require flipping and also palindromic SNPs.
+# We then do population analysis and GWAS.
+#
+# ASSUMPTIONS: dataset1 is 1000g, dataset2 is mega-related with or without running
+# check_bim. 
 
 # Load auxiliary functions
 script_file = "~/repos/fitness_genetics/R/gwas_flow_helper_functions.R"
 source(script_file)
-# Define the datasets to be analyzed
+
+# Define the datasets to be analyzed: vs 1000g
 dataset1 = "/oak/stanford/groups/euan/projects/fitness_genetics/1000g/"
-# dataset2 = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/mega_eu_imp_wo_jhu/with_ukbb/"
-# dataset2 = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl_mega_separate_recalls/by_chr/"
 dataset2 = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/mega_with_genepool/by_chr/"
 chrs = paste("chr",c(1:22),sep="")
 # define the output path
-out_path = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/qc/1000g_pop/"
 out_path = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/qc/1000g_vs_direct_mega/"
 system(paste("mkdir",out_path))
+external_data_cov_file = "/oak/stanford/groups/euan/projects/fitness_genetics/1000g/integrated_call_samples_v3.20130502.ALL.panel"
 
-# mega_covars_path = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl_mega_separate_recalls/integrated_sample_metadata_and_covariates.phe"
+# Define the datasets to be analyzed: vs ukbb
+dataset1 = "/oak/stanford/groups/euan/projects/fitness_genetics/ukbb/ukbb_direct_20k_rand_controls_sex_age/"
+dataset2 = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/mega_with_genepool/by_chr/"
+chrs = paste("chr",c(1:22),sep="")
+# define the output path
+out_path = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/qc/ukbb_vs_direct_mega/"
+system(paste("mkdir",out_path))
+external_data_cov_file = "/oak/stanford/groups/euan/projects/fitness_genetics/ukbb/20k_rand_controls_sex_age_with_info.txt"
+
 mega_covars_path = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/mega_with_genepool/integrated_sample_metadata_and_covariates.phe"
 
 is_snp_paly<-function(x){
@@ -148,7 +158,7 @@ for(chr in chrs){
 	curr_cmd = paste("plink --bfile",paste(out_path,"merged_",chr,sep=''),
                    "--threads 8",
                    "--maf 0.05",
-                   "--indep-pairwise 500 10",0.1,
+                   "--indep-pairwise 500 10",0.5,
                    "--out",paste(out_path,"merged_",chr,sep='')
 	)
 	run_plink_command(curr_cmd,out_path,curr_name,
@@ -219,34 +229,228 @@ for (k in 1:10){
   system(paste("sbatch",curr_sh_file))  
 }
 
+# #####################################################################################
+# #####################################################################################
+# #####################################################################################
+# # Run GWAS using selected admixture results 
+# selected_admx_result = paste(out_path,"admixture_output/merged_dataset.8.Q",sep="")
+# admx = read.table(selected_admx_result)
+# colnames(admx) = paste("admx",1:ncol(admx),sep="")
+# fam = read.table(paste(out_path,"merged_dataset.fam",sep=""),stringsAsFactors = F,row.names = 2)
+# rownames(admx) = rownames(fam)
+# 
+# # just for comparison, look at the pca
+# pcax = read_pca_res(paste(out_path,"run_pca.eigenvec",sep=""))
+# nrow(admx) == nrow(pcax)
+# all(rownames(admx)==rownames(pcax))
+# cor(pcax[,1:5],admx[,1:5])
+# 
+# admx = cbind(fam[,1:2],admx)
+# d2 = read.table(
+#   "/oak/stanford/groups/euan/projects/fitness_genetics/1000g/integrated_call_samples_v3.20130502.ALL.panel"
+#   ,stringsAsFactors=F,header=T,row.names = 1)
+# mega_covars = read.table(mega_covars_path,header=T)
+# rownames(mega_covars) = mega_covars[,2]
+# 
+# # put the covars in a single file
+# sex = rep(NA,nrow(admx));names(sex) = rownames(admx)
+# inds1 = intersect(names(sex),rownames(mega_covars))
+# sex[inds1] = mega_covars[inds1,"sex"]
+# inds2 = intersect(rownames(d2),names(sex))
+# sex[inds2] = d2[inds2,3]
+# sex[sex=="female"]="2";sex[sex=="male"]="1"
+# table(sex)
+# 
+# curr_cohorts = c(rownames(mega_covars),rownames(d2))
+# names(curr_cohorts) = curr_cohorts
+# curr_cohorts[rownames(mega_covars)] = mega_covars$Cohort
+# curr_cohorts[rownames(d2)] = d2[,1]
+# # a binary column for cooper vs 1000g
+# cooper_col = rep(NA,nrow(admx))
+# names(cooper_col) = rownames(admx)
+# cooper_col[curr_cohorts=="1"]  = 1
+# cooper_col[curr_cohorts !="1" & curr_cohorts!= "2" & curr_cohorts!= "3"]  = 2
+# # a binary column for elite vs 1000g
+# elite_col = rep(NA,nrow(admx))
+# names(elite_col) = rownames(admx)
+# elite_col[curr_cohorts=="2"]  = 1
+# elite_col[curr_cohorts !="1" & curr_cohorts!= "2" & curr_cohorts!= "3"]  = 2
+# # a binary column for gp vs 1000g
+# gp_col = rep(NA,nrow(admx))
+# names(gp_col) = rownames(gp_col)
+# gp_col[curr_cohorts=="3"]  = 1
+# gp_col[curr_cohorts !="1" & curr_cohorts!= "2" & curr_cohorts!= "3"]  = 2
+# 
+# covs = cbind(admx,sex,cooper_col,elite_col,gp_col)
+# colnames(covs)[1:2] = c("FID","IID")
+# covs[,2] = rownames(covs)
+# covs_file = paste(curr_path,"admx_subjects_covs.phe",sep="")
+# curr_path = paste(out_path,"admixture_gwas/",sep="")
+# system(paste("mkdir",curr_path))
+# write.table(covs,file=covs_file,
+#             row.names = F,col.names = T,quote=F,sep=" ")
+# 
+# cov_string = "--covar-name sex,admx1,admx2,admx3,admx4,admx5,admx6,admx7"
+# for(chr in chrs){
+#   curr_cmd = paste("plink --bfile",paste(out_path,"merged_",chr,sep=''),
+#                    "--logistic hide-covar",
+#                    "--pheno",covs_file,
+#                    "--pheno-name cooper_col",
+#                    "--covar",covs_file,
+#                    "--maf 0.01",
+#                    cov_string,
+#                    "--allow-no-sex --adjust",
+#                    "--threads",4,
+#                    "--out",paste(curr_path,"cooper_gwas_res",chr,sep="")
+#   )
+#   run_plink_command(curr_cmd,curr_path,paste("cooper_gwas_res",chr,sep=""),
+#                     get_sh_prefix_one_node_specify_cpu_and_mem,Ncpu=4,mem_size=16000)
+# }
+# for(chr in chrs){
+#   curr_cmd = paste("plink --bfile",paste(out_path,"merged_",chr,sep=''),
+#                    "--logistic hide-covar",
+#                    "--pheno",covs_file,
+#                    "--pheno-name elite_col",
+#                    "--covar",covs_file,
+#                    "--maf 0.01",
+#                    cov_string,
+#                    "--allow-no-sex --adjust",
+#                    "--threads",4,
+#                    "--out",paste(curr_path,"elite_gwas_res",chr,sep="")
+#   )
+#   run_plink_command(curr_cmd,curr_path,paste("elite_gwas_res",chr,sep=""),
+#                     get_sh_prefix_one_node_specify_cpu_and_mem,Ncpu=4,mem_size=16000)
+# }
+# for(chr in chrs){
+#   curr_cmd = paste("plink --bfile",paste(out_path,"merged_",chr,sep=''),
+#                    "--logistic hide-covar",
+#                    "--pheno",covs_file,
+#                    "--pheno-name gp_col",
+#                    "--covar",covs_file,
+#                    "--maf 0.01",
+#                    cov_string,
+#                    "--allow-no-sex --adjust",
+#                    "--threads",4,
+#                    "--out",paste(curr_path,"gp_gwas_res",chr,sep="")
+#   )
+#   run_plink_command(curr_cmd,curr_path,paste("gp_gwas_res",chr,sep=""),
+#                     get_sh_prefix_one_node_specify_cpu_and_mem,Ncpu=4,mem_size=16000)
+# }
+# wait_for_job(240)
+# 
+# concatenate_res_files<-function(res_files,res_file){
+#   for(j in 1:length(res_files)){
+#     if(j==1){
+#       system(paste("less",res_files[j],">",res_file))
+#     }
+#     if(j>1){
+#       system(paste("less",res_files[j],"| grep -v SNP >>",res_file))
+#     }
+#   }
+# }
+# 
+# get_lambda_from_log_file<-function(f){
+#   l = readLines(f)
+#   s = l[grepl(" = ",l)][1]
+#   if(length(s)==0 || is.na(s) || nchar(s)==0){return(NA)}
+#   s = strsplit(s,split=" = ")[[1]][2]
+#   s = substr(s,start = 1,stop = 5)
+#   return(as.numeric(s))
+# }
+# 
+# res_files = paste(curr_path,"elite_gwas_res",chrs,".assoc.logistic",sep="")
+# res_file = paste(curr_path,"elite_gwas_res_all.assoc",sep="")
+# concatenate_res_files(res_files,res_file)
+# res_files = paste(curr_path,"cooper_gwas_res",chrs,".assoc.logistic",sep="")
+# res_file = paste(curr_path,"cooper_gwas_res_all.assoc",sep="")
+# concatenate_res_files(res_files,res_file)
+# res_files = paste(curr_path,"gp_gwas_res",chrs,".assoc.logistic",sep="")
+# res_file = paste(curr_path,"gp_gwas_res_all.assoc",sep="")
+# concatenate_res_files(res_files,res_file)
+# 
+# all_log_files = list.files(curr_path)
+# all_log_files = all_log_files[grepl("log$",all_log_files)]
+# setwd(curr_path)
+# all_lambdas = sapply(all_log_files,get_lambda_from_log_file)
+# for(cc in c("elite","cooper","gp")){
+#   curr_files = all_log_files[grepl(cc,all_log_files)]
+#   print(paste(cc,mean(all_lambdas[curr_files],na.rm=T)))
+# }
+# 
+# file2pvals = c()
+# res_file = paste(curr_path,"elite_gwas_res_all.assoc",sep="")
+# res_file2 = paste(curr_path,"fuma_elite_gwas_res_all.assoc",sep="")
+# res = read.table(res_file,header=T,stringsAsFactors = F)
+# res = res[,c("SNP","P")]
+# colnames(res) = c("rsID","P-value")
+# write.table(res,file=res_file2,col.names = T,row.names = F,quote = F,sep=" ")
+# p = res[,2];names(p) = res[,1]
+# file2pvals[[res_file]] = p
+# res_file = paste(curr_path,"cooper_gwas_res_all.assoc",sep="")
+# res_file2 = paste(curr_path,"fuma_cooper_gwas_res_all.assoc",sep="")
+# res = read.table(res_file,header=T,stringsAsFactors = F)
+# res = res[,c("SNP","P")]
+# colnames(res) = c("rsID","P-value")
+# write.table(res,file=res_file2,col.names = T,row.names = F,quote = F,sep=" ")
+# p = res[,2];names(p) = res[,1]
+# file2pvals[[res_file]] = p
+# res_file = paste(curr_path,"gp_gwas_res_all.assoc",sep="")
+# res_file2 = paste(curr_path,"fuma_gp_gwas_res_all.assoc",sep="")
+# res = read.table(res_file,header=T,stringsAsFactors = F)
+# res = res[,c("SNP","P")]
+# colnames(res) = c("rsID","P-value")
+# write.table(res,file=res_file2,col.names = T,row.names = F,quote = F,sep=" ")
+# p = res[,2];names(p) = res[,1]
+# file2pvals[[res_file]] = p
+# 
+# table_after_name_matching <-function(x1,x2,thr){
+#   inds = intersect(names(x1),names(x2))
+#   table(x1[inds] < thr, x2[inds]<thr)
+# }
+# table_after_name_matching(file2pvals[[3]],file2pvals[[2]],1e-6)
 
 #####################################################################################
 #####################################################################################
 #####################################################################################
+curr_path = paste(out_path,"gwas_eu/",sep="")
+
 pcax = read_pca_res(paste(out_path,"run_pca.eigenvec",sep=""))
-d2 = read.table("/oak/stanford/groups/euan/projects/fitness_genetics/1000g/integrated_call_samples_v3.20130502.ALL.panel"
-                ,stringsAsFactors=F,header=T,row.names = 1)
+# For 1000G metadata
+d2 = read.table(external_data_cov_file,stringsAsFactors=F,header=T,row.names = 1)
+# For UKBB metadata
+d2 = read.table(external_data_cov_file,stringsAsFactors=F,header=F,row.names = 1)
+
 mega_covars = read.table(mega_covars_path,header=T)
 rownames(mega_covars) = mega_covars[,2]
 
+# Define pheno: 1000G
 cohorts2 = c(rownames(mega_covars),d2[,1])
 names(cohorts2) = cohorts2
 cohorts2[rownames(mega_covars)] = mega_covars$Cohort
 cohorts2[rownames(d2)] = d2[,1]
 
-
-# Define EUR-descendants manually
-yy = pcax[,1] < 0 & pcax[,2]< 0
+# Define EUR-descendants manually - 1000G QC1
+yy = pcax[,1] < -0.004 & pcax[,2]< -0.003
 table(yy)
 table(yy,cohorts2[names(yy)])
 
-# For Cooper and Elite, define the subjects are rerun the PCA
+# Define pheno: UKBB
+cohorts2 = c(rownames(mega_covars),rownames(d2))
+names(cohorts2) = cohorts2
+cohorts2[rownames(mega_covars)] = as.character(mega_covars$Cohort)
+cohorts2[rownames(d2)] = "ukbb"
+cohorts2[cohorts2=="1"] = "cooper"
+cohorts2[cohorts2=="2"] = "elite"
+table(cohorts2)
+
+# Define EUR-descendants manually - UKBB QC1
+yy = pcax[,1] < 0.005 & pcax[,2]< 0.03 & pcax[,2] > -0.03
+table(yy,cohorts2[names(yy)])
+
+# Define the selected subjects for PCA rerun
 our_subjects = names(yy)[yy]
 curr_fam = read.table(paste(out_path,"merged_dataset.fam",sep=''))
 curr_fam = curr_fam[is.element(curr_fam[,2],set=our_subjects),]
-dim(curr_fam)
-
-curr_path = paste(out_path,"gwas_eu/",sep="")
 system(paste("mkdir",curr_path))
 write.table(curr_fam,file=paste(curr_path,"our_subjects.txt",sep=""),
             row.names = F,col.names = F,quote=F,sep=" ")
@@ -265,7 +469,7 @@ run_plink_command(curr_cmd,curr_path,curr_name,
                   get_sh_prefix_one_node_specify_cpu_and_mem,Ncpu=16,mem_size=64000)
 wait_for_job()
 
-# put the covars in a single file
+# Put the covars in a single file: 1000G
 new_pcax  = read_pca_res(paste(curr_path,"rerun_pca.eigenvec",sep=""))
 rownames(curr_fam) = curr_fam[,2]
 sex = rep(NA,nrow(new_pcax))
@@ -278,7 +482,7 @@ table(sex)
 sex[sex=="female"]="2"
 sex[sex=="male"]="1"
 table(sex)
-
+# Define the subcohorts and the pheno files
 curr_cohorts = cohorts2[rownames(new_pcax)]
 cooper_col = rep(NA,nrow(new_pcax))
 names(cooper_col) = rownames(new_pcax)
@@ -289,9 +493,39 @@ names(elite_col) = rownames(new_pcax)
 elite_col[curr_cohorts=="2"]  = 1
 elite_col[curr_cohorts !="1" & curr_cohorts!= "2" & curr_cohorts!= "3"]  = 2
 gp_col = rep(NA,nrow(new_pcax))
-names(gp_col) = rownames(gp_col)
+names(gp_col) = rownames(new_pcax)
 gp_col[curr_cohorts=="3"]  = 1
 gp_col[curr_cohorts !="1" & curr_cohorts!= "2" & curr_cohorts!= "3"]  = 2
+
+# Put the covars in a single file: UKBB
+# Jan 2019: Notice that "2" in our UKBB file is male - this does not fit plink's code
+# so we reverse it in the script below
+new_pcax  = read_pca_res(paste(curr_path,"rerun_pca.eigenvec",sep=""))
+rownames(curr_fam) = curr_fam[,2]
+sex = rep(NA,nrow(new_pcax))
+names(sex) = rownames(new_pcax)
+inds1 = intersect(names(sex),rownames(mega_covars))
+sex[inds1] = mega_covars[inds1,"sex"]
+inds2 = intersect(rownames(d2),names(sex))
+sex[inds2] = d2[inds2,1]
+table(sex)
+sex[sex=="female"]="1"
+sex[sex=="male"]="2"
+table(sex)
+# Define the subcohorts and the pheno files
+curr_cohorts = cohorts2[rownames(new_pcax)]
+cooper_col = rep(NA,nrow(new_pcax))
+names(cooper_col) = rownames(new_pcax)
+cooper_col[curr_cohorts == "cooper"]  = 1
+cooper_col[curr_cohorts == "ukbb"]  = 2
+elite_col = rep(NA,nrow(new_pcax))
+names(elite_col) = rownames(new_pcax)
+elite_col[curr_cohorts=="elite"]  = 1
+elite_col[curr_cohorts == "ukbb"]  = 2
+gp_col = rep(NA,nrow(new_pcax))
+names(gp_col) = rownames(new_pcax)
+gp_col[curr_cohorts=="genepool"]  = 1
+gp_col[curr_cohorts == "ukbb"]  = 2
 
 covs = cbind(curr_fam[rownames(new_pcax),],sex,new_pcax,cooper_col,elite_col,gp_col)
 colnames(covs)[1:2] = c("FID","IID")
@@ -302,6 +536,7 @@ write.table(covs,file=paste(curr_path,covs_file,sep=""),
 curr_path = paste(out_path,"gwas_eu/",sep="")
 covs_file = paste(curr_path,"our_subjects_covs.phe",sep="")
 
+# Run the GWAS: try different numbers of PCs
 for(num_pcs in 0:5){
   cov_string = "--covar-name sex"
   if(num_pcs > 0){
@@ -352,41 +587,29 @@ for(num_pcs in 0:5){
     run_plink_command(curr_cmd,curr_path,paste("gp_gwas_res_pcs",num_pcs,"_",chr,sep=""),
                       get_sh_prefix_one_node_specify_cpu_and_mem,Ncpu=4,mem_size=16000)
   }
-  
 }
 
 # Merge the results into single files
+concatenate_res_files<-function(res_files,res_file){
+  for(j in 1:length(res_files)){
+    if(j==1){
+      system(paste("less",res_files[j],">",res_file))
+    }
+    if(j>1){
+      system(paste("less",res_files[j],"| grep -v SNP >>",res_file))
+    }
+  }
+}
 for(num_pcs in 0:5){
   res_files = paste(curr_path,"elite_gwas_res_pcs",num_pcs,"_",chrs,".assoc.logistic",sep="")
   res_file = paste(curr_path,"elite_gwas_res_all_pcs",num_pcs,".assoc",sep="")
-  for(j in 1:length(res_files)){
-    if(j==1){
-      system(paste("less",res_files[j],">",res_file))
-    }
-    if(j>1){
-      system(paste("less",res_files[j],"| grep -v SNP >>",res_file))
-    }
-  }
+  concatenate_res_files(res_files,res_file)
   res_files = paste(curr_path,"cooper_gwas_res_pcs",num_pcs,"_",chrs,".assoc.logistic",sep="")
   res_file = paste(curr_path,"cooper_gwas_res_all_pcs",num_pcs,".assoc",sep="")
-  for(j in 1:length(res_files)){
-    if(j==1){
-      system(paste("less",res_files[j],">",res_file))
-    }
-    if(j>1){
-      system(paste("less",res_files[j],"| grep -v SNP >>",res_file))
-    }
-  }
+  concatenate_res_files(res_files,res_file)
   res_files = paste(curr_path,"gp_gwas_res_pcs",num_pcs,"_",chrs,".assoc.logistic",sep="")
   res_file = paste(curr_path,"gp_gwas_res_all_pcs",num_pcs,".assoc",sep="")
-  for(j in 1:length(res_files)){
-    if(j==1){
-      system(paste("less",res_files[j],">",res_file))
-    }
-    if(j>1){
-      system(paste("less",res_files[j],"| grep -v SNP >>",res_file))
-    }
-  }
+  concatenate_res_files(res_files,res_file)
 }
 
 get_lambda_from_log_file<-function(f){
@@ -455,7 +678,7 @@ for(cc in c("elite","cooper","gp")){
     curr_file2 = names(file2pvals)[grepl(paste("pcs",num_pcs,sep=""),names(file2pvals)) & grepl(cc,names(file2pvals))]
     currp = file2pvals[[curr_file2]]
     m = rbind(m,c(cc,num_pcs,all_lambdas[curr_file1][1],
-          median(all_lambdas[curr_file1],na.rm=T),sum(currp < 1e-7,na.rm = T),
+          median(all_lambdas[curr_file1],na.rm=T),sum(currp < 1e-8,na.rm = T),
           median(currp,na.rm=T)))
   }
 }
@@ -540,16 +763,23 @@ intersect(curr_PC_snps,rownames(direct_g))
 ####################################################################################################
 ####################################################################################################
 # Locally
+# 1000G direct analysis
 setwd("/Users/David/Desktop/elite/november2018_analysis/qc_1000g_mega_direct/")
+d2 = read.table(
+  "/Users/David/Desktop/elite/november2018_analysis/qc_1000g/integrated_call_samples_v3.20130502.ALL.panel"
+  ,stringsAsFactors=F,header=T)
+
+# UKBB direct analysis
+setwd("/Users/David/Desktop/elite/november2018_analysis/qc_ukbb_direct/")
+d2 = read.table("20k_rand_controls_sex_age_with_info.txt",stringsAsFactors=F,header=F,row.names = 1)
+
 source("~/Desktop/repos/fitness_genetics/R/gwas_flow_helper_functions.R")
 
 pcax = read_pca_res("run_pca.eigenvec")
 # d = read.table("/Users/David/Desktop/elite/november2018_analysis/qc_1000g/all_cohorts.phe",header=T,stringsAsFactors = F)
-d = read.table("integrated_sample_metadata_and_covariates.phe",header=T,stringsAsFactors = F)
-d = read.table("our_subjects_covs.phe",header=T,stringsAsFactors = F)
+d = read.table("../qc_1000g_mega_direct/integrated_sample_metadata_and_covariates.phe",header=T,stringsAsFactors = F)
+# d = read.table("../qc_1000g_mega_direct/our_subjects_covs.phe",header=T,stringsAsFactors = F)
 rownames(d) = d$IID
-d2 = read.table("/Users/David/Desktop/elite/november2018_analysis/qc_1000g/integrated_call_samples_v3.20130502.ALL.panel"
-                ,stringsAsFactors=F,header=T)
 inds = intersect(rownames(d),rownames(pcax))
 d = d[inds,]
 dim(d)
@@ -561,6 +791,7 @@ CohortName[CohortName=="2"]="ELITE"
 d = cbind(d,CohortName)
 d$CohortName = as.character(d$CohortName)
 
+# Other cohorts: 1000G
 cohorts1 = c(d$CohortName,d2[,2])
 names(cohorts1) = c(rownames(d),d2[,1])
 cohorts2 = c(d$CohortName,d2[,3])
@@ -569,6 +800,7 @@ cohorts3 = c(d$CohortName,rep("1000g",nrow(d2)))
 names(cohorts3) = c(rownames(d),d2[,1])
 pcax = pcax[names(cohorts1),]
 
+# Cohorts for analysis using our_subjects_covs.phe
 cohorts_new = d[,c("cooper_col","elite_col","gp_col")]
 cohorts_new[is.na(cohorts_new)] = "NA"
 cohorts_new[cohorts_new[,1]==1,1] = "cooper"
@@ -581,30 +813,39 @@ cohorts_new [cohorts_new=="NA"]="gp"
 names(cohorts_new) = c(rownames(d),d2[,1])
 pcax = d[,paste("PC",1:40,sep="")]
 
+# Other cohorts: UKBB
+cohorts_all = d$CohortName
+names(cohorts_all) = rownames(d)
+cohorts_all[rownames(d2)]="UKBB"
+table(cohorts_all)
+length(intersect(rownames(pcax),names(cohorts_all)))
+
 # PCA plots
 inds = rownames(pcax)
 curr_cohorts = cohorts_new
 curr_cohorts = cohorts3
+curr_cohorts = cohorts_all
+
 # inds = names(cohorts2)[cohorts2=="elite" | cohorts2=="cooper" | cohorts2=="EUR"]
 res = two_d_plot_visualize_covariate(pcax[inds,1],pcax[inds,2],curr_cohorts[inds],curr_cohorts[inds],
-      main = "All filters",xlab="PC1",ylab="PC2",lwd=2)
-legend(x="topright",names(res[[1]]),fill = res[[1]])
-
-res = two_d_plot_visualize_covariate(pcax[inds,3],pcax[inds,4],curr_cohorts[inds],curr_cohorts[inds],
-      main = "All filters",xlab="PC3",ylab="PC4",lwd=2)
+      main = "All filters",xlab="PC1",ylab="PC2",lwd=3,cex=0.1)
 legend(x="bottomleft",names(res[[1]]),fill = res[[1]])
 
+res = two_d_plot_visualize_covariate(pcax[inds,3],pcax[inds,4],curr_cohorts[inds],curr_cohorts[inds],
+      main = "All filters",xlab="PC3",ylab="PC4",lwd=2,cex=0.1)
+legend(x="bottomright",names(res[[1]]),fill = res[[1]])
+
 res = two_d_plot_visualize_covariate(pcax[inds,5],pcax[inds,6],curr_cohorts[inds],curr_cohorts[inds],
-      main = "All filters",xlab="PC5",ylab="PC6",lwd=2)
+      main = "All filters",xlab="PC5",ylab="PC6",lwd=3,cex=0.01)
 legend(x="topright",names(res[[1]]),fill = res[[1]])
 table(pcax[,5] > 0.05)
 
 res = two_d_plot_visualize_covariate(pcax[inds,7],pcax[inds,8],curr_cohorts[inds],curr_cohorts[inds],
-    main = "All filters",xlab="PC7",ylab="PC8",lwd=2)
+    main = "All filters",xlab="PC7",ylab="PC8",lwd=2,cex=0.1)
 legend(x="topright",names(res[[1]]),fill = res[[1]])
 
 res = two_d_plot_visualize_covariate(pcax[inds,9],pcax[inds,10],curr_cohorts[inds],curr_cohorts[inds],
-    main = "All filters",xlab="PC9",ylab="PC10",lwd=2)
+    main = "All filters",xlab="PC9",ylab="PC10",lwd=2,cex=0.1)
 legend(x="bottomleft",names(res[[1]]),fill = res[[1]])
 
 res = two_d_plot_visualize_covariate(pcax[inds,11],pcax[inds,12],curr_cohorts[inds],curr_cohorts[inds],
@@ -616,22 +857,20 @@ res = two_d_plot_visualize_covariate(pcax[inds,13],pcax[inds,14],curr_cohorts[in
 legend(x="bottomleft",names(res[[1]]),fill = res[[1]])
 
 # Define EUR-descendants manually
-yy = pcax[,1] < 0 & pcax[,2]< -0
+yy = pcax[,1] < 0.005 & pcax[,2]< 0.03 & pcax[,2] > -0.03
 table(yy,curr_cohorts[names(yy)])
-table(yy,cohorts1[names(yy)])
-table(yy)
 
 res = two_d_plot_visualize_covariate(pcax[inds,1],pcax[inds,2],yy[inds],yy[inds],
-  main = "All filters",xlab="PC1",ylab="PC2",lwd=2)
+  main = "All filters",xlab="PC1",ylab="PC2",lwd=2,cex=0.1)
 legend(x="topright",names(res[[1]]),fill = res[[1]])
 
 
 # Do the pcs perfectly predict the group?
-y = as.factor(cohorts3=="ukbb")
+y = as.factor(curr_cohorts=="ukbb")
 y = as.factor(cohorts3=="elite")
 y = as.factor(cohorts3=="cooper")
 y = as.factor(cohorts3=="1000g")
-x = pcax[,1:40]
+x = pcax[,1:10]
 logistic_d = data.frame(y,x)
 cv_res = c()
 folds = sample(rep(1:10,length(y)/10))[1:length(y)]

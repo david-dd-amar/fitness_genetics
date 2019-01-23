@@ -1,9 +1,14 @@
 
 # Input
-external_files_path = "/oak/stanford/groups/euan/projects/ukbb/data/genetic_data/v2/plink_small/"
+# imputed
+# external_files_path = "/oak/stanford/groups/euan/projects/ukbb/data/genetic_data/v2/plink_small/" # imputed
+# analysis_name = "ukbb_imputed_20k_rand_controls_sex_age"
+# direct
+external_files_path = "/oak/stanford/groups/euan/projects/ukbb/data/genetic_data/v2/plink_dir_genotype/" # direct
+analysis_name = "ukbb_direct_20k_rand_controls_sex_age"
+# metadata
 external_control_ids = "/oak/stanford/groups/euan/projects/fitness_genetics/ukbb/20k_rand_controls_sex_age.txt"
 external_covars_path = "/oak/stanford/groups/euan/projects/fitness_genetics/ukbb/20k_rand_controls_sex_age_with_info.txt"
-analysis_name = "ukbb_imputed_20k_rand_controls_sex_age"
 
 # set the output dir
 out_path = "/oak/stanford/groups/euan/projects/fitness_genetics/ukbb/"
@@ -14,7 +19,7 @@ if(analysis_name != ""){
   system(paste("mkdir",out_path))
 }
 
-script_file = "/oak/stanford/groups/euan/projects/fitness_genetics/scripts/fitness_genetics/R/gwas_flow_helper_functions.R"
+script_file = "~/repos/fitness_genetics/R/gwas_flow_helper_functions.R"
 source(script_file)
 
 ####################################################################################################
@@ -57,8 +62,11 @@ curr_cmd = paste("plink --bfile",all_out_bed_files[1],
 curr_sh_file = "merged_control_beds.sh"
 print_sh_file(paste(out_path,curr_sh_file,sep=''),
               get_sh_prefix_bigmem(err_path,log_path,Ncpu=1,mem_size=256000),curr_cmd)
+# print_sh_file(paste(out_path,curr_sh_file,sep=''),
+#              get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,Ncpu=4,mem_size=32000),curr_cmd)
 system(paste("sbatch",paste(out_path,curr_sh_file,sep='')))
-wait_for_job()
+wait_for_job(120)
+
 all_out_bed_files = list.files(out_path)
 all_out_bed_files = all_out_bed_files[grepl(".bed$",all_out_bed_files)]
 system(paste("rm ",out_path,"merge_geno_chr*",sep=""))
@@ -120,7 +128,10 @@ curr_cmd = paste("perl", paste(out_path, "HRC-1000G-check-bim-NoReadKey.pl",sep=
 curr_sh_file = "run_check_bim2.sh"
 print_sh_file(paste(out_path,curr_sh_file,sep=''),
               get_sh_prefix_bigmem(err_path,log_path,Ncpu=1,mem_size=256000),curr_cmd)
+# print_sh_file(paste(out_path,curr_sh_file,sep=''),
+#              get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,Ncpu=4,mem_size=64000),curr_cmd)
 system(paste("sbatch",paste(out_path,curr_sh_file,sep='')))
+wait_for_job(120)
 system(paste("less ",out_path,"Run-plink.sh | grep TEMP > ",out_path,"Run-plink_1000g.sh",sep=""))
 run_sh_lines = readLines(paste(out_path,"Run-plink_1000g.sh",sep=""))
 run_sh_lines = sapply(run_sh_lines,gsub,pattern = "-updated",replacement = "-1000g_updated")
@@ -133,6 +144,8 @@ plink_commands = readLines(paste(out_path,"Run-plink_1000g.sh",sep=""))
 curr_sh_file = "run_check_bim_update.sh"
 print_sh_file(paste(out_path,curr_sh_file,sep=''),
               get_sh_prefix_bigmem(err_path,log_path,Ncpu=1,mem_size=256000),plink_commands)
+# print_sh_file(paste(out_path,curr_sh_file,sep=''),
+#               get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,Ncpu=4,mem_size=64000),plink_commands)
 system(paste("sbatch",paste(out_path,curr_sh_file,sep='')))
 
 # ## MAF filter to reduce file size

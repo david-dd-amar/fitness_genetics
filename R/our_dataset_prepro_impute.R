@@ -2,7 +2,11 @@
 # Define input for flow
 script_file = "/home/users/davidama/repos/fitness_genetics/R/gwas_flow_helper_functions.R"
 source(script_file)
+# Without GP
 our_data_bed_path = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl_mega_separate_recalls/1000g/merged_mega_data_autosomal"
+# With GP
+our_data_bed_path = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/mega_with_genepool/1000g/merged_mega_data_autosomal"
+
 map_files_path = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/mega_eu_imp/1000g_data/1000GP_Phase3/"
 shapeit_path = "/home/users/davidama/apps/shapeit.v2.904.3.10.0-693.11.6.el7.x86_64/bin/shapeit"
 impute2_path = "/home/users/davidama/apps/impute2/impute_v2.3.2_x86_64_static/impute2"
@@ -13,6 +17,8 @@ ref_for_phasing = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/
 job_dir = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/mega_eu_imp/"
 # Exclude JHU
 job_dir = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/mega_eu_imp_wo_jhu/"
+# Include our direct geno as is: with genepool
+job_dir = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/mega_with_genepool_imp/"
 
 system(paste("mkdir",job_dir))
 
@@ -31,7 +37,7 @@ for (j in 1:22){
   log_path = paste("split",j,".log",sep="")
   curr_cmd = paste("plink --bfile",our_data_bed_path,
                    "--chr",j,
-                   "--exclude",paste(job_dir,"JHUs.txt",sep=""),
+                   # "--exclude",paste(job_dir,"JHUs.txt",sep=""),
                    "--make-bed --out",paste(j,sep=''))
   curr_sh_file = paste("split",j,".sh",sep="")
   print_sh_file(curr_sh_file,get_sh_default_prefix(err_path,log_path),curr_cmd)
@@ -186,6 +192,7 @@ for (j in 1:22){
 }
 wait_for_job(waittime = 60)
 wait_for_job(waittime = 60)
+load("tmp_chunck_files_per_chr.RData")
 
 ## Organazie the output
 
@@ -326,6 +333,12 @@ for(j in 1:22){
   exclude_snps_using_plink(bfile,to_rem,curr_out_path,curr_analysis_name,bfile)
 }
 
+############################################
+############################################
+############################################
+############################################
+
+# OPTIONAL: in case we want to merge with an external data source
 # 8. Run check bim vs 1000G before merge
 # 8.1 update the frq files
 for (j in 1:22){

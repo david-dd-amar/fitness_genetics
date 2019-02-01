@@ -1,6 +1,19 @@
+
+# In this script we go over our lab's different annotation files.
+# Our goal here is to map the DNA ids imprinted in the idat files to our
+# sample ids. Note that we do not analyze the genepool samples in detail. 
+# For this we have the script our_dataset_merge_with_gp_annotation, which
+# takes the output of this script and merge it with the different genepool
+# annotation sources. 
+#
+# Additional comments are given in line.
+
 # Locally: get the metadata and compare to Malene's metadata
 setwd("/Users/David/Desktop/elite/metadata/")
+options(java.parameters = "-Xmx8000m")
 library(xlsx)
+
+# Load idat metadata
 load('idats_metadata.RData')
 idats_metadata_table = t(sapply(idats_metadata,function(x)x))
 idats_dna_id = unname(idats_metadata_table[,5])
@@ -12,19 +25,20 @@ idat_barcodes = unname(sapply(idat_files,function(x){arr=strsplit(x,split='/')[[
 idat_locs = unname(idats_metadata_table[,3])
 names(idat_barcodes) = idats_dna_id
 names(idat_locs) = idats_dna_id
-idat_paths = unname(sapply(unique(idat_files),function(x){
-  arr=strsplit(x,split='/')[[1]];
-  n = length(arr)
-  paste(arr[1:(n-2)],collapse='/')
-}))
-unique(idat_paths)
-table(idat_paths)/2
-# test
-idats_dna_id[idat_barcodes=="200200980068" & idat_locs=="R02C01"]
-idats_dna_id[idat_barcodes=="201557580009" & idat_locs=="R02C01"]
-idats_dna_id[grepl("1391",idats_dna_id)]
-idats_dna_id[grepl("1390",idats_dna_id)]
+# # tests and stats
+# idat_paths = unname(sapply(unique(idat_files),function(x){
+#   arr=strsplit(x,split='/')[[1]];
+#   n = length(arr)
+#   paste(arr[1:(n-2)],collapse='/')
+# }))
+# unique(idat_paths)
+# table(idat_paths)/2
+# idats_dna_id[idat_barcodes=="200200980068" & idat_locs=="R02C01"]
+# idats_dna_id[idat_barcodes=="201557580009" & idat_locs=="R02C01"]
+# idats_dna_id[grepl("1391",idats_dna_id)]
+# idats_dna_id[grepl("1390",idats_dna_id)]
 
+#
 # Read metadata from different sources
 mdata_elite = read.xlsx2('Elite_Cooper_metadata.xlsx',1)
 mdata_cooper = read.xlsx2('Elite_Cooper_metadata.xlsx',2)
@@ -44,7 +58,6 @@ mdata_kirs = read.xlsx2("Stanford_Ashley_MEGAv2_n3484_DNAReport_Kirstie_dw.xlsx"
 try({mdata_kirs = read.delim("metadata/Stanford_Ashley_MEGAv2_n3484_DNAReport_Kirstie_dw.tsv")})
 
 ################# New script mapping sample ids to their idat files ##################
-library(xlsx)
 reverse_names<-function(x,remove_wo_names=T){
   v = names(x)
   names(v)=x
@@ -100,9 +113,9 @@ names(sample_id2dna_id_mainfile) = all_sample_data$Sample_ID
 clinical_id2sample_id = all_sample_data$Clinical_ID
 names(clinical_id2sample_id) = all_sample_data$Sample_ID
 clinical_id2sample_id = clinical_id2sample_id[clinical_id2sample_id!=""]
+alternate_id2sample_id = reverse_names(sample_id_to_alternate_id)
 alternate_id2sample_id = c(alternate_id2sample_id,clinical_id2sample_id)
 length(alternate_id2sample_id)
-alternate_id2sample_id = reverse_names(sample_id_to_alternate_id)
 
 # use the stanford3k file to map dna ids to sample ids
 dnaid2sampleid_st3k = as.character(mdata_st3k$FID)
@@ -173,6 +186,7 @@ print(length(unique(curr_dnaid2sample_id)))
 curr_dnaid2sample_id = remove_dup_results_in_mapping_vector(curr_dnaid2sample_id)
 print(length(curr_dnaid2sample_id))
 print(length(unique(curr_dnaid2sample_id)))
+
 # As of may 2018 this is empty:
 unmapped_but_in_mainfile = names(which(""==curr_dnaid2sample_id | is.na(curr_dnaid2sample_id)))
 print(dim(sample_id2idat_file))
@@ -217,7 +231,21 @@ sample_id2idat_file = cbind(sample_id2idat_file,m)
 table(sample_id2idat_file$Cohort)
 
 # print the file
+# Version 1:
 write.table(sample_id2idat_file,file="merged_metadata_file_stanford3k_elite_cooper.txt",quote=F,sep="\t")
+# Jan 2019: version 2 after correcting some mis-formatted sample ids
+write.table(sample_id2idat_file,file="merged_metadata_file_stanford3k_elite_cooper_v2_jan_2019.txt",quote=F,sep="\t")
+is.element("62E02",rownames(sample_id2idat_file))
+
+# # QC
+# # compare the two file versions: befor and after Jan 2019:
+# x1 = read.delim("merged_metadata_file_stanford3k_elite_cooper.txt",row.names = 1,stringsAsFactors = F)
+# x2 = read.delim("merged_metadata_file_stanford3k_elite_cooper_v2_jan_2019.txt",row.names = 1,stringsAsFactors = F)
+# setdiff(rownames(x2),rownames(x1))
+# inds = intersect(rownames(x2),rownames(x1))
+# all(x1[inds,]==x2[inds,],na.rm=T)
+# all(which(is.na(x1))==which(is.na(x2)))
+# sort(colSums(x1!=x2,na.rm=T))
 
 # # Get stats by cohorts
 # curr_rows = is.element(all_sample_data$Sample_ID,set=rownames(sample_id2idat_file))

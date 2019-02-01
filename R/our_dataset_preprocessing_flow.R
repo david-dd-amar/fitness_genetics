@@ -49,19 +49,18 @@ setwd(job_dir)
 # input_bfile1 = "/oak/stanford/groups/euan/projects/fitness_genetics/illu_processed_plink_data/no_reclustering/PLINK_fwd_strand/recall_may_2018_without_reclustering"
 # snp_report_file1 = "/oak/stanford/groups/euan/projects/fitness_genetics/illu_processed_plink_data/no_reclustering/reports/no_reclustering_SNP_Table.txt"
 # sample_report_file1 = "/oak/stanford/groups/euan/projects/fitness_genetics/illu_processed_plink_data/no_reclustering/reports/no_reclustering_Samples_Table.txt"
-# 1. MEGG: recalled alone
+# 1. MEGG: recalled alone (MEGG: MEGA global)
 ped_file1 = "/oak/stanford/groups/euan/projects/fitness_genetics/illu_processed_plink_data/no_reclustering/non_MEGA_Cons_recall/raw.ped"
 map_file1 = "/oak/stanford/groups/euan/projects/fitness_genetics/illu_processed_plink_data/no_reclustering/non_MEGA_Cons_recall/raw.map"
 input_bfile1 = "/oak/stanford/groups/euan/projects/fitness_genetics/illu_processed_plink_data/no_reclustering/non_MEGA_Cons_recall/raw"
 snp_report_file1 = "/oak/stanford/groups/euan/projects/fitness_genetics/illu_processed_plink_data/no_reclustering/non_MEGA_Cons_recall/SNP_Table.txt"
 sample_report_file1 = "/oak/stanford/groups/euan/projects/fitness_genetics/illu_processed_plink_data/no_reclustering/non_MEGA_Cons_recall/Samples_Table.txt"
-# 2. MEGC
+# 2. MEGC (MEGA Consortium)
 ped_file2 = "/oak/stanford/groups/euan/projects/fitness_genetics/illu_processed_plink_data/no_reclustering/MEGA_Consortium_recall/plink_test_mega_consortium_data.ped"
 map_file2 = "/oak/stanford/groups/euan/projects/fitness_genetics/illu_processed_plink_data/no_reclustering/MEGA_Consortium_recall/plink_test_mega_consortium_data.map"
 input_bfile2 = "/oak/stanford/groups/euan/projects/fitness_genetics/illu_processed_plink_data/no_reclustering/MEGA_Consortium_recall/plink_test_mega_consortium_data"
 snp_report_file2 = "/oak/stanford/groups/euan/projects/fitness_genetics/illu_processed_plink_data/no_reclustering/MEGA_Consortium_recall/SNP_Table.txt"
 sample_report_file2 = "/oak/stanford/groups/euan/projects/fitness_genetics/illu_processed_plink_data/no_reclustering/MEGA_Consortium_recall/Samples_Table.txt"
-
 bad_snps_file = "/oak/stanford/groups/euan/projects/fitness_genetics/bad_mega_snps.txt"
 
 # Our metadata
@@ -624,6 +623,22 @@ all(names(imputed_sex) == fam_samples[,2])
 
 final_sample_set_pheno = cbind(sample_metadata_raw[ids,],missinigness_report[ids,"F_MISS"],imputed_sex[ids])
 save(final_sample_set_pheno,file=paste(job_dir,"final_sample_set_pheno.RData",sep=""))
+
+# Samples: put all filtered samples in one file 
+load("final_sample_set_pheno.RData")
+sample_metadata_raw_ids = paste(sample_metadata_raw[,1],sample_metadata_raw[,2],sep="_")
+S1 = intersect(rownames(sample_data1),sample_metadata_raw_ids)
+S2 = intersect(rownames(sample_data2),sample_metadata_raw_ids)
+removed1 = setdiff(S1,rownames(final_sample_set_pheno))
+removed2 = setdiff(S2,rownames(final_sample_set_pheno))
+gp_samples = sample_metadata_raw_ids[sample_metadata_raw$Cohort=="genepool"]
+removed1 = setdiff(removed1,gp_samples)
+removed2 = setdiff(removed2,gp_samples)
+removed = union(removed1,removed2)
+xx = sample_metadata_raw
+removed_info = xx[is.element(sample_metadata_raw_ids,removed),1:10]
+write.table(removed_info,file="removed_samples_info.txt",sep="\t",row.names = F,col.names = T,quote=F)
+
 ####################################################################################################
 ####################################################################################################
 ####################################################################################################

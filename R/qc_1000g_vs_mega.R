@@ -684,7 +684,6 @@ for(cc in c("elite","cooper","gp")){
 }
 write.table(m,quote=F,row.names=F,sep="\t")
 
-
 rownames(res_cooper) = res_cooper$SNP
 rownames(res_elite) = res_elite$SNP
 rownames(res_gp) = res_gp$SNP

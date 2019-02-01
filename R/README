@@ -1,0 +1,19 @@
+# Description of the scripts in this project.
+
+# Scripts that merge and handle metadata
+# 1. integrate_elite_cooper_mega_metadata.R
+      use: idats_metadata.RData (derived using test_idat_illuio.R in archive)
+           'Elite_Cooper_metadata.xlsx' or 'fitness_genetics_ashleylab_metadata.xlsx' sheets Cooper and Elite from May 2018
+           "stanford3k_metadata2.txt"
+           "Stanford_Ashley_MEGAv2_n3484_DNAReport_Kirstie_dw.xlsx"
+           '1092_samples_report_1.csv'
+           '485_samples_report_2.csv'
+      Creates a file with a prefix "merged_metadata_file_stanford3k_elite_cooper"
+# 2. our_dataset_merge_with_gp_annotation.R
+
+# Scripts for GWAS data preprocessing
+# 1. our_data_preprocessing_flow.R
+# 2. our_dataset_prepro_impute.R
+
+# Scripts for running GWAS
+

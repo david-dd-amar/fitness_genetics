@@ -71,7 +71,7 @@ elite_col[curr_cohorts !="1" & curr_cohorts!= "2"]  = 2
 mega_covars = cbind(mega_covars,elite_col,cooper_col)
 
 # write the pheno file
-covs_file = paste(out_path,"pheno.phe")
+covs_file = paste(out_path,"pheno.phe",sep="")
 write.table(mega_covars,file=covs_file,row.names = F,col.names = T,quote=F,sep=" ")
 
 ############################################################################
@@ -90,7 +90,7 @@ for(num_pcs in 0:5){
                      "--pheno",covs_file,
                      "--pheno-name cooper_col",
                      "--covar",covs_file,
-                     "--maf 0.05",
+                     "--maf 0.05 --all-pheno",
                      cov_string,
                      "--allow-no-sex --adjust",
                      "--threads",4,
@@ -105,7 +105,7 @@ for(num_pcs in 0:5){
                      "--pheno",covs_file,
                      "--pheno-name elite_col",
                      "--covar",covs_file,
-                     "--maf 0.05",
+                     "--maf 0.05 --all-pheno",
                      cov_string,
                      "--allow-no-sex --adjust",
                      "--threads",4,

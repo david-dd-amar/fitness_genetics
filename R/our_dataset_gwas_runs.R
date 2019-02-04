@@ -4,14 +4,11 @@ source(script_file)
 
 dataset = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/mega_with_genepool_imp/impute2_1000gRef_out/"
 chrs = paste("chr",c(1:22),sep="")
-out_path = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/mega_with_genepool_imp/gwas_res_v1/"
-system(paste("mkdir",out_path))
 
 # This is the project's raw annotation file
 mega_covars_path_raw = "/oak/stanford/groups/euan/projects/fitness_genetics/metadata/merged_metadata_file_stanford3k_elite_cooper_with_gp.txt"
 # This is a file with imputed sex, computed by our_dataset_prepricessing_flow.R
 mega_covars_path = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/mega_with_genepool/integrated_sample_metadata_and_covariates.phe"
-
 
 ############################################################################
 ############################################################################
@@ -19,8 +16,18 @@ mega_covars_path = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis
 # These files determine the subject sets and their PCA (i.e., use EU or not)
 # All
 pca_results = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/mega_with_genepool/merged_mega_data_autosomal.eigenvec"
+out_path = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/mega_with_genepool_imp/gwas_res_v1/"
+system(paste("mkdir",out_path))
+
 # EU
 pca_results = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/mega_with_genepool/eu_gwas/merged_mega_data_autosomal.eigenvec"
+out_path = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/mega_with_genepool_imp/gwas_res_eu_v1/"
+system(paste("mkdir",out_path))
+
+# EU
+pca_results = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/mega_with_genepool/eu_gwas/merged_mega_data_autosomal.eigenvec"
+out_path = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/mega_with_genepool_imp/gwas_res_eu_v1_wo_age/"
+system(paste("mkdir",out_path))
 
 
 ############################################################################
@@ -54,9 +61,9 @@ mega_covars = mega_covars[,!grepl("^PC",colnames(mega_covars))]
 colnames(mega_covars)[grepl("Ethni",colnames(mega_covars))] = "Ethnicity"
 mega_covars[gp_samples,"Ethnicity"] = mega_anno[gp_samples,"Ethnicity"]
 pcax = read_pca_res(pca_results)
-mega_covars = mega_covars[rownames(pcax),]
+mega_covars = mega_covars[rownames(pcax),c(1:5,7:10,14:15,21:24,27)]
+mega_covars[mega_covars==""]=NA
 mega_covars = cbind(mega_covars,pcax)
-
 
 # Define the subcohorts and the pheno files
 curr_cohorts = mega_covars$Cohort
@@ -74,10 +81,20 @@ mega_covars = cbind(mega_covars,elite_col,cooper_col)
 covs_file = paste(out_path,"pheno.phe",sep="")
 write.table(mega_covars,file=covs_file,row.names = F,col.names = T,quote=F,sep=" ")
 
+cooper_pheno_file = paste(out_path,"cooper_pheno.phe",sep="")
+write.table(mega_covars[!is.na(cooper_col),c("FID","IID","cooper_col")],file=cooper_pheno_file,row.names = F,col.names = T,quote=F,sep=" ")
+
+elite_pheno_file = paste(out_path,"elite_pheno.phe",sep="")
+write.table(mega_covars[!is.na(elite_col),c("FID","IID","elite_col")],file=elite_pheno_file,row.names = F,col.names = T,quote=F,sep=" ")
+
+# # Make sure the covars file fits the fam file
+# all(curr_fam[,1]==mega_covars[,1])
+# all(curr_fam[,2]==mega_covars[,2])
+
 ############################################################################
 ############################################################################
 # Run the GWAS: try different numbers of PCs
-for(num_pcs in 0:5){
+for(num_pcs in 0:7){
   cov_string = "--covar-name sex,age"
   if(num_pcs > 0){
     cov_string = paste("--covar-name sex,age,",paste("PC",1:num_pcs,sep="",collapse=","),sep="")
@@ -85,34 +102,34 @@ for(num_pcs in 0:5){
   curr_path = paste(out_path,"gwas_num_pcs_",num_pcs,"/",sep="")
   system(paste("mkdir",curr_path))
   for(chr in chrs){
-    curr_cmd = paste("plink --bfile",paste(dataset,chr,sep=''),
-                     "--logistic hide-covar",
-                     "--pheno",covs_file,
+    curr_cmd = paste("plink2 --bfile",paste(dataset,chr,sep=''),
+                     "--logistic firth-fallback hide-covar",
+                     "--pheno",cooper_pheno_file,
                      "--pheno-name cooper_col",
                      "--covar",covs_file,
-                     "--maf 0.05 --all-pheno",
+                     "--maf 0.05",
                      cov_string,
                      "--allow-no-sex --adjust",
                      "--threads",4,
                      "--out",paste(curr_path,"cooper_gwas_res_pcs",num_pcs,"_",chr,sep="")
     )
     run_plink_command(curr_cmd,curr_path,paste("cooper_gwas_res_pcs",num_pcs,"_",chr,sep=""),
-                      get_sh_prefix_one_node_specify_cpu_and_mem,Ncpu=4,mem_size=16000)
+                      get_sh_prefix_one_node_specify_cpu_and_mem,Ncpu=4,mem_size=16000,plink_pkg="plink/2.0a1")
   }
   for(chr in chrs){
-    curr_cmd = paste("plink --bfile",paste(dataset,chr,sep=''),
-                     "--logistic hide-covar",
-                     "--pheno",covs_file,
+    curr_cmd = paste("plink2 --bfile",paste(dataset,chr,sep=''),
+                     "--logistic firth-fallback hide-covar",
+                     "--pheno",elite_pheno_file,
                      "--pheno-name elite_col",
                      "--covar",covs_file,
-                     "--maf 0.05 --all-pheno",
+                     "--maf 0.05",
                      cov_string,
                      "--allow-no-sex --adjust",
                      "--threads",4,
                      "--out",paste(curr_path,"elite_gwas_res_pcs",num_pcs,"_",chr,sep="")
     )
     run_plink_command(curr_cmd,curr_path,paste("elite_gwas_res_pcs",num_pcs,"_",chr,sep=""),
-                      get_sh_prefix_one_node_specify_cpu_and_mem,Ncpu=4,mem_size=16000)
+                      get_sh_prefix_one_node_specify_cpu_and_mem,Ncpu=4,mem_size=16000,plink_pkg="plink/2.0a1")
   }
 }
 
@@ -127,15 +144,13 @@ concatenate_res_files<-function(res_files,res_file){
     }
   }
 }
-for(num_pcs in 0:5){
-  res_files = paste(curr_path,"elite_gwas_res_pcs",num_pcs,"_",chrs,".assoc.logistic",sep="")
+for(num_pcs in 0:7){
+  curr_path = paste(out_path,"gwas_num_pcs_",num_pcs,"/",sep="")
+  res_files = paste(curr_path,"elite_gwas_res_pcs",num_pcs,"_",chrs,".elite_col.glm.logistic.hybrid",sep="")
   res_file = paste(curr_path,"elite_gwas_res_all_pcs",num_pcs,".assoc",sep="")
   concatenate_res_files(res_files,res_file)
-  res_files = paste(curr_path,"cooper_gwas_res_pcs",num_pcs,"_",chrs,".assoc.logistic",sep="")
+  res_files = paste(curr_path,"cooper_gwas_res_pcs",num_pcs,"_",chrs,".cooper_col.glm.logistic.hybrid",sep="")
   res_file = paste(curr_path,"cooper_gwas_res_all_pcs",num_pcs,".assoc",sep="")
-  concatenate_res_files(res_files,res_file)
-  res_files = paste(curr_path,"gp_gwas_res_pcs",num_pcs,"_",chrs,".assoc.logistic",sep="")
-  res_file = paste(curr_path,"gp_gwas_res_all_pcs",num_pcs,".assoc",sep="")
   concatenate_res_files(res_files,res_file)
 }
 
@@ -147,15 +162,54 @@ get_lambda_from_log_file<-function(f){
   s = substr(s,start = 1,stop = 5)
   return(as.numeric(s))
 }
-all_log_files = list.files(curr_path)
-all_log_files = all_log_files[grepl("log$",all_log_files)]
-all_log_files = all_log_files[grepl("pcs",all_log_files)]
-setwd(curr_path)
-all_lambdas = sapply(all_log_files,get_lambda_from_log_file)
-for(cc in c("elite","cooper","gp")){
-  for(num_pcs in 0:5){
+
+all_lambdas = list()
+all_lambdas[["elite"]] = list()
+all_lambdas[["cooper"]] = list()
+for(cc in c("elite","cooper")){
+  for(num_pcs in 0:7){
+    curr_path = paste(out_path,"gwas_num_pcs_",num_pcs,"/",sep="")
+    all_log_files = list.files(curr_path)
+    all_log_files = all_log_files[grepl("log$",all_log_files)]
+    all_log_files = all_log_files[grepl("pcs",all_log_files)]
     curr_files = all_log_files[grepl(num_pcs,all_log_files) & grepl(cc,all_log_files)]
-    print(paste(cc,num_pcs,mean(all_lambdas[curr_files],na.rm=T)))
+    curr_files = paste(curr_path,curr_files,sep="")
+    curr_lambdas = sapply(curr_files, get_lambda_from_log_file)
+    print(paste(cc,num_pcs,mean(curr_lambdas,na.rm=T)))
+    all_lambdas[[cc]][[as.character(num_pcs)]]=curr_lambdas
   }
 }
+sapply(all_lambdas,sapply,median,na.rm=T)
+save(all_lambdas,file=paste(out_path,"all_lambdas.RData",sep=""))
+
+
+# reformat and write to fuma files
+file2pvals = c()
+for(num_pcs in 0:7){
+  curr_path = paste(out_path,"gwas_num_pcs_",num_pcs,"/",sep="")
+  res_file = paste(curr_path,"elite_gwas_res_all_pcs",num_pcs,".assoc",sep="")
+  res_file2 = paste(curr_path,"fuma_elite_gwas_res_all_pcs",num_pcs,".assoc",sep="")
+  res = read.table(res_file,header=T,stringsAsFactors = F,comment.char="")
+  ps = as.numeric(res[,"P"])
+  print(paste("elite",num_pcs,sum(ps<1e-8,na.rm=T)))
+  print(paste("elite",num_pcs,sum(ps<1e-6,na.rm=T)))
+  res = res[,c(1:2,ncol(res))]
+  colnames(res) = c("chromosome","position","P-value")
+  write.table(res,file=res_file2,col.names = T,row.names = F,quote = F,sep=" ")
+  file2pvals[[res_file]] = ps
+  
+  res_file = paste(curr_path,"cooper_gwas_res_all_pcs",num_pcs,".assoc",sep="")
+  res_file2 = paste(curr_path,"fuma_cooper_gwas_res_all_pcs",num_pcs,".assoc",sep="")
+  res = read.table(res_file,header=T,stringsAsFactors = F,comment.char="")
+  ps = as.numeric(res[,"P"])
+  print(paste("elite",num_pcs,sum(ps<1e-8,na.rm=T)))
+  print(paste("elite",num_pcs,sum(ps<1e-6,na.rm=T)))
+  res = res[,c(1:2,ncol(res))]
+  colnames(res) = c("chromosome","position","P-value")
+  write.table(res,file=res_file2,col.names = T,row.names = F,quote = F,sep=" ")
+  file2pvals[[res_file]] = ps
+  
+}
+
+
 

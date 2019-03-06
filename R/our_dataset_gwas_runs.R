@@ -94,10 +94,14 @@ write.table(mega_covars[!is.na(elite_col),c("FID","IID","elite_col")],file=elite
 ############################################################################
 ############################################################################
 # Run the GWAS: try different numbers of PCs
+covs_file = paste(out_path,"pheno.phe",sep="")
+cooper_pheno_file = paste(out_path,"cooper_pheno.phe",sep="")
+elite_pheno_file = paste(out_path,"elite_pheno.phe",sep="")
+
 for(num_pcs in 0:7){
-  cov_string = "--covar-name sex,age"
+  cov_string = "--covar-name sex"
   if(num_pcs > 0){
-    cov_string = paste("--covar-name sex,age,",paste("PC",1:num_pcs,sep="",collapse=","),sep="")
+    cov_string = paste("--covar-name sex,",paste("PC",1:num_pcs,sep="",collapse=","),sep="")
   }
   curr_path = paste(out_path,"gwas_num_pcs_",num_pcs,"/",sep="")
   system(paste("mkdir",curr_path))
@@ -107,7 +111,7 @@ for(num_pcs in 0:7){
                      "--pheno",cooper_pheno_file,
                      "--pheno-name cooper_col",
                      "--covar",covs_file,
-                     "--maf 0.05",
+                     "--maf 0.01",
                      cov_string,
                      "--allow-no-sex --adjust",
                      "--threads",4,
@@ -122,7 +126,7 @@ for(num_pcs in 0:7){
                      "--pheno",elite_pheno_file,
                      "--pheno-name elite_col",
                      "--covar",covs_file,
-                     "--maf 0.05",
+                     "--maf 0.01",
                      cov_string,
                      "--allow-no-sex --adjust",
                      "--threads",4,
@@ -187,12 +191,13 @@ save(all_lambdas,file=paste(out_path,"all_lambdas.RData",sep=""))
 file2pvals = c()
 for(num_pcs in 0:7){
   curr_path = paste(out_path,"gwas_num_pcs_",num_pcs,"/",sep="")
+  
   res_file = paste(curr_path,"elite_gwas_res_all_pcs",num_pcs,".assoc",sep="")
   res_file2 = paste(curr_path,"fuma_elite_gwas_res_all_pcs",num_pcs,".assoc",sep="")
   res = read.table(res_file,header=T,stringsAsFactors = F,comment.char="")
   ps = as.numeric(res[,"P"])
-  print(paste("elite",num_pcs,sum(ps<1e-8,na.rm=T)))
-  print(paste("elite",num_pcs,sum(ps<1e-6,na.rm=T)))
+  print(paste("elite 1e-8",num_pcs,sum(ps<1e-8,na.rm=T)))
+  print(paste("elite 1e-6",num_pcs,sum(ps<1e-6,na.rm=T)))
   res = res[,c(1:2,ncol(res))]
   colnames(res) = c("chromosome","position","P-value")
   write.table(res,file=res_file2,col.names = T,row.names = F,quote = F,sep=" ")
@@ -202,13 +207,12 @@ for(num_pcs in 0:7){
   res_file2 = paste(curr_path,"fuma_cooper_gwas_res_all_pcs",num_pcs,".assoc",sep="")
   res = read.table(res_file,header=T,stringsAsFactors = F,comment.char="")
   ps = as.numeric(res[,"P"])
-  print(paste("elite",num_pcs,sum(ps<1e-8,na.rm=T)))
-  print(paste("elite",num_pcs,sum(ps<1e-6,na.rm=T)))
+  print(paste("cooper 1e-8",num_pcs,sum(ps<1e-8,na.rm=T)))
+  print(paste("cooper 1e-6",num_pcs,sum(ps<1e-6,na.rm=T)))
   res = res[,c(1:2,ncol(res))]
   colnames(res) = c("chromosome","position","P-value")
   write.table(res,file=res_file2,col.names = T,row.names = F,quote = F,sep=" ")
   file2pvals[[res_file]] = ps
-  
 }
 
 

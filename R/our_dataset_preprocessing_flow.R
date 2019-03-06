@@ -64,6 +64,7 @@ sample_report_file2 = "/oak/stanford/groups/euan/projects/fitness_genetics/illu_
 bad_snps_file = "/oak/stanford/groups/euan/projects/fitness_genetics/bad_mega_snps.txt"
 
 # Our metadata
+# Assumes that the first two columns are barcode and position. Third column is our sample ID.
 sample_metadata = "/oak/stanford/groups/euan/projects/fitness_genetics/metadata/merged_metadata_file_stanford3k_elite_cooper.txt"
 sample_metadata_raw = read.delim(sample_metadata,stringsAsFactors = F)
 sample_metadata_raw = correct_dups_in_sample_metadata(sample_metadata_raw)
@@ -854,6 +855,7 @@ covariate_matrix = cbind(fam_samples[,1:2],sample_metadata_raw[subjects_for_anal
 
 # Correct some columns to make them easier to work with plink
 covariate_matrix[covariate_matrix==""] = NA
+covariate_matrix[covariate_matrix=="_"] = NA
 covariate_matrix$Shipment.date[is.na(covariate_matrix$Shipment.date)] = "uknown"
 covariate_matrix$Cohort[covariate_matrix$Cohort=="ELITE"] = "2"
 covariate_matrix$Cohort[covariate_matrix$Cohort=="Cooper"] = "1"
@@ -908,8 +910,13 @@ print("After selecting the EUs, data sizes are:")
 print(paste("number of samples:",length(readLines(paste(job_dir,"merged_mega_data_autosomal_eu_selected.fam",sep="")))))
 print(paste("number of snps:",length(readLines(paste(job_dir,"merged_mega_data_autosomal_eu_selected.bim",sep="")))))
 ids = read.table(paste(job_dir,"merged_mega_data_autosomal_eu_selected.fam",sep=""),stringsAsFactors = F)[,2]
-print(paste("number of cooper samples in this file:",sum(sample_metadata_raw[ids,"Cohort"]!="Cooper",na.rm = T)))
+print(paste("number of ELITE samples in this file:",sum(sample_metadata_raw[ids,"Cohort"]=="ELITE",na.rm = T)))
 print(paste("number of cooper samples in this file:",sum(sample_metadata_raw[ids,"Cohort"]=="Cooper",na.rm = T)))
+print(paste("number of genepool samples in this file:",sum(sample_metadata_raw[ids,"Cohort"]=="genepool",na.rm = T)))
+
+curr_gp_data = sample_metadata_raw[ids,]
+curr_gp_data = curr_gp_data[curr_gp_data[,"Cohort"]=="genepool",]
+table(is.na(curr_gp_data$Age..at.test.)) 
 
 # Load covariates, create a new dir for GWAS and reruns of PCA
 curr_dir = paste(job_dir,"eu_gwas/",sep="")
@@ -962,7 +969,7 @@ new_pca = read_pca_res(paste(curr_dir,"merged_mega_data_autosomal.eigenvec",sep=
 nrow(new_pca) == length(intersect(rownames(new_pca),rownames(covariate_matrix)))
 new_pca = new_pca[rownames(covariate_matrix),]
 covariate_matrix[,paste("PC",1:40,sep="")] = new_pca
-
+covariate_matrix[covariate_matrix=="_"] = NA
 write.table(covariate_matrix,file=paste(curr_dir,"all_covs_and_pheno.phe",sep=""),row.names=F,
                                         col.names = T,sep=" ",quote=F)
 
@@ -974,7 +981,7 @@ curr_cmd = paste("plink --bfile",paste(job_dir,"merged_mega_data_autosomal_eu_se
                  "--pheno-name elite_vs_gp",
                  "--covar",covs_file,
                  "--maf 0.01",
-                 "--covar-name sex,PC1,PC2,PC3,PC4,PC5,PC6,PC7,PC8,PC9,PC10",
+                 "--covar-name sex,age,PC1,PC2,PC3,PC4,PC5",
                  "--allow-no-sex --adjust",
                  "--threads",8,
                  "--out",paste(curr_dir,"elite_vs_gp_gwas_res",sep="")
@@ -988,7 +995,7 @@ curr_cmd = paste("plink --bfile",paste(job_dir,"merged_mega_data_autosomal_eu_se
                  "--pheno-name cooper_vs_gp",
                  "--covar",covs_file,
                  "--maf 0.01",
-                 "--covar-name sex,PC1,PC2,PC3,PC4,PC5,PC6,PC7,PC8,PC9,PC10",
+                 "--covar-name sex,age,PC1,PC2,PC3,PC4,PC5",
                  "--allow-no-sex --adjust",
                  "--threads",8,
                  "--out",paste(curr_dir,"cooper_vs_gp_gwas_res",sep="")
@@ -1001,74 +1008,78 @@ out_files = list.files(curr_dir)
 out_files = out_files[grepl("logistic$",out_files)]
 for(ff in out_files){
   res = read.table(paste(curr_dir,ff,sep=""),stringsAsFactors = F,header=T)
+  print("####")
+  print(table(as.numeric(res[,"P"]<1e-7)))
+  print(table(as.numeric(res[,"P"]<5e-8)))
+  print("####")
   fuma_res = res[,c("CHR","BP","P")]
   colnames(fuma_res) = c("chromosome","position","P-value")
   write.table(fuma_res,file=paste(curr_dir,"fuma_",ff,sep=""),quote=F,col.names = T,row.names = F,
               sep=" ")
 }
 
-####################################################################################################
-####################################################################################################
-####################################################################################################
-# Take the mega direct geno as is, EU samples and run GWAS for each PC
-curr_dir = paste(job_dir,"eu_gwas/",sep="")
-covs_file = paste(curr_dir,"all_covs_and_pheno.phe",sep="")
-curr_bfile = paste(job_dir,"merged_mega_data_autosomal_eu_selected",sep='')
-for (j in 1:10){
-  currname = paste("PC",j,sep="")
-  curr_cmd = paste("plink --bfile",curr_bfile,
-                   "--linear hide-covar",
-                   "--pheno",covs_file,
-                   "--pheno-name", paste("PC",j,sep=""),
-                   "--covar",covs_file,
-                   "--maf 0.01",
-                   "--covar-name sex",
-                   "--allow-no-sex --adjust",
-                   "--threads",4,
-                   "--out",paste(curr_dir,currname,sep="")
-  )
-  run_plink_command(curr_cmd,curr_dir,currname,
-                    get_sh_prefix_one_node_specify_cpu_and_mem,Ncpu=4,mem_size=16000)
-}
-
-# Create FUMA files
-out_files = list.files(curr_dir)
-out_files = out_files[grepl("linear$",out_files)]
-out_files = out_files[!grepl("fuma",out_files)]
-for(ff in out_files){
-  res = read.table(paste(curr_dir,ff,sep=""),stringsAsFactors = F,header=T)
-  fuma_res = res[,c("CHR","BP","P")]
-  colnames(fuma_res) = c("chromosome","position","P-value")
-  write.table(fuma_res,file=paste(curr_dir,"fuma_",ff,sep=""),quote=F,col.names = T,row.names = F,
-              sep=" ")
-  print(ff)
-}
-
-# Check the association with the cohort
-d = read.table(covs_file,header=T)
-pc_ps = c()
-for(j in 1:40){
-  curr_inds = d[,"Cohort"] == "2" | d[,"Cohort"]=="1"
-  p1 = compute_pc_vs_binary_variable_association_p(
-    pc = d[curr_inds,paste("PC",j,sep="")],y = d[curr_inds,"Cohort"],
-    test=wilcox.test
-  )
-  curr_inds = d[,"Cohort"] == "2" | d[,"Cohort"]=="genepool"
-  p2 = compute_pc_vs_binary_variable_association_p(
-    pc = d[curr_inds,paste("PC",j,sep="")],y = d[curr_inds,"Cohort"],
-    test=wilcox.test
-  )
-  curr_inds = d[,"Cohort"] == "1" | d[,"Cohort"]=="genepool"
-  p3 = compute_pc_vs_binary_variable_association_p(
-    pc = d[curr_inds,paste("PC",j,sep="")],y = d[curr_inds,"Cohort"],
-    test=wilcox.test
-  )
-  pc_ps = rbind(pc_ps,c(p1,p2,p3))
-}
-
-####################################################################################################
-####################################################################################################
-####################################################################################################
+# ####################################################################################################
+# ####################################################################################################
+# ####################################################################################################
+# # Take the mega direct geno as is, EU samples and run GWAS for each PC
+# curr_dir = paste(job_dir,"eu_gwas/",sep="")
+# covs_file = paste(curr_dir,"all_covs_and_pheno.phe",sep="")
+# curr_bfile = paste(job_dir,"merged_mega_data_autosomal_eu_selected",sep='')
+# for (j in 1:10){
+#   currname = paste("PC",j,sep="")
+#   curr_cmd = paste("plink --bfile",curr_bfile,
+#                    "--linear hide-covar",
+#                    "--pheno",covs_file,
+#                    "--pheno-name", paste("PC",j,sep=""),
+#                    "--covar",covs_file,
+#                    "--maf 0.01",
+#                    "--covar-name sex",
+#                    "--allow-no-sex --adjust",
+#                    "--threads",4,
+#                    "--out",paste(curr_dir,currname,sep="")
+#   )
+#   run_plink_command(curr_cmd,curr_dir,currname,
+#                     get_sh_prefix_one_node_specify_cpu_and_mem,Ncpu=4,mem_size=16000)
+# }
+# 
+# # Create FUMA files
+# out_files = list.files(curr_dir)
+# out_files = out_files[grepl("linear$",out_files)]
+# out_files = out_files[!grepl("fuma",out_files)]
+# for(ff in out_files){
+#   res = read.table(paste(curr_dir,ff,sep=""),stringsAsFactors = F,header=T)
+#   fuma_res = res[,c("CHR","BP","P")]
+#   colnames(fuma_res) = c("chromosome","position","P-value")
+#   write.table(fuma_res,file=paste(curr_dir,"fuma_",ff,sep=""),quote=F,col.names = T,row.names = F,
+#               sep=" ")
+#   print(ff)
+# }
+# 
+# # Check the association with the cohort
+# d = read.table(covs_file,header=T)
+# pc_ps = c()
+# for(j in 1:40){
+#   curr_inds = d[,"Cohort"] == "2" | d[,"Cohort"]=="1"
+#   p1 = compute_pc_vs_binary_variable_association_p(
+#     pc = d[curr_inds,paste("PC",j,sep="")],y = d[curr_inds,"Cohort"],
+#     test=wilcox.test
+#   )
+#   curr_inds = d[,"Cohort"] == "2" | d[,"Cohort"]=="genepool"
+#   p2 = compute_pc_vs_binary_variable_association_p(
+#     pc = d[curr_inds,paste("PC",j,sep="")],y = d[curr_inds,"Cohort"],
+#     test=wilcox.test
+#   )
+#   curr_inds = d[,"Cohort"] == "1" | d[,"Cohort"]=="genepool"
+#   p3 = compute_pc_vs_binary_variable_association_p(
+#     pc = d[curr_inds,paste("PC",j,sep="")],y = d[curr_inds,"Cohort"],
+#     test=wilcox.test
+#   )
+#   pc_ps = rbind(pc_ps,c(p1,p2,p3))
+# }
+# 
+# ####################################################################################################
+# ####################################################################################################
+# ####################################################################################################
 
 ####################################################################################################
 ####################################################################################################
@@ -1133,8 +1144,8 @@ print_sh_file(paste(curr_dir,curr_sh_file,sep=''),
 system(paste("sbatch",paste(curr_dir,curr_sh_file,sep='')))
 wait_for_job()
 system(paste("less ",curr_dir,"Run-plink.sh | grep TEMP > ",curr_dir,"Run-plink_hrc.sh",sep=""))
-run_sh_lines[1] = gsub(paste("plink --bfile",curr_bfile),paste("plink --bfile ",job_dir,curr_bfile,sep=""),run_sh_lines[1])
 run_sh_lines = readLines(paste(curr_dir,"Run-plink_hrc.sh",sep=""))
+run_sh_lines[1] = gsub(paste("plink --bfile",curr_bfile),paste("plink --bfile ",job_dir,curr_bfile,sep=""),run_sh_lines[1])
 run_sh_lines = sapply(run_sh_lines,gsub,pattern = "-updated",replacement = "")
 err_path = paste(curr_dir,"run_check_bim_update.err",sep="")
 log_path = paste(curr_dir,"run_check_bim_update.log",sep="")

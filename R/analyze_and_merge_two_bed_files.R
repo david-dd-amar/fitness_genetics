@@ -270,17 +270,68 @@ if(!use_qctool){
                      "--make-bed --out",paste(out_path,"chr",j,sep=''))
     curr_sh_file = paste(out_path,"chr",j,".sh",sep="")
     print_sh_file(curr_sh_file,
-                  get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,Ncpu=4,mem_size=32000),curr_cmd)
+                  get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,Ncpu=4,mem_size=32000),
+                  curr_cmd)
     system(paste("sbatch",curr_sh_file))  
   }
 }
 
+###################################################################################################
+###################################################################################################
+###################################################################################################
+###################################################################################################
+# Run flipscan: assumption - we now have a set of merged bfiles, one per chromosome
 
-###################################################################################################
-###################################################################################################
-###################################################################################################
-###################################################################################################
-# Run flipscan
+fam1 = as.matrix(read.table(paste(bfile1,".fam",sep=""),stringsAsFactors = F))
+fam2 = as.matrix(read.table(paste(bfile2,".fam",sep=""),stringsAsFactors = F))
+fam1 = cbind(fam1,rep("1",nrow(fam1)))
+fam2 = cbind(fam2,rep("2",nrow(fam2)))
+rownames(fam1)=NULL;colnames(fam1)=NULL
+rownames(fam2)=NULL;colnames(fam2)=NULL
+phe = rbind(fam1,fam2)
+phe = phe[,c(1:2,7)]
+colnames(phe) = c("FID","IID","merged")
+write.table(phe,file=paste(out_path,"flipscan_type.txt",sep=""),
+            sep=" ",quote=F,row.names = F,col.names = T)
+
+for(chr in 1:22){
+  # Run flipscan
+  err_path = paste(out_path,"chr",chr,"_flipscan.err",sep="")
+  log_path = paste(out_path,"chr",chr,"_flipscan.log",sep="")
+  curr_cmd = paste("plink --bfile",paste(out_path,"chr",chr,sep=''),
+                   "--flip-scan --allow-no-sex",
+                   "--pheno",paste(out_path,"flipscan_type.txt",sep=""),
+                   "--pheno-name merged",
+                   "--out",paste(out_path,"chr",chr,"_merged_data_flipscan",sep=''))
+  curr_sh_file = paste("chr",chr,"_mega_flipscan.sh",sep="")
+  print_sh_file(paste(out_path,curr_sh_file,sep=''),
+                get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,Ncpu=4,mem_size=32000),curr_cmd)
+  system(paste("sbatch",paste(out_path,curr_sh_file,sep='')))
+}
+wait_for_job(120)
+
+# Read the flipscan results, exclude snps
+excluded_snps_flipscan = c()
+for(chr in 1:22){
+  flipscan_res = readLines(paste(out_path,"chr",chr,"_merged_data_flipscan.flipscan",sep=''))
+  arrs = strsplit(flipscan_res[-1],split="\\s+")
+  names(arrs) = sapply(arrs,function(x)x[3])
+  table(sapply(arrs,length))
+  flipscan_failures = sapply(arrs,length) > 11
+  flipscan_failures = sapply(arrs[flipscan_failures],function(x)x[3])
+  bim = read.table(paste(out_path,"chr",chr,".bim",sep=""),stringsAsFactors = F)
+  snps_to_keep = setdiff(bim[,2],flipscan_failures)
+  excluded_snps_flipscan = c(excluded_snps_flipscan,flipscan_failures)
+  print(paste("Flipscan check, number of variants to remove:",length(flipscan_failures)))
+  extract_snps_using_plink(paste(out_path,"chr",chr,sep=''), # bfile
+                           snps_to_keep,out_path, # list of snps to keep, output path
+                           "_final_snps_to_keep_after_flipscan", # the name for the tmp txt file
+                           paste(out_path,"chr",chr,sep=''), # output bfile
+                           batch_script_func=get_sh_prefix_one_node_specify_cpu_and_mem,
+                           Ncpu=4,mem_size=32000)
+}
+save(excluded_snps_flipscan,file=paste(out_path,"excluded_snps_flipscan.RData",sep=""))
+wait_for_job(60)
 
 
 

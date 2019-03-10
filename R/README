@@ -12,8 +12,14 @@
 # 2. our_dataset_merge_with_gp_annotation.R
 
 # Scripts for GWAS data preprocessing
-# 1. our_data_preprocessing_flow.R
-# 2. our_dataset_prepro_impute.R
+# 1. our_data_preprocessing_flow.R # Takes care of all QCs, phenotype files, and final bed files
+# 2. our_dataset_prepro_impute.R # If we want to impute ourself, otherwise use the Michigan server
+# 3. analyze_and_merge_two_bed_files.R # Takes two bed files after check_bim and creates merged bed files, by chromosome
 
 # Scripts for running GWAS
+# 1. our_dataset_gwas_runs.R - run GWAS on different versions of the imputed data
+# 2. ukbb_sample_vs_mega.R - our analysis that compares our samples to UKBB using GP results as a filter for false positives
+
+# Old scripts
+
 

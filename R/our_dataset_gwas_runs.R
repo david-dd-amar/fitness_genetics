@@ -40,6 +40,11 @@ pca_results = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/mega
 out_path = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/mega_with_genepool_imp/gwas_res_eu_mich_hrc/"
 system(paste("mkdir",out_path))
 
+# EU + Michigan impute + HRC
+pca_results = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/mega_with_genepool/eu_gwas/merged_mega_data_autosomal.eigenvec"
+out_path = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/mega_with_genepool_imp/gwas_res_eu_mich_1000g/"
+system(paste("mkdir",out_path))
+
 ############################################################################
 ############################################################################
 ############################################################################
@@ -234,13 +239,12 @@ concatenate_res_files<-function(res_files,res_file){
   }
 }
 
-
 for(num_pcs in 0:7){
   curr_path = paste(out_path,"gwas_num_pcs_",num_pcs,"/",sep="")
-  res_files = paste(curr_path,"elite_gwas_res_pcs",num_pcs,"_",chrs,".elite_col.glm.logistic.hybrid",sep="")
+  res_files = paste(curr_path,"elite_gwas_res_pcs",num_pcs,"_",chrs,".elite_vs_gp.glm.logistic.hybrid",sep="")
   res_file = paste(curr_path,"elite_gwas_res_all_pcs",num_pcs,".assoc",sep="")
   concatenate_res_files(res_files,res_file)
-  res_files = paste(curr_path,"cooper_gwas_res_pcs",num_pcs,"_",chrs,".cooper_col.glm.logistic.hybrid",sep="")
+  res_files = paste(curr_path,"cooper_gwas_res_pcs",num_pcs,"_",chrs,".cooper_vs_gp.glm.logistic.hybrid",sep="")
   res_file = paste(curr_path,"cooper_gwas_res_all_pcs",num_pcs,".assoc",sep="")
   concatenate_res_files(res_files,res_file)
 }
@@ -273,7 +277,6 @@ for(cc in c("elite","cooper")){
 sapply(all_lambdas,sapply,median,na.rm=T)
 save(all_lambdas,file=paste(out_path,"all_lambdas.RData",sep=""))
 
-
 # reformat and write to fuma files
 file2pvals = c()
 for(num_pcs in 0:7){
@@ -292,7 +295,9 @@ for(num_pcs in 0:7){
   
   res_file = paste(curr_path,"cooper_gwas_res_all_pcs",num_pcs,".assoc",sep="")
   res_file2 = paste(curr_path,"fuma_cooper_gwas_res_all_pcs",num_pcs,".assoc",sep="")
-  res = read.table(res_file,header=T,stringsAsFactors = F,comment.char="")
+  res=NULL
+  try({res = read.table(res_file,header=T,stringsAsFactors = F,comment.char="")})
+  if(is.null(res)){res = read.delim(res_file,header=T,stringsAsFactors = F,comment.char="")}
   ps = as.numeric(res[,"P"])
   print(paste("cooper 1e-8",num_pcs,sum(ps<1e-8,na.rm=T)))
   print(paste("cooper 1e-6",num_pcs,sum(ps<1e-6,na.rm=T)))

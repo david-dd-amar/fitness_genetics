@@ -157,8 +157,8 @@ for(chr in chrs){
 	curr_name = paste("ld_",chr,sep='')
 	curr_cmd = paste("plink --bfile",paste(out_path,"merged_",chr,sep=''),
                    "--threads 8",
-                   "--maf 0.05",
-                   "--indep-pairwise 500 10",0.5,
+                   "--maf 0.01",
+                   "--indep-pairwise 250 10",0.5,
                    "--out",paste(out_path,"merged_",chr,sep='')
 	)
 	run_plink_command(curr_cmd,out_path,curr_name,

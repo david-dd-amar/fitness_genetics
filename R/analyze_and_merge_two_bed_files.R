@@ -325,8 +325,8 @@ for(chr in 1:22){
   print(paste("Flipscan check, number of variants to remove:",length(flipscan_failures)))
   extract_snps_using_plink(paste(out_path,"chr",chr,sep=''), # bfile
                            snps_to_keep,out_path, # list of snps to keep, output path
-                           "_final_snps_to_keep_after_flipscan", # the name for the tmp txt file
-                           paste(out_path,"chr",chr,sep=''), # output bfile
+                           paste("_chr",chr,"_final_snps_to_keep_after_flipscan",sep=""), # the name for the tmp txt file
+                           paste("chr",chr,sep=''), # output bfile
                            batch_script_func=get_sh_prefix_one_node_specify_cpu_and_mem,
                            Ncpu=4,mem_size=32000)
 }

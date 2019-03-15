@@ -6,12 +6,8 @@ source(script_file)
 our_data_bed_path = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl_mega_separate_recalls/1000g/merged_mega_data_autosomal"
 # With GP
 our_data_bed_path = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/mega_with_genepool/1000g/merged_mega_data_autosomal"
-
-map_files_path = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/mega_eu_imp/1000g_data/1000GP_Phase3/"
-shapeit_path = "/home/users/davidama/apps/shapeit.v2.904.3.10.0-693.11.6.el7.x86_64/bin/shapeit"
-impute2_path = "/home/users/davidama/apps/impute2/impute_v2.3.2_x86_64_static/impute2"
-impute2_size = 5000000
-ref_for_phasing = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/mega_eu_imp/1000g_data/1000GP_Phase3/"
+# UKBB - 20k sample
+our_data_bed_path = "/oak/stanford/groups/euan/projects/fitness_genetics/ukbb/ukbb_direct_20k_rand_controls_sex_age/merged_control_geno-1000g_updated"
 
 # Include our direct geno as is
 job_dir = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/mega_eu_imp/"
@@ -19,15 +15,24 @@ job_dir = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/mega_eu_
 job_dir = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/mega_eu_imp_wo_jhu/"
 # Include our direct geno as is: with genepool
 job_dir = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/mega_with_genepool_imp/"
+# UKBB - 20k sample
+job_dir = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/ukbb_20k_imp/"
+
+
+map_files_path = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/mega_eu_imp/1000g_data/1000GP_Phase3/"
+shapeit_path = "/home/users/davidama/apps/shapeit.v2.904.3.10.0-693.11.6.el7.x86_64/bin/shapeit"
+impute2_path = "/home/users/davidama/apps/impute2/impute_v2.3.2_x86_64_static/impute2"
+impute2_size = 5000000
+ref_for_phasing = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/mega_eu_imp/1000g_data/1000GP_Phase3/"
 
 system(paste("mkdir",job_dir))
-
 our_bim = read.table(paste(our_data_bed_path,".bim",sep=""),stringsAsFactors = F)
-JHUs = our_bim[grepl("JHU",our_bim[,2]),2]
-write.table(t(t(JHUs)),file=paste(job_dir,"JHUs.txt",sep=""),row.names = F,
-            col.names = F,quote = F)
 
-# Split our data by chromosome
+# JHUs = our_bim[grepl("JHU",our_bim[,2]),2]
+# write.table(t(t(JHUs)),file=paste(job_dir,"JHUs.txt",sep=""),row.names = F,
+#             col.names = F,quote = F)
+
+# Split our data by chromosome and exclude variants with >5% missigness
 direct_geno_path = paste(job_dir,"direct_geno/",sep="")
 # Create a dir with bed file per chromosome
 system(paste("mkdir",direct_geno_path))
@@ -37,6 +42,7 @@ for (j in 1:22){
   log_path = paste("split",j,".log",sep="")
   curr_cmd = paste("plink --bfile",our_data_bed_path,
                    "--chr",j,
+                   "--geno 0.05",
                    # "--exclude",paste(job_dir,"JHUs.txt",sep=""),
                    "--make-bed --out",paste(j,sep=''))
   curr_sh_file = paste("split",j,".sh",sep="")

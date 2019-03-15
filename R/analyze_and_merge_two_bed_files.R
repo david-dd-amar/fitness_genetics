@@ -37,6 +37,7 @@ source(script_file)
 remove_JHU = grepl("sanity",out_path)
 maf_for_pca = 0.01
 use_qctool = F
+exclude_pali = T
 
 # ####################################################################################################
 # ####################################################################################################
@@ -136,6 +137,33 @@ bim2 = read.table(paste(bfile2,".bim",sep=""))
 rownames(bim2) = bim2[,2]
 bim1 = read.table(paste(bfile1,".bim",sep=""))
 rownames(bim1) = bim1[,2]
+
+# Exclude palindromic snps
+if(exclude_pali){
+  is_snp_paly<-function(x){
+    return(x=="AT" || x=="TA" || x=="CG" || x=="GC")
+  }
+  
+  # Get the palindromic SNPs
+  alleles2 = paste(bim2[,5],bim2[,6],sep="")
+  pali_snps2 = sapply(alleles2,is_snp_paly)
+  pali_snps2 = bim2[pali_snps2,2]
+  pali_snps2 = as.character(pali_snps2)
+  write.table(t(t(pali_snps2)),file=paste(out_path,"pali_snps2.txt",sep=""),
+              row.names = F,col.names = F,quote = F)
+  alleles1 = paste(bim1[,5],bim1[,6],sep="")
+  pali_snps1 = sapply(alleles1,is_snp_paly)
+  pali_snps1 = bim1[pali_snps1,2]
+  pali_snps1 = as.character(pali_snps1)
+  write.table(t(t(pali_snps1)),file=paste(out_path,"pali_snps1.txt",sep=""),
+              row.names = F,col.names = F,quote = F)
+  
+  # reduce the final shared snps list
+  to_rem1 = is.element(final_shared_snps[,1],set=pali_snps1)
+  to_rem2 = is.element(final_shared_snps[,2],set=pali_snps2)
+  sum(!to_rem1 & !to_rem2)
+  final_shared_snps = final_shared_snps[!to_rem1 & !to_rem2,]
+}
 
 # Print force-allele files - we are going to load the data to plink and change
 # some of the bim info. Here we make sure that we keep the input alleles before we 

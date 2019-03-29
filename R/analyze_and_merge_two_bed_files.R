@@ -21,10 +21,15 @@
 # bfile2 = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/mega_eu_imp_wo_jhu/impute2_1000gRef_out/check_bim_res/merged_geno"
 # out_path = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/mega_eu_imp_wo_jhu/with_ukbb/"
 
-# March 2019: MEGA with GP, Impute2, 1000G vs. UKBB
-bfile1 = "/oak/stanford/groups/euan/projects/fitness_genetics/ukbb/ukbb_imputed_20k_rand_controls_sex_age/merged_control_geno-1000g_updated"
+# # March 2019: MEGA with GP, Impute2, 1000G vs. UKBB
+# bfile1 = "/oak/stanford/groups/euan/projects/fitness_genetics/ukbb/ukbb_imputed_20k_rand_controls_sex_age/merged_control_geno-1000g_updated"
+# bfile2 = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/mega_with_genepool_imp/impute2_1000gRef_out/check_bim_res/merged_geno"
+# out_path = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/mega_with_genepool_imp/with_ukbb/"
+
+# March 2019: MEGA with GP, Impute2, 1000G vs. our imputed UKBB
+bfile1 = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/ukbb_20k_imp/impute2_1000gRef_out/check_bim_res/merged_geno"
 bfile2 = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/mega_with_genepool_imp/impute2_1000gRef_out/check_bim_res/merged_geno"
-out_path = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/mega_with_genepool_imp/with_ukbb/"
+out_path = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/mega_with_genepool_imp/with_our_imp_ukbb/"
 
 try(system(paste("mkdir",out_path)))
 
@@ -37,7 +42,7 @@ source(script_file)
 remove_JHU = grepl("sanity",out_path)
 maf_for_pca = 0.01
 use_qctool = F
-exclude_pali = T
+exclude_pali = F
 
 # ####################################################################################################
 # ####################################################################################################

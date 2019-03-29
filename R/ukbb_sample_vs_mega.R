@@ -2,11 +2,11 @@
 script_file = "~/repos/fitness_genetics/R/gwas_flow_helper_functions.R"
 source(script_file)
 
-# Our imputed data, generated on March 2019
-bfiles = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/mega_with_genepool_imp/with_ukbb/"
-external_data_mafs = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/mega_with_genepool_imp/with_ukbb/new_bed_1.frq"
-our_data_mafs = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/mega_with_genepool_imp/with_ukbb/new_bed_2.frq"
-out_path = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/mega_with_genepool_imp/with_ukbb/gwas/"
+# Our imputed data (for mega and ukbb), generated on March 2019
+bfiles = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/mega_with_genepool_imp/with_our_imp_ukbb/"
+external_data_mafs = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/mega_with_genepool_imp/with_our_imp_ukbnew_bed_1.frq"
+our_data_mafs = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/mega_with_genepool_imp/with_our_imp_ukbb/new_bed_2.frq"
+out_path = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/mega_with_genepool_imp/with_our_imp_ukbb/gwas/"
 our_covars_path = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/mega_with_genepool/integrated_sample_metadata_and_covariates.phe"
 external_control_ids = "/oak/stanford/groups/euan/projects/fitness_genetics/ukbb/20k_rand_controls_sex_age.txt"
 external_covars_path = "/oak/stanford/groups/euan/projects/fitness_genetics/ukbb/20k_rand_controls_sex_age_with_info.txt"

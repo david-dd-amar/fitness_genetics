@@ -18,11 +18,10 @@ job_dir = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/mega_wit
 # UKBB - 20k sample
 job_dir = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/ukbb_20k_imp/"
 
-
 map_files_path = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/mega_eu_imp/1000g_data/1000GP_Phase3/"
 shapeit_path = "/home/users/davidama/apps/shapeit.v2.904.3.10.0-693.11.6.el7.x86_64/bin/shapeit"
 impute2_path = "/home/users/davidama/apps/impute2/impute_v2.3.2_x86_64_static/impute2"
-impute2_size = 5000000
+impute2_size = 1000000
 ref_for_phasing = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/mega_eu_imp/1000g_data/1000GP_Phase3/"
 
 system(paste("mkdir",job_dir))
@@ -91,7 +90,7 @@ if(!is.null(ref_for_phasing)){
   shapeit_1000gOut_path = paste(job_dir,"shapeit_1000gRef_out/",sep="")
   system(paste("mkdir",shapeit_1000gOut_path))
   setwd(shapeit_1000gOut_path)
-  for (j in 1:22){
+  for (j in c(1,3,6,8,14,19)){
     curr_bed = paste(direct_geno_path,j,".bed",sep="")
     curr_bim = paste(direct_geno_path,j,".bim",sep="")
     curr_fam = paste(direct_geno_path,j,".fam",sep="")
@@ -132,10 +131,12 @@ if(!is.null(ref_for_phasing)){
                      "--input-map",curr_gmap,exclude_line,
                      "--input-ref", curr_hap,curr_leg,sample_file,
                      "-O",paste(j,"_phased",sep=''),
-                     "--thread 8 --seed 123456789")
+                     "--thread 16 --seed 123456789")
     curr_sh_file = paste("shapeit_run_",j,".sh",sep="")
     print_sh_file(curr_sh_file,
-                  get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,Ncpu = 8,mem_size = 16000),
+                  get_sh_prefix_one_node_specify_cpu_and_mem(
+                    err_path,log_path,Ncpu = 16,mem_size = 32000,
+                    time="48:00:00"),
                   curr_cmd)
     system(paste("sbatch",paste(curr_sh_file,sep='')))
   }
@@ -186,7 +187,7 @@ for (j in 1:22){
     )
     curr_sh_file = paste("tmp_chr",j,"_chunck",chunk_count,".sh",sep="")
     print_sh_file(curr_sh_file,
-                  get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,Ncpu = 4,mem_size = 32000),
+                  get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,Ncpu = 4,mem_size = 48000),
                   curr_cmd)
     system(paste("sbatch",paste(curr_sh_file,sep='')))
     chunk_count = chunk_count + 1
@@ -328,7 +329,8 @@ for(ff in info_files){
   low_cert_snps = c(low_cert_snps,curr_excluded)
   print(length(low_cert_snps))
 }
-save(our_data_info,low_cert_snps,our_low_concord_snps,file=paste(info_dir,"our_data_info.RData",sep=""))
+save(our_data_info,low_cert_snps,our_low_concord_snps,
+     file=paste(info_dir,"our_data_info.RData",sep=""))
 
 to_rem = c(low_cert_snps,our_low_concord_snps)
 to_rem_snp_file = "impute_qc_snps_to_remove"

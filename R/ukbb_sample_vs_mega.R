@@ -438,7 +438,6 @@ concatenate_res_files<-function(res_files,res_file){
 
 # March 2019: we take the GP vs. UKBB adjusted for 3 PCs
 nn = "3"
-
 for(num_pcs in tested_pcs_sets){
   curr_path = paste(bfiles,"eu_gp_vs_ukbb_analysis_",nn,"/gwas/",sep="")
   all_files = list.files(curr_path)
@@ -491,13 +490,14 @@ sapply(all_lambdas,sapply,median,na.rm=T)
 save(all_lambdas,file=paste(out_path,"all_lambdas.RData",sep=""))
 
 # reformat and write to fuma files
-file2pvals = c()
+file2pvals = list()
+library(data.table,lib.loc = "~/R/packages/")
 mhc_region = c(25000000,35000000)
 for(num_pcs in tested_pcs_sets){
   curr_path = paste(bfiles,"eu_gp_vs_ukbb_analysis_",nn,"/gwas/",sep="")
   res_file = paste(curr_path,"elite_gwas_res_all_pcs",num_pcs,".assoc",sep="")
   res_file2 = paste(curr_path,"fuma_elite_gwas_res_all_pcs",num_pcs,".assoc",sep="")
-  res = read.table(res_file,header=T,stringsAsFactors = F,comment.char="")
+  res = fread(res_file,header=T,stringsAsFactors = F,data.table = F)
   # exclude mhc
   is_mhc = res[,1]==6 & res[,2]>mhc_region[1] & res[,2]<mhc_region[2]
   res = res[!is_mhc,]
@@ -512,8 +512,8 @@ for(num_pcs in tested_pcs_sets){
   res_file = paste(curr_path,"cooper_gwas_res_all_pcs",num_pcs,".assoc",sep="")
   res_file2 = paste(curr_path,"fuma_cooper_gwas_res_all_pcs",num_pcs,".assoc",sep="")
   res=NULL
-  try({res = read.table(res_file,header=T,stringsAsFactors = F,comment.char="")})
-  if(is.null(res)){res = read.delim(res_file,header=T,stringsAsFactors = F,comment.char="")}
+  try({res = fread(res_file,header=T,stringsAsFactors = F,data.table = F)})
+  if(is.null(res)){res = fread(res_file,header=T,stringsAsFactors = F,data.table = F,sep="\t")}
   # exclude mhc
   is_mhc = res[,1]==6 & res[,2]>mhc_region[1] & res[,2]<mhc_region[2]
   res = res[!is_mhc,]
@@ -528,9 +528,8 @@ for(num_pcs in tested_pcs_sets){
   res_file = paste(curr_path,"gp_gwas_res_all_pcs",num_pcs,".assoc",sep="")
   res_file2 = paste(curr_path,"fuma_gp_gwas_res_all_pcs",num_pcs,".assoc",sep="")
   res=NULL
-  try({res = read.table(res_file,header=T,stringsAsFactors = F,comment.char="")})
-  if(is.null(res)){res = read.delim(res_file,header=T,stringsAsFactors = F,comment.char="")}
-  # exclude mhc
+  try({res = fread(res_file,header=T,stringsAsFactors = F,data.table = F)})
+  if(is.null(res)){res = fread(res_file,header=T,stringsAsFactors = F,data.table = F,sep="\t")}  # exclude mhc
   is_mhc = res[,1]==6 & res[,2]>mhc_region[1] & res[,2]<mhc_region[2]
   res = res[!is_mhc,]
   ps = as.numeric(res[,"P"])
@@ -551,22 +550,22 @@ p1 = as.numeric(x1[,3])
 p2 = as.numeric(x2[,3])
 inds = !is.na(p1) & !is.na(p2)
 cor(p1[inds],p2[inds])
-table(p1[inds]<1e-8 & p2[inds] > 0.01)
-table(p2[inds]<1e-8 & p1[inds] > 0.01)
+table(p1[inds]<1e-8 & p2[inds] > 0.001)
+table(p2[inds]<1e-8 & p1[inds] > 0.001)
 
 cor.test(-log(p1[inds]),-log(p2[inds]))
 cor(-log(p1[inds]),-log(p2[inds]))
 
 curr_path = paste(bfiles,"eu_gp_vs_ukbb_analysis_",nn,"/gwas/",sep="")
-res_file2 = paste(curr_path,"fuma_cooper_gwas_res_20pcs_cleaned_1e6_0.01.assoc",sep="")
-inds2 = p1 < 1e-6 & p2 > 0.01
+res_file2 = paste(curr_path,"fuma_cooper_gwas_res_20pcs_cleaned_1e6_0.001.assoc",sep="")
+inds2 = p1 < 1e-6 & p2 > 0.001
 inds2[is.na(inds2)]=F
 sum(inds2,na.rm=T)
 fuma_res = x1[inds2,]
 write.table(fuma_res,file=res_file2,col.names = T,row.names = F,quote = F,sep=" ")
-# write.table(fuma_res,col.names = T,row.names = F,quote = F,sep=" ")
 
 # Compare two results
+names(file2pvals)[5:6]
 x1 = file2pvals[[5]] 
 x2 = file2pvals[[6]]
 all(x1[,2]==x2[,2])
@@ -574,8 +573,8 @@ p1 = as.numeric(x1[,3])
 p2 = as.numeric(x2[,3])
 inds = !is.na(p1) & !is.na(p2)
 curr_path = paste(bfiles,"eu_gp_vs_ukbb_analysis_",nn,"/gwas/",sep="")
-res_file2 = paste(curr_path,"fuma_cooper_gwas_res_10pcs_cleaned_1e6_0.01.assoc",sep="")
-inds2 = p1 < 1e-6 & p2 > 0.01
+res_file2 = paste(curr_path,"fuma_cooper_gwas_res_10pcs_cleaned_1e6_0.001.assoc",sep="")
+inds2 = p1 < 1e-6 & p2 > 0.001
 inds2[is.na(inds2)]=F
 fuma_res = x1[inds2,]
 write.table(fuma_res,file=res_file2,col.names = T,row.names = F,quote = F,sep=" ")

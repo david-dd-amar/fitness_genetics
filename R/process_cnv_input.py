@@ -123,7 +123,7 @@ with gzip.open(gz1,'rt') as f:
         if arr[1]!="Name" and not shared_snps_dict.has_key(arr[1]):
             continue
         arr_reduced = []
-        for i in gz1_inds_to_include[:10]:
+        for i in gz1_inds_to_include:
             arr_reduced.append(arr[i])
         s = "\t".join(arr_reduced)
         if arr[1]=="Name":
@@ -146,7 +146,7 @@ with gzip.open(gz2,'rt') as f:
         if arr[1]!="Name" and not shared_snps_dict.has_key(arr[1]):
             continue
         arr_reduced = []
-        for i in gz2_inds_to_include[:10]:
+        for i in gz2_inds_to_include:
             arr_reduced.append(arr[i])
         s = "\t".join(arr_reduced)
         if arr[1]=="Name":

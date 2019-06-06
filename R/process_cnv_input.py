@@ -1,9 +1,9 @@
 # module load python/3.6.1 
 
 import os
-os.system("module load py-pandas/0.23.0_py27")
-os.system("module load py-numpy/1.14.3_py27")
-os.system("module load py-scikit-image/0.15.0_py27")
+# os.system("module load py-pandas/0.23.0_py27")
+# os.system("module load py-numpy/1.14.3_py27")
+# os.system("module load py-scikit-image/0.15.0_py27")
 import re
 import gzip
 import numpy as np
@@ -32,25 +32,25 @@ samples2_set = samples2["Sample ID"].tolist()
 
 snps1 = pd.read_table(snpfile1)
 print("read in the first snp qc file, size:")
-snps1.shape
+print(snps1.shape)
 snps1 = snps1[snps1["Call Freq"]>0.95]
 print("remaining snps after filtering:")
-snps1.shape
+print(snps1.shape)
 snps1_set = snps1["Name"].tolist()
 snps1_set = set(snps1_set)
 
 snps2 = pd.read_table(snpfile2)
 print("read in the second snp qc file, size:")
-snps2.shape
+print(snps2.shape)
 snps2 = snps2[snps2["Call Freq"]>0.95]
 print("remaining snps after filtering:")
-snps2.shape
+print(snps2.shape)
 snps2_set = snps2["Name"].tolist()
 snps2_set = set(snps2_set)
 
 shared_snps = snps1_set.intersection(snps2_set)
 print("number of shared snps between the two MEGA platforms:")
-len(shared_snps)
+print(len(shared_snps))
 shared_snps_dict = {}
 for snp in shared_snps:
     shared_snps_dict[snp] = True
@@ -106,8 +106,8 @@ for i in range(len(gz2_header_arr)):
 
 # Covered sample sizes
 print("Finished filtering samples out, remaining number of columns (by file)")
-len(gz1_inds_to_include)/3
-len(gz2_inds_to_include)/3
+print(len(gz1_inds_to_include)/3)
+print(len(gz2_inds_to_include)/3)
 
 all_chrs = snps1["Chr"].astype('str').unique()
 
@@ -157,7 +157,7 @@ with gzip.open(gz2,'rt') as f:
     f.close()
     for o2 in o2s.values():o2.close()
 
-
+print("completed analyzing the two files")
 
 
 

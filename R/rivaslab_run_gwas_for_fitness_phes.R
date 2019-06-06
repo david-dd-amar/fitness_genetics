@@ -1,13 +1,14 @@
 
 out_path = "/oak/stanford/groups/euan/projects/fitness_genetics/ukbb/gwas/"
 
-rivaslab_pheno_codes_file = "/oak/stanford/groups/mrivas/users/magu/repos/rivas-lab/wiki/ukbb/icdinfo/icdinfo.txt"
+rivaslab_pheno_codes_file = "home/users/davidama/repos/ukbb-tools/05_gbe/phenotype_info.tsv"
 rivaslab_codes = read.delim(rivaslab_pheno_codes_file,stringsAsFactors = F,header=F)
 rownames(rivaslab_codes) = rivaslab_codes[,1]
 
 tested_phenotypes = c(
-  "Exercise_HR" = "INI1003051",
-  "Recovery" = "INI1003054",
+  "Exercise_HR" = "INI20005983",
+  "MaxWD" = "INI30005983",
+  "Recovery" = "INI40005983",
   "RestingHR" = "INI102",
   "VigActivityN" = "INI1003040",
   "ModActivityN" = "INI1003039"
@@ -40,7 +41,27 @@ phe = phe[intersect(eth_subjects,rownames(phe)),]
 print("Dim of master phe")
 print(dim(phe))
 
-# TODO: add missing phenotypes to the phe table
+# Add missing phenotypes to the phe table
+additional_phe_paths = "/oak/stanford/groups/mrivas/ukbb/24983/phenotypedata/extras/physical_activity/phe/"
+additional_phe_files = list.files(additional_phe_paths)
+additional_phe = c()
+for(phe_code in tested_phenotypes){
+  currfile = additional_phe_files[grepl(phe_code,additional_phe_files)]
+  if(length(currfile)==0){next}
+  print(paste(phe_code,"was found in the extras dir"))
+  curr_v = fread(paste(additional_phe_paths,currfile,sep=""),data.table = F,header = F,stringsAsFactors = F)
+  rownames(curr_v) = as.character(curr_v[,1])
+  newv = rep(NA,nrow(phe))
+  names(newv) = rownames(phe)
+  currnames = intersect(rownames(curr_v),rownames(phe))
+  newv[currnames] = curr_v[currnames,3]
+  print(newv[currnames][1:10])
+  additional_phe = cbind(additional_phe,newv)
+  rownames(additional_phe) = names(newv)
+  colnames(additional_phe)[ncol(additional_phe)] = phe_code
+}
+additional_phe[additional_phe==-9] = NA
+phe = cbind(phe,additional_phe)
 
 # Create folders with a phe file and a covariate file
 PCs = c(5,10)
@@ -150,6 +171,7 @@ for(npc in PCs){
                        covars_line1,covars_line2,
                        "--threads 4",
                        "--maf 0.01",
+                       "--adjust",
                        "--out",paste(curr_path,pheno_name,"_",taskname,sep=''))
       curr_sh_file = paste(curr_path,taskname,"_tmp.sh",sep="")
       print_sh_file(curr_sh_file,

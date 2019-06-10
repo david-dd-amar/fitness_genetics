@@ -159,6 +159,94 @@ with gzip.open(gz2,'rt') as f:
 
 print("completed analyzing the two files")
 
+# A bunch of tests to make sure that the data extraction went well
+# Test 1: go over the files from both batches, they should have the same variants
+tmp1 = pd.read_table(snpfile2)
+for chr in all_chrs[2:]:
+    f1 = out1+chr+".txt"
+    f2 = out2+chr+".txt"
+    d1 = pd.read_table(f1)
+    d2 = pd.read_table(f2)
+    names1 = d1["Name"] 
+    names2 = d2["Name"]
+    if len(names1)!=len(names2):
+        for name in names1:
+            if not shared_snps_dict.has_key(name):
+                print(name + "is not in the dictionary!")
+                break
+        for name in names2:
+            if not shared_snps_dict.has_key(name):
+                print(name + "is not in the dictionary!")
+                break
+    break
+
+# Test 2: get info for a variant x sample pair in a specific file
+import subprocess
+import random
+def get_pair_info(filename, variantid,sampleid):
+    randint  = str(random.randint(1,10001))
+    tmpfile1 = "tmp_variant_" + randint + "txt"
+    tmpfile2 = "tmp_header_" + randint + "txt"
+    command1 = "less " + filename + " | grep " + variantid + "> " + tmpfile1
+    command2 = "less " + filename + " | grep " + sampleid + "> " + tmpfile2
+    process1 = subprocess.Popen(command1, shell=True, stdout=subprocess.PIPE)
+    process1.wait()
+    print (process1.returncode)
+    process2 = subprocess.Popen(command2, shell=True, stdout=subprocess.PIPE)
+    process2.wait()
+    print (process2.returncode)
+    f1 = open(tmpfile1)
+    l1 = f1.readLine()
+    f1.close()
+    f2 = open(tmpfile2)
+    l2 = f2.readLine()
+    f2.close()
+    arr1 = l1.split("\t")
+    arr2 = l2.split("\t")
+    for i in range(len(arr1)):
+        if re.search(sampleid,arr2[i]):
+            print(arr1[i]+"\t"+arr2[i])
+    command1 = "rm " + tmpfile1
+    command2 = "rm " + tmpfile2
+    process1 = subprocess.Popen(command1, shell=True, stdout=subprocess.PIPE)
+    process1.wait()
+    print (process1.returncode)
+    process2 = subprocess.Popen(command2, shell=True, stdout=subprocess.PIPE)
+    process2.wait()
+    print (process2.returncode)
+    return
+
+# Example:
+chr = "Y"
+currf = out1 + chr + ".txt" 
+currf_data = pd.read_table(currf,sep="\t")
+sampleid = "200206380188_R07C01"
+variantid = "exm2263279"
+get_pair_info(currf, variantid,sampleid)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

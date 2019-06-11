@@ -117,6 +117,7 @@ for chr in all_chrs:
 
 with gzip.open(gz1,'rt') as f:
     for line in f:
+        line = line.rstrip()
         arr = line.split("\t")
         currChr = arr[3]
         # print(arr[1]+" " + arr[3]+" "+arr[4])
@@ -128,7 +129,7 @@ with gzip.open(gz1,'rt') as f:
         s = "\t".join(arr_reduced)
         if arr[1]=="Name":
             for o1 in o1s.values():
-                o1.write(s+"\n")
+                o1.write(s=+"\n")
         else:
             o1s[currChr].write(s+"\n")
     f.close()
@@ -140,6 +141,7 @@ for chr in all_chrs:
 
 with gzip.open(gz2,'rt') as f:
     for line in f:
+        line = line.rstrip()
         arr = line.split("\t")
         currChr = arr[3]
         # print(arr[1]+" " + arr[3]+" "+arr[4])
@@ -180,54 +182,89 @@ for chr in all_chrs[2:]:
                 break
     break
 
+# DO NOT RUN THE CODE BELOW, WE DO THE QC IN R (EASIER)
+# exit()
 # Test 2: get info for a variant x sample pair in a specific file
-import subprocess
-import random
-def get_pair_info(filename, variantid,sampleid):
-    randint  = str(random.randint(1,10001))
-    tmpfile1 = "tmp_variant_" + randint + "txt"
-    tmpfile2 = "tmp_header_" + randint + "txt"
-    command1 = "less " + filename + " | grep " + variantid + "> " + tmpfile1
-    command2 = "less " + filename + " | grep " + sampleid + "> " + tmpfile2
-    process1 = subprocess.Popen(command1, shell=True, stdout=subprocess.PIPE)
-    process1.wait()
-    print (process1.returncode)
-    process2 = subprocess.Popen(command2, shell=True, stdout=subprocess.PIPE)
-    process2.wait()
-    print (process2.returncode)
-    f1 = open(tmpfile1)
-    l1 = f1.readLine()
-    f1.close()
-    f2 = open(tmpfile2)
-    l2 = f2.readLine()
-    f2.close()
-    arr1 = l1.split("\t")
-    arr2 = l2.split("\t")
-    for i in range(len(arr1)):
-        if re.search(sampleid,arr2[i]):
-            print(arr1[i]+"\t"+arr2[i])
-    command1 = "rm " + tmpfile1
-    command2 = "rm " + tmpfile2
-    process1 = subprocess.Popen(command1, shell=True, stdout=subprocess.PIPE)
-    process1.wait()
-    print (process1.returncode)
-    process2 = subprocess.Popen(command2, shell=True, stdout=subprocess.PIPE)
-    process2.wait()
-    print (process2.returncode)
-    return
+# import subprocess
+# import random
+# def get_pair_info(filename, variantid,sampleid,wd):
+#    randint  = str(random.randint(1,10001))
+#    tmpfile1 = wd + "tmp_variant_" + randint + ".txt"
+#    tmpfile2 = wd + "tmp_header_" + randint + ".txt"
+#    command1 = "less " + filename + " | grep " + variantid + "> " + tmpfile1
+#    command2 = "less " + filename + " | grep " + sampleid + "> " + tmpfile2
+#    process1 = subprocess.Popen(command1, shell=True, stdout=subprocess.PIPE)
+#    process1.wait()
+#    process2 = subprocess.Popen(command2, shell=True, stdout=subprocess.PIPE)
+#    process2.wait()
+#    f1 = open(tmpfile1)
+#    l1 = f1.readline().rstrip()
+#    f1.close()
+#    f2 = open(tmpfile2)
+#    l2 = f2.readline().rstrip()
+#    f2.close()
+#    arr1 = l1.split("\t")
+#    arr2 = l2.split("\t")
+#    result = []
+#    for i in range(len(arr1)):
+#        if re.search(sampleid,arr2[i]):
+#            result.append(arr1[i]+"\t"+arr2[i])
+#    command1 = "rm " + tmpfile1
+#    command2 = "rm " + tmpfile2
+#    process1 = subprocess.Popen(command1, shell=True, stdout=subprocess.PIPE)
+#    process1.wait()
+#    process2 = subprocess.Popen(command2, shell=True, stdout=subprocess.PIPE)
+#    process2.wait()
+#    return(result)
 
-# Example:
-chr = "Y"
-currf = out1 + chr + ".txt" 
-currf_data = pd.read_table(currf,sep="\t")
-sampleid = "200206380188_R07C01"
-variantid = "exm2263279"
-get_pair_info(currf, variantid,sampleid)
+# # Example:
+# all_chrs = snps1["Chr"].astype('str').unique()
+# chr = "Y"
+# currf = out1 + chr + ".txt" 
+# wd = "/oak/stanford/groups/euan/projects/fitness_genetics/illu_processed_cnv_data/"
+# currf_raw = "/oak/stanford/groups/euan/projects/fitness_genetics/illu_processed_cnv_data/batch1_raw_"+chr+"_data.txt"
+# currf_data = pd.read_table(currf,sep="\t")
+# currf_raw_data = pd.read_table(currf_raw,sep="\t")
+# for col in currf_data.columns:
+#    if not re.search("_",col):continue
+#    if not re.search("Log",col):continue
+#    sampleid = col.split(".")[0]
+#    for variantid in currf_data["Name"]:
+#        if shared_snps_dict.has_key(variantid):
+#            print("Variant in hash " + variantid)
+#        if not variantid in currf_raw_data["Name"]: continue
+#        print(variantid)
+#        res1 = get_pair_info(currf, variantid,sampleid,wd)
+#        res2 = get_pair_info(currf_raw, variantid,sampleid,wd)
 
+# In R
+setwd("/oak/stanford/groups/euan/projects/fitness_genetics/illu_processed_cnv_data/penncnv_table_batch1_filtered")
+d = read.delim("22.txt",check.names=F,stringsAsFactors=F)
+d2 = fread("../batch1_raw_22_data.txt",sep="\t",data.table=F)
+d2_header = fread("../batch1_raw_header.txt",sep="\t",data.table=F)
 
+setwd("/oak/stanford/groups/euan/projects/fitness_genetics/illu_processed_cnv_data/penncnv_table_other_batches_filtered")
+d = read.delim("22.txt",check.names=F,stringsAsFactors=F)
+d2 = fread("../other_batches_raw_22_data.txt",sep="\t",data.table=F)
+d2_header = fread("../other_batches_raw_header.txt",sep="\t",data.table=F)
 
-
-
+colnames(d2) = colnames(d2_header)
+table(d2$Chr)
+rownames(d) = d$Name
+rownames(d2) = d2$Name
+table(grepl("22:",d2$Name))
+inds1 = intersect(rownames(d),rownames(d2))
+inds2 = intersect(colnames(d),colnames(d2))
+x1 = d[inds1,inds2]
+x2 = d2[inds1,inds2]
+dim(x1)
+comp = x1==x2
+sort(colSums(!comp))
+table(comp)
+selected_cols = which(colSums(!comp)>0)
+selected_rows = which(rowSums(!comp)>0)
+diffs = x1[selected_rows,selected_cols] - x2[selected_rows,selected_cols]
+table(apply(diffs,2,max) < 1e-10)
 
 
 

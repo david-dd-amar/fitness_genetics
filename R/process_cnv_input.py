@@ -238,33 +238,32 @@ for chr in all_chrs[2:]:
 #        res2 = get_pair_info(currf_raw, variantid,sampleid,wd)
 
 # In R
-setwd("/oak/stanford/groups/euan/projects/fitness_genetics/illu_processed_cnv_data/penncnv_table_batch1_filtered")
-d = read.delim("22.txt",check.names=F,stringsAsFactors=F)
-d2 = fread("../batch1_raw_22_data.txt",sep="\t",data.table=F)
-d2_header = fread("../batch1_raw_header.txt",sep="\t",data.table=F)
+# setwd("/oak/stanford/groups/euan/projects/fitness_genetics/illu_processed_cnv_data/penncnv_table_batch1_filtered")
+# d = read.delim("22.txt",check.names=F,stringsAsFactors=F)
+# d2 = fread("../batch1_raw_22_data.txt",sep="\t",data.table=F)
+# d2_header = fread("../batch1_raw_header.txt",sep="\t",data.table=F)
 
-setwd("/oak/stanford/groups/euan/projects/fitness_genetics/illu_processed_cnv_data/penncnv_table_other_batches_filtered")
-d = read.delim("22.txt",check.names=F,stringsAsFactors=F)
-d2 = fread("../other_batches_raw_22_data.txt",sep="\t",data.table=F)
-d2_header = fread("../other_batches_raw_header.txt",sep="\t",data.table=F)
+# setwd("/oak/stanford/groups/euan/projects/fitness_genetics/illu_processed_cnv_data/penncnv_table_other_batches_filtered")
+# d = read.delim("22.txt",check.names=F,stringsAsFactors=F)
+# d2 = fread("../other_batches_raw_22_data.txt",sep="\t",data.table=F)
+# d2_header = fread("../other_batches_raw_header.txt",sep="\t",data.table=F)
 
-colnames(d2) = colnames(d2_header)
-table(d2$Chr)
-rownames(d) = d$Name
-rownames(d2) = d2$Name
-table(grepl("22:",d2$Name))
-inds1 = intersect(rownames(d),rownames(d2))
-inds2 = intersect(colnames(d),colnames(d2))
-x1 = d[inds1,inds2]
-x2 = d2[inds1,inds2]
-dim(x1)
-comp = x1==x2
-sort(colSums(!comp))
-table(comp)
-selected_cols = which(colSums(!comp)>0)
-selected_rows = which(rowSums(!comp)>0)
-diffs = x1[selected_rows,selected_cols] - x2[selected_rows,selected_cols]
-table(apply(diffs,2,max) < 1e-10)
+# colnames(d2) = colnames(d2_header)
+# table(d2$Chr)
+# rownames(d) = d$Name
+# rownames(d2) = d2$Name
+# table(grepl("22:",d2$Name))
+# inds1 = intersect(rownames(d),rownames(d2))
+# inds2 = intersect(colnames(d),colnames(d2))
+# x1 = d[inds1,inds2]
+# x2 = d2[inds1,inds2]
+# dim(x1)
+# comp = x1==x2
+# table(comp)
+# selected_cols = which(colSums(!comp)>0)
+# selected_rows = which(rowSums(!comp)>0)
+# diffs = x1[selected_rows,selected_cols] - x2[selected_rows,selected_cols]
+# table(apply(diffs,2,max) < 1e-10)
 
 
 

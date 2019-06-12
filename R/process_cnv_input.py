@@ -115,6 +115,8 @@ o1s = {}
 for chr in all_chrs:
     o1s[chr] = open(out1+chr+".txt","w")
 
+print("Going over the first file")
+
 with gzip.open(gz1,'rt') as f:
     for line in f:
         line = line.rstrip()
@@ -138,6 +140,8 @@ with gzip.open(gz1,'rt') as f:
 o2s = {}
 for chr in all_chrs:
     o2s[chr] = open(out2+chr+".txt","w")
+
+print("Going over the second file")
 
 with gzip.open(gz2,'rt') as f:
     for line in f:

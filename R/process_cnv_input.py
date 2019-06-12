@@ -131,7 +131,7 @@ with gzip.open(gz1,'rt') as f:
         s = "\t".join(arr_reduced)
         if arr[1]=="Name":
             for o1 in o1s.values():
-                o1.write(s=+"\n")
+                o1.write(s+"\n")
         else:
             o1s[currChr].write(s+"\n")
     f.close()

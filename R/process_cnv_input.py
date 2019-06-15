@@ -269,10 +269,7 @@ for chr in all_chrs[2:]:
 # diffs = x1[selected_rows,selected_cols] - x2[selected_rows,selected_cols]
 # table(apply(diffs,2,max) < 1e-10)
 
-
-
-
-
+python ~/repos/ukbb-tools/04_gwas/gwas.py --run-imputed --pheno /oak/stanford/groups/mrivas/users/davidama/gwas_res/HC281.phe --out . --population all --batch-partitions euan,mrivas,normal,owners --log-dir ./logs --memory 24000
 
 
 

@@ -270,24 +270,6 @@ for chr in all_chrs[2:]:
 # table(apply(diffs,2,max) < 1e-10)
 
 
-Variant ID
-Position
-Mapped gene(s)
-Beta
-Statistic
-P-value
-CADD : CADD score which is computed based on 63 annotations. The higher the score, the more deleterious the SNP is. 12.37 is the suggested threshold by Kicher et al (2014)
-RDB : RegulomeDB score which is a categorical score (from 1a to 7). 1a is the highest score for SNPs with the most biological evidence to be a regulatory element
-Function : Functional consequence on the gene
-Exonic function : Functional annotation of exonic SNPs
-
-
-
-
-
-
-
-
 
 
 

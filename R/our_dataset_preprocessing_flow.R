@@ -14,8 +14,6 @@ snp_max_het_ex = 0.4
 min_maf = 0.001
 run_loacally = F
 num_pca_clusters = 3
-# analysis_cohorts = "elite" # If null then use all cohorts
-# analysis_cohorts = NULL # If null then use all cohorts
 
 # Define analysis parameters for the Illumina reports
 initial_subj_min_call_rate = 0.95
@@ -25,30 +23,16 @@ snp_het_p = 1e-4
 script_file = "/home/users/davidama/repos/fitness_genetics/R/gwas_flow_helper_functions.R"
 source(script_file)
 
-# Define Input parameters
-# Original PLINK files
-# job_dir = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl/"
-# ped_file = "/oak/stanford/groups/euan/projects/fitness_genetics/illu_processed_plink_data/no_reclustering/PLINK_050618_0953/recall_may_2018_without_reclustering.ped"
-# map_file = "/oak/stanford/groups/euan/projects/fitness_genetics/illu_processed_plink_data/no_reclustering/PLINK_050618_0953/recall_may_2018_without_reclustering.map"
-# New fwd strand files (August 2018)
-# job_dir = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl_fwd_strand/"
-# Alternative for elite only: August 2018
-# job_dir = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/elite_only/our_prepro/"
-# September 2018
+# Define paths
+# Raw PLINK files
 job_dir = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl_mega_separate_recalls/"
-# Dec 2018: add Genepool
+# Out dir
 job_dir = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/mega_with_genepool/"
 # set the job's directory
 try({system(paste("mkdir",job_dir),wait = T)})
 setwd(job_dir)
 
 # Each recalling has a set of parameters
-# # 1. MEGG: old run with MEGC samples
-# ped_file1 = "/oak/stanford/groups/euan/projects/fitness_genetics/illu_processed_plink_data/no_reclustering/PLINK_fwd_strand/recall_may_2018_without_reclustering.ped"
-# map_file1 = "/oak/stanford/groups/euan/projects/fitness_genetics/illu_processed_plink_data/no_reclustering/PLINK_fwd_strand/recall_may_2018_without_reclustering.map"
-# input_bfile1 = "/oak/stanford/groups/euan/projects/fitness_genetics/illu_processed_plink_data/no_reclustering/PLINK_fwd_strand/recall_may_2018_without_reclustering"
-# snp_report_file1 = "/oak/stanford/groups/euan/projects/fitness_genetics/illu_processed_plink_data/no_reclustering/reports/no_reclustering_SNP_Table.txt"
-# sample_report_file1 = "/oak/stanford/groups/euan/projects/fitness_genetics/illu_processed_plink_data/no_reclustering/reports/no_reclustering_Samples_Table.txt"
 # 1. MEGG: recalled alone (MEGG: MEGA global)
 ped_file1 = "/oak/stanford/groups/euan/projects/fitness_genetics/illu_processed_plink_data/no_reclustering/non_MEGA_Cons_recall/raw.ped"
 map_file1 = "/oak/stanford/groups/euan/projects/fitness_genetics/illu_processed_plink_data/no_reclustering/non_MEGA_Cons_recall/raw.map"
@@ -68,15 +52,6 @@ bad_snps_file = "/oak/stanford/groups/euan/projects/fitness_genetics/bad_mega_sn
 sample_metadata = "/oak/stanford/groups/euan/projects/fitness_genetics/metadata/merged_metadata_file_stanford3k_elite_cooper.txt"
 sample_metadata_raw = read.delim(sample_metadata,stringsAsFactors = F)
 sample_metadata_raw = correct_dups_in_sample_metadata(sample_metadata_raw)
-
-# # September 2018 we do not have genepool's metadata: we ignore this until we get it
-# # This filter was later ignored during the Dec 2018 preprocessing
-# sample_metadata_raw = sample_metadata_raw[sample_metadata_raw$Cohort!="genepool",]
-# sample_metadata_raw = sample_metadata_raw[!is.na(sample_metadata_raw[,1]),]
-# rownames(sample_metadata_raw) = apply(sample_metadata_raw[,1:2],1,paste,collapse="_")
-
-# Dec 2018: get some stats for genepool samples
-# gp_samples = sample_metadata_raw[sample_metadata_raw$Cohort=="genepool",]
 
 ####################################################################################################
 ####################################################################################################
@@ -337,7 +312,7 @@ extract_snps_using_plink(paste(job_dir,"bfile2",sep=""),snps_to_keep,job_dir,"fi
                          batch_script_func=get_sh_default_prefix)
 wait_for_job()
 
-print("After initial qc, datas sizes are:")
+print("After initial qc, data sizes are:")
 print(paste("number of samples, file 1:",length(readLines(paste(job_dir,"bfile1.fam",sep="")))))
 print(paste("number of snps, file 1:",length(readLines(paste(job_dir,"bfile1.bim",sep="")))))
 ids1 = read.table(paste(job_dir,"bfile1.fam",sep=""),stringsAsFactors = F)[,2]
@@ -975,48 +950,137 @@ write.table(covariate_matrix,file=paste(curr_dir,"all_covs_and_pheno.phe",sep=""
 
 # Run the GWASs
 covs_file = paste(curr_dir,"all_covs_and_pheno.phe",sep="")
-curr_cmd = paste("plink --bfile",paste(job_dir,"merged_mega_data_autosomal_eu_selected",sep=''),
-                 "--logistic hide-covar",
-                 "--pheno",covs_file,
-                 "--pheno-name elite_vs_gp",
-                 "--covar",covs_file,
-                 "--maf 0.01",
-                 "--covar-name sex,age,PC1,PC2,PC3,PC4,PC5",
-                 "--allow-no-sex --adjust",
-                 "--threads",8,
-                 "--out",paste(curr_dir,"elite_vs_gp_gwas_res",sep="")
-)
-run_plink_command(curr_cmd,curr_dir,paste("elite_vs_gp_gwas_res",sep=""),
-                  get_sh_prefix_one_node_specify_cpu_and_mem,Ncpu=8,mem_size=32000)
-
-curr_cmd = paste("plink --bfile",paste(job_dir,"merged_mega_data_autosomal_eu_selected",sep=''),
-                 "--logistic hide-covar",
-                 "--pheno",covs_file,
-                 "--pheno-name cooper_vs_gp",
-                 "--covar",covs_file,
-                 "--maf 0.01",
-                 "--covar-name sex,age,PC1,PC2,PC3,PC4,PC5",
-                 "--allow-no-sex --adjust",
-                 "--threads",8,
-                 "--out",paste(curr_dir,"cooper_vs_gp_gwas_res",sep="")
-)
-run_plink_command(curr_cmd,curr_dir,paste("cooper_vs_gp_gwas_res",sep=""),
-                  get_sh_prefix_one_node_specify_cpu_and_mem,Ncpu=8,mem_size=32000)
+for(pcs in 1:5){
+  # Vs GP
+  curr_pcs = paste(paste("PC",1:pcs,sep=""),collapse = ",")
+  cov_line = paste("--covar-name sex,age,",curr_pcs,sep="")
+  curr_cmd = paste("plink --bfile",paste(job_dir,"merged_mega_data_autosomal_eu_selected",sep=''),
+                   "--logistic hide-covar",
+                   "--pheno",covs_file,
+                   "--pheno-name elite_vs_gp",
+                   "--covar",covs_file,
+                   "--maf 0.01",
+                   cov_line,
+                   "--allow-no-sex --adjust",
+                   "--threads",8,
+                   "--out",paste(curr_dir,"elite_vs_gp_gwas_res_PCs",pcs,sep="")
+  )
+  run_plink_command(curr_cmd,curr_dir,paste("elite_vs_gp_gwas_res_PCs",pcs,sep=""),
+                    get_sh_prefix_one_node_specify_cpu_and_mem,Ncpu=8,mem_size=32000)
+  
+  curr_cmd = paste("plink --bfile",paste(job_dir,"merged_mega_data_autosomal_eu_selected",sep=''),
+                   "--logistic hide-covar",
+                   "--pheno",covs_file,
+                   "--pheno-name cooper_vs_gp",
+                   "--covar",covs_file,
+                   "--maf 0.01",
+                   cov_line,
+                   "--allow-no-sex --adjust",
+                   "--threads",8,
+                   "--out",paste(curr_dir,"cooper_vs_gp_gwas_res_PCs",pcs,sep="")
+  )
+  run_plink_command(curr_cmd,curr_dir,paste("cooper_vs_gp_gwas_res_PCs",pcs,sep=""),
+                    get_sh_prefix_one_node_specify_cpu_and_mem,Ncpu=8,mem_size=32000)
+  
+  # VO2
+  curr_cmd = paste("plink --bfile",paste(job_dir,"merged_mega_data_autosomal_eu_selected",sep=''),
+                   "--linear hide-covar",
+                   "--pheno",covs_file,
+                   "--pheno-name VO2max..ml.kg.min.",
+                   "--covar",covs_file,
+                   "--maf 0.01",
+                   cov_line,
+                   "--allow-no-sex --adjust",
+                   "--threads",8,
+                   "--out",paste(curr_dir,"elite_vo2_ml_kg_min_PCs",pcs,sep="")
+  )
+  run_plink_command(curr_cmd,curr_dir,paste("elite_vo2_ml_kg_min_PCs",pcs,sep=""),
+                    get_sh_prefix_one_node_specify_cpu_and_mem,Ncpu=8,mem_size=32000)
+  
+  curr_cmd = paste("plink --bfile",paste(job_dir,"merged_mega_data_autosomal_eu_selected",sep=''),
+                   "--linear hide-covar",
+                   "--pheno",covs_file,
+                   "--pheno-name VO2max..l.",
+                   "--covar",covs_file,
+                   "--maf 0.01",
+                   cov_line,
+                   "--allow-no-sex --adjust",
+                   "--threads",8,
+                   "--out",paste(curr_dir,"elite_vo2max_l_PCs",pcs,sep="")
+  )
+  run_plink_command(curr_cmd,curr_dir,paste("elite_vo2max_l_PCs",pcs,sep=""),
+                    get_sh_prefix_one_node_specify_cpu_and_mem,Ncpu=8,mem_size=32000)
+  
+  # Add Cooper's run test
+  curr_cmd = paste("plink --bfile",paste(job_dir,"merged_mega_data_autosomal_eu_selected",sep=''),
+                   "--linear hide-covar",
+                   "--pheno",covs_file,
+                   "--pheno-name Treadmill.time",
+                   "--covar",covs_file,
+                   "--maf 0.01",
+                   cov_line,
+                   "--allow-no-sex --adjust",
+                   "--threads",8,
+                   "--out",paste(curr_dir,"cooper_treadmill_time_PCs",pcs,sep="")
+  )
+  run_plink_command(curr_cmd,curr_dir,paste("cooper_treadmill_time_PCs",pcs,sep=""),
+                    get_sh_prefix_one_node_specify_cpu_and_mem,Ncpu=8,mem_size=32000)
+  
+}
 
 # Print in fuma-compatible format
 out_files = list.files(curr_dir)
 out_files = out_files[grepl("logistic$",out_files)]
+out_files = out_files[!grepl("fuma",out_files)]
 for(ff in out_files){
+  print(ff)
   res = read.table(paste(curr_dir,ff,sep=""),stringsAsFactors = F,header=T)
-  print("####")
-  print(table(as.numeric(res[,"P"]<1e-7)))
-  print(table(as.numeric(res[,"P"]<5e-8)))
-  print("####")
-  fuma_res = res[,c("CHR","BP","P")]
-  colnames(fuma_res) = c("chromosome","position","P-value")
+  print(paste("num variants with p<1e-06:",sum(as.numeric(res[,"P"]<1e-6))))
+  print(paste("num variants with p<5e-08:",sum(as.numeric(res[,"P"]<5e-8))))
+  fuma_res = res[,c("CHR","BP","OR","P")]
+  colnames(fuma_res) = c("chromosome","position","OR","P-value")
   write.table(fuma_res,file=paste(curr_dir,"fuma_",ff,sep=""),quote=F,col.names = T,row.names = F,
               sep=" ")
 }
+# For linear
+out_files = list.files(curr_dir)
+out_files = out_files[grepl("linear$",out_files)]
+out_files = out_files[!grepl("fuma",out_files)]
+for(ff in out_files){
+  print(ff)
+  res = read.table(paste(curr_dir,ff,sep=""),stringsAsFactors = F,header=T)
+  print(paste("num variants with p<1e-06:",sum(as.numeric(res[,"P"]<1e-6))))
+  print(paste("num variants with p<5e-08:",sum(as.numeric(res[,"P"]<5e-8))))
+  fuma_res = res[,c("CHR","BP","BETA","P")]
+  colnames(fuma_res) = c("chromosome","position","beta","P-value")
+  write.table(fuma_res,file=paste(curr_dir,"fuma_",ff,sep=""),quote=F,col.names = T,row.names = F,
+              sep=" ")
+}
+
+# locally: merge elite vo2 and cooper max
+setwd("~/Desktop/elite/fuma_results/input_files/")
+pcs = 5
+library(data.table);library(metap)
+elite_res = fread("./fuma_elite_vo2_ml_kg_min_PCs5.assoc.linear",
+                  data.table = F,stringsAsFactors = F)
+elite_res = elite_res[!is.na(elite_res$`P-value`),]
+elite_res = elite_res[!(elite_res[,1]==0 & elite_res[,2]==0),]
+rownames(elite_res) = paste(elite_res[,1],elite_res[,2])
+cooper_res = fread("./fuma_cooper_treadmill_time_PCs5.assoc.linear",
+                   data.table = F,stringsAsFactors = F)
+cooper_res = cooper_res[!is.na(cooper_res$`P-value`),]
+cooper_res = cooper_res[!(cooper_res[,1]==0 & cooper_res[,2]==0),]
+rownames(cooper_res) = paste(cooper_res[,1],cooper_res[,2])
+shared_loci = intersect(rownames(cooper_res),rownames(elite_res))
+length(shared_loci)
+elite_res = elite_res[shared_loci,]
+cooper_res = cooper_res[shared_loci,]
+ps1 = elite_res$`P-value`
+ps2 = cooper_res$`P-value`
+merged_ps = apply(cbind(ps1,ps2),1,metap::minimump)
+merged_ps = sapply(merged_ps,function(x)x$p)
+table(merged_ps<1e-05)
+table(p.adjust(merged_ps,method="fdr")<0.5)
 
 # ####################################################################################################
 # ####################################################################################################

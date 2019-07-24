@@ -6,12 +6,12 @@
 ####################################################################################################
 
 # Define analysis parameters for the Illumina reports
-autosomal_chrs = T
-snp_min_clustersep_thr = 0.3
+# autosomal_chrs = T
+snp_min_clustersep_thr = 0.2
 snp_min_call_rate = 0.95
 snp_min_het_ex = -0.4
 snp_max_het_ex = 0.4
-min_maf = 0.001
+# min_maf = 0.001 # For later use
 run_loacally = F
 num_pca_clusters = 3
 
@@ -46,6 +46,7 @@ input_bfile2 = "/oak/stanford/groups/euan/projects/fitness_genetics/illu_process
 snp_report_file2 = "/oak/stanford/groups/euan/projects/fitness_genetics/illu_processed_plink_data/no_reclustering/MEGA_Consortium_recall/SNP_Table.txt"
 sample_report_file2 = "/oak/stanford/groups/euan/projects/fitness_genetics/illu_processed_plink_data/no_reclustering/MEGA_Consortium_recall/Samples_Table.txt"
 bad_snps_file = "/oak/stanford/groups/euan/projects/fitness_genetics/bad_mega_snps.txt"
+# New batch - June 2019
 
 # Our metadata
 # Assumes that the first two columns are barcode and position. Third column is our sample ID.
@@ -53,53 +54,39 @@ sample_metadata = "/oak/stanford/groups/euan/projects/fitness_genetics/metadata/
 sample_metadata_raw = read.delim(sample_metadata,stringsAsFactors = F)
 sample_metadata_raw = correct_dups_in_sample_metadata(sample_metadata_raw)
 
+# Libraries for the analysis
+library(data.table,lib.loc = "~/R/packages")
+
 ####################################################################################################
 ####################################################################################################
 ####################################################################################################
 # We need to merge the two MEGA sub datasets that were called separately
 # Read the reports and compare
-snp_data1 = read.delim(snp_report_file1)
+snp_data1 = fread(snp_report_file1,data.table = F,stringsAsFactors = F,check.names = T)
+rownames(snp_data1) = snp_data1$Name
 sample_data1 = read.delim(sample_report_file1,stringsAsFactors = F)
 rownames(sample_data1) = sample_data1$Sample.ID
 
-snp_data2 = read.delim(snp_report_file2)
+snp_data2 = fread(snp_report_file2,data.table = F,stringsAsFactors = F,check.names = T)
+rownames(snp_data2) = snp_data2$Name
 sample_data2 = read.delim(sample_report_file2,stringsAsFactors = F)
 rownames(sample_data2) = sample_data2$Sample.ID
 
-# Compare some stats
-rownames(snp_data1) = snp_data1$Name
-rownames(snp_data2) = snp_data2$Name
-inds = intersect(rownames(snp_data1),rownames(snp_data2))
-snp_samp = sample(inds)[1:2000]
-cor(snp_data1[snp_samp,]$Call.Freq,snp_data2[snp_samp,]$Call.Freq,method="spearman")
-cor(snp_data1[snp_samp,]$Het.Excess,snp_data2[snp_samp,]$Het.Excess,method="spearman")
-snp_samp = snp_samp[!is.na(snp_data2[snp_samp,]$MEGA_Consortium_v2_15070954_A2.bpm.Cluster.Sep)]
-cor(snp_data1[snp_samp,]$Multi.EthnicGlobal_D1.bpm.Cluster.Sep,snp_data2[snp_samp,]$MEGA_Consortium_v2_15070954_A2.bpm.Cluster.Sep,method="spearman")
-table(snp_data2[snp_samp,]$MEGA_Consortium_v2_15070954_A2.bpm.Cluster.Sep>0.3,snp_data1[snp_samp,]$Multi.EthnicGlobal_D1.bpm.Cluster.Sep>0.3)
-
-# snp_data1["rs1747677",]
-
 # some preprocessing of metadata
-analyze_snp_report_get_snps_to_exclude<-function(snp_data,autosomal_chrs,snp_min_call_rate,
-                                                 snp_min_clustersep_thr,snp_min_het_ex,snp_max_het_ex,
-                                                 clust_sep_col_name = "Multi.EthnicGlobal_D1.bpm.Cluster.Sep"){
+analyze_snp_report_get_snps_to_exclude<-function(snp_data,snp_min_call_rate,
+    snp_min_clustersep_thr,snp_min_het_ex,snp_max_het_ex,
+    clust_sep_col_name = "Multi.EthnicGlobal_D1.bpm.Cluster.Sep"){
   snp_data_autosomal_rows = grepl("^\\d+$",snp_data$Chr)
   snps_to_exclude =  snp_data$Call.Freq < snp_min_call_rate |
     snp_data[[clust_sep_col_name]] < snp_min_clustersep_thr |
     snp_data$Het.Excess < snp_min_het_ex |
     snp_data$Het.Excess > snp_max_het_ex
-  if(autosomal_chrs){
-    snps_to_exclude = snps_to_exclude & snp_data_autosomal_rows
-  }
-  if(!autosomal_chrs){
-    snps_to_exclude = snps_to_exclude & !snp_data_autosomal_rows
-  }
   return(snp_data$Name[snps_to_exclude])
 }
-excl1 = analyze_snp_report_get_snps_to_exclude(snp_data1,autosomal_chrs,snp_min_call_rate,
+excl1 = analyze_snp_report_get_snps_to_exclude(snp_data1,snp_min_call_rate,
       snp_min_clustersep_thr,snp_min_het_ex,snp_max_het_ex,
       clust_sep_col_name = "Multi.EthnicGlobal_D1.bpm.Cluster.Sep")
-excl2 = analyze_snp_report_get_snps_to_exclude(snp_data2,autosomal_chrs,snp_min_call_rate,
+excl2 = analyze_snp_report_get_snps_to_exclude(snp_data2,snp_min_call_rate,
       snp_min_clustersep_thr,snp_min_het_ex,snp_max_het_ex,
       clust_sep_col_name = "MEGA_Consortium_v2_15070954_A2.bpm.Cluster.Sep")
 excl3 = read.table(bad_snps_file,stringsAsFactors = F)[,1]
@@ -114,16 +101,10 @@ snp_set = intersect(rownames(snp_data1),rownames(snp_data2))
 snp_set = setdiff(snp_set,excl1)
 snp_set = setdiff(snp_set,excl2)
 snp_set = setdiff(snp_set,excl3)
+print(paste("using genomestudio data, the number of surviving snps:",length(snp_set)))
 write.table(t(t(snp_set)),paste(job_dir,"snp_set.txt",sep=""), row.names = F,col.names = F,quote = F)
 
-# # Sanity check
-# snp_set = readLines(paste(job_dir,"snp_set.txt",sep=""))
-# bim1 = read.table(paste(input_bfile1,".bim",sep=""),stringsAsFactors = F)
-# table(is.element(bim1[,2],set=snp_set))
-# bim2 = read.table(paste(input_bfile1,".bim",sep=""),stringsAsFactors = F)
-# table(is.element(bim2[,2],set=snp_set))
-
-# take care of the FIDs
+# Before PLINK, take care of the FIDs
 fam1 = read.table(paste(input_bfile1,".fam",sep=""),stringsAsFactors = F)
 update_ids1 = cbind(fam1[,1:2],paste("file1_",fam1[,1],sep=""),fam1[,2])
 write.table(file=paste(job_dir,"update_ids1.txt",sep=""),update_ids1,sep="\t",row.names = F,col.names = F,quote = F)

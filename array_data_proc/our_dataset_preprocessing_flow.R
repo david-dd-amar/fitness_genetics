@@ -843,6 +843,9 @@ table(covariate_matrix[,"Cohort"],covariate_matrix[,"batch"])
 ####################################################################################################
 ####################################################################################################
 load(paste(job_dir,"manual_clustering.RData",sep=""))
+tmp = fread("manual_clustering.txt",stringsAsFactors = F,data.table = F)
+manual_clustering = tmp[,2]
+names(manual_clustering) = tmp[,1]
 selected_subjects = names(which(manual_clustering))
 curr_fam = read.table(paste(job_dir,"merged_mega_data_autosomal.fam",sep=""),stringsAsFactors = F)
 curr_fam = curr_fam[!is.element(curr_fam[,2],set=selected_subjects),]
@@ -1751,6 +1754,8 @@ table(manual_clustering)
 table(manual_clustering,d$Cohort)
 
 save(manual_clustering,file="manual_clustering.RData")
+write.table(t(t(manual_clustering)),file="manual_clustering.txt",sep="\t",
+            quote=F)
 
 # # Check number of clusters in PCA plot
 # wss <- sapply(1:10,

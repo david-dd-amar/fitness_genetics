@@ -7,13 +7,12 @@
 
 # Define analysis parameters for the Illumina reports
 # autosomal_chrs = T
-snp_min_clustersep_thr = 0.2
+snp_min_clustersep_thr = 0.3
 snp_min_call_rate = 0.95
 snp_min_het_ex = -0.4
 snp_max_het_ex = 0.4
 # min_maf = 0.001 # For later use
 run_loacally = F
-num_pca_clusters = 3
 
 # Define analysis parameters for the Illumina reports
 initial_subj_min_call_rate = 0.95
@@ -23,28 +22,29 @@ snp_het_p = 1e-4
 script_file = "/home/users/davidama/repos/fitness_genetics/R/gwas_flow_helper_functions.R"
 source(script_file)
 
-# Define paths
-# Raw PLINK files
-job_dir = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl_mega_separate_recalls/"
-# Out dir
-job_dir = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/mega_with_genepool/"
+# Define out dir
+# job_dir = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl_mega_separate_recalls/"
+# job_dir = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/mega_with_genepool/"
+job_dir = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/mega_reclustered_with_genepool_/"
 # set the job's directory
 try({system(paste("mkdir",job_dir),wait = T)})
 setwd(job_dir)
 
 # Each recalling has a set of parameters
 # 1. MEGG: recalled alone (MEGG: MEGA global)
-ped_file1 = "/oak/stanford/groups/euan/projects/fitness_genetics/illu_processed_plink_data/no_reclustering/non_MEGA_Cons_recall/raw.ped"
-map_file1 = "/oak/stanford/groups/euan/projects/fitness_genetics/illu_processed_plink_data/no_reclustering/non_MEGA_Cons_recall/raw.map"
 input_bfile1 = "/oak/stanford/groups/euan/projects/fitness_genetics/illu_processed_plink_data/no_reclustering/non_MEGA_Cons_recall/raw"
 snp_report_file1 = "/oak/stanford/groups/euan/projects/fitness_genetics/illu_processed_plink_data/no_reclustering/non_MEGA_Cons_recall/SNP_Table.txt"
 sample_report_file1 = "/oak/stanford/groups/euan/projects/fitness_genetics/illu_processed_plink_data/no_reclustering/non_MEGA_Cons_recall/Samples_Table.txt"
-# 2. MEGC (MEGA Consortium)
-ped_file2 = "/oak/stanford/groups/euan/projects/fitness_genetics/illu_processed_plink_data/no_reclustering/MEGA_Consortium_recall/plink_test_mega_consortium_data.ped"
-map_file2 = "/oak/stanford/groups/euan/projects/fitness_genetics/illu_processed_plink_data/no_reclustering/MEGA_Consortium_recall/plink_test_mega_consortium_data.map"
-input_bfile2 = "/oak/stanford/groups/euan/projects/fitness_genetics/illu_processed_plink_data/no_reclustering/MEGA_Consortium_recall/plink_test_mega_consortium_data"
-snp_report_file2 = "/oak/stanford/groups/euan/projects/fitness_genetics/illu_processed_plink_data/no_reclustering/MEGA_Consortium_recall/SNP_Table.txt"
-sample_report_file2 = "/oak/stanford/groups/euan/projects/fitness_genetics/illu_processed_plink_data/no_reclustering/MEGA_Consortium_recall/Samples_Table.txt"
+# # 2. MEGC (MEGA Consortium)
+# input_bfile2 = "/oak/stanford/groups/euan/projects/fitness_genetics/illu_processed_plink_data/no_reclustering/MEGA_Consortium_recall/plink_test_mega_consortium_data"
+# snp_report_file2 = "/oak/stanford/groups/euan/projects/fitness_genetics/illu_processed_plink_data/no_reclustering/MEGA_Consortium_recall/SNP_Table.txt"
+# sample_report_file2 = "/oak/stanford/groups/euan/projects/fitness_genetics/illu_processed_plink_data/no_reclustering/MEGA_Consortium_recall/Samples_Table.txt"
+# 2. MEGC (MEGA Consortium) - reclustred
+input_bfile2 = "/oak/stanford/groups/euan/projects/fitness_genetics/illu_processed_plink_data/batch1_megc_reclustered/PLINK_260719_0306/batch1_megac_reclustered"
+snp_report_file2 = "/oak/stanford/groups/euan/projects/fitness_genetics/illu_processed_plink_data/batch1_megc_reclustered/SNP_Table.txt"
+sample_report_file2 = "/oak/stanford/groups/euan/projects/fitness_genetics/illu_processed_plink_data/batch1_megc_reclustered/Samples_Table.txt"
+
+# Additional input
 bad_snps_file = "/oak/stanford/groups/euan/projects/fitness_genetics/bad_mega_snps.txt"
 # New batch - June 2019
 
@@ -169,16 +169,19 @@ ids2 = read.table(paste(job_dir,"bfile2.fam",sep=""),stringsAsFactors = F)[,2]
 print(paste("number of subjects in both files:",length(intersect(ids1,ids2))))
 
 # Compare the bim files
-bim1 = read.table(paste(job_dir,"bfile1.bim",sep=""),stringsAsFactors = F,row.names = 2)
-bim2 = read.table(paste(job_dir,"bfile2.bim",sep=""),stringsAsFactors = F,row.names = 2)
+bim1 = fread(paste(job_dir,"bfile1.bim",sep=""),stringsAsFactors = F,
+             data.table = F)
+bim2 = fread(paste(job_dir,"bfile2.bim",sep=""),stringsAsFactors = F,
+             data.table = F)
+rownames(bim1) = bim1[,2];rownames(bim2) = bim2[,2]
 all(dim(bim1)==dim(bim2))
 length(intersect(rownames(bim1),rownames(bim2))) == nrow(bim1)
 bim2 = bim2[rownames(bim1),]
-table(bim1[,5]==bim2[,5])
-same_snps = bim1[,5]==bim2[,5] & bim1[,4]==bim2[,4]
-same_snps_diff_maf = bim1[,5]==bim2[,4] & bim1[,4]==bim2[,5]
-zero_maf1 = bim1[,4]=="0"
-zero_maf2 = bim2[,4]=="0"
+table(bim1[,6]==bim2[,6])
+same_snps = bim1[,5]==bim2[,5] & bim1[,6]==bim2[,6]
+same_snps_diff_maf = bim1[,6]==bim2[,5] & bim1[,5]==bim2[,6]
+zero_maf1 = bim1[,5]=="0"
+zero_maf2 = bim2[,5]=="0"
 maybe_rev_snps = !(same_snps | zero_maf2 | zero_maf1 | same_snps_diff_maf)
 sum(maybe_rev_snps) == 0 # should be true
 
@@ -262,27 +265,20 @@ frq2 = read.table(paste(job_dir,"bfile2.frq",sep=""),stringsAsFactors = F,header
 het1 = read.table(paste(job_dir,"bfile1.hwe",sep=""),stringsAsFactors = F,header=T)
 het2 = read.table(paste(job_dir,"bfile2.hwe",sep=""),stringsAsFactors = F,header=T)
 
-to_rem_file1 = union(miss1$SNP[1-miss1$F_MISS<snp_min_call_rate],
-                     frq1$SNP[frq1$MAF < min_maf])
+to_rem_file1 = miss1$SNP[1-miss1$F_MISS<snp_min_call_rate]
 to_rem_file1 = union(to_rem_file1,het1$SNP[het1$P < snp_het_p])
-to_rem_file2 = union(miss2$SNP[1-miss2$F_MISS<snp_min_call_rate],
-                     frq2$SNP[frq2$MAF < min_maf])
+to_rem_file2 = miss2$SNP[1-miss2$F_MISS<snp_min_call_rate]
 to_rem_file2 = union(to_rem_file2,het2$SNP[het2$P < snp_het_p])
 
 # Some numbers
 sum(1-miss1$F_MISS<snp_min_call_rate, na.rm=T)
-sum(frq1$MAF < min_maf, na.rm = T)
 sum(het1$P < snp_het_p, na.rm=T)
-x1 = frq1$MAF;names(x1) = frq1$SNP
-x2 = snp_data1$Minor.Freq;names(x2) = snp_data1$Name
-x1[is.na(x1)] = 0
-cor(x2[names(x1)],x1)
 print(paste("Second QC using plink, removed from file 1:",length(to_rem_file1)))
 print(paste("Second QC using plink, removed from file 2:",length(to_rem_file2)))
 print(paste("Second QC, overlap between the two files:",length(intersect(to_rem_file2,to_rem_file1))))
 
 to_rem_files_union = union(to_rem_file1,to_rem_file2)
-bim1 = read.table(paste(job_dir,"bfile1.bim",sep=""),stringsAsFactors = F)
+bim1 = fread(paste(job_dir,"bfile1.bim",sep=""),stringsAsFactors = F,data.table = F)
 snps_to_keep = setdiff(bim1[,2],to_rem_files_union)
 print(paste("remaining number of snps after second qc:",length(snps_to_keep)))
 
@@ -305,10 +301,11 @@ print(paste("removed samples in previous step, by cohort",table(sample_metadata_
 print(paste("removed samples in previous step, by cohort",table(sample_metadata_raw[to_rem2[,2],"Cohort"])))
 
 # Read the bim files: we may need to flip some snps
-bim1 = read.table(paste(job_dir,"bfile1.bim",sep=""),stringsAsFactors = F)
-bim2 = read.table(paste(job_dir,"bfile2.bim",sep=""),stringsAsFactors = F)
+bim1 = fread(paste(job_dir,"bfile1.bim",sep=""),stringsAsFactors = F,data.table = F)
+bim2 = fread(paste(job_dir,"bfile2.bim",sep=""),stringsAsFactors = F,data.table = F)
 rownames(bim1) = bim1[,2];rownames(bim2) = bim2[,2]
 all(bim1[,2]==bim2[,2])
+length(intersect(bim1[,2],bim2[,2])) == nrow(bim1)
 bim1 = bim1[rownames(bim2),]
 
 xx = cbind(bim1[,5:6],bim2[,5:6])
@@ -318,7 +315,7 @@ is_one_allele_appears_as_two = apply(xx,1,one_allele_appears_as_two)
 xx[is_one_allele_appears_as_two,]
 snps_to_flip = rownames(bim1)[is_one_allele_appears_as_two | all_num_alleles>2]
 print(paste("comparing the two bim files, these should be removed or flipped:",length(snps_to_flip)))
-# Dec 2018: the snps discovered above have alleles marked as "0 0" in one of the files. Exclude and do not flip.
+# July 2019: nothing to remove
 snps_to_keep = setdiff(snps_to_keep,snps_to_flip)
 extract_snps_using_plink(paste(job_dir,"bfile1",sep=""),snps_to_keep,job_dir,"final_snps_to_keep","bfile1",
                          batch_script_func=get_sh_default_prefix)
@@ -425,7 +422,7 @@ table(sapply(arrs,length))
 flipscan_failures = sapply(arrs,length) > 11
 flipscan_failures = sapply(arrs[flipscan_failures],function(x)x[3])
 # sapply(arrs[flipscan_failures],function(x)x[2])
-bim = read.table(paste(job_dir,"merged_mega_data.bim",sep=""),stringsAsFactors = F)
+bim = fread(paste(job_dir,"merged_mega_data.bim",sep=""),stringsAsFactors = F,data.table = F)
 snps_to_keep = setdiff(bim[,2],flipscan_failures)
 print(paste("Flipscan check, number of variants to remove:",length(flipscan_failures)))
 extract_snps_using_plink(paste(job_dir,"merged_mega_data",sep=""),snps_to_keep,job_dir,
@@ -437,8 +434,9 @@ print("After flipscan, data sizes are:")
 print(paste("number of samples:",length(readLines(paste(job_dir,"merged_mega_data.fam",sep="")))))
 print(paste("number of snps:",length(readLines(paste(job_dir,"merged_mega_data.bim",sep="")))))
 ids = read.table(paste(job_dir,"merged_mega_data.fam",sep=""),stringsAsFactors = F)[,2]
-print(paste("number of cooper samples in this file:",sum(sample_metadata_raw[ids,"Cohort"]!="Cooper")))
+print(paste("number of non cooper samples in this file:",sum(sample_metadata_raw[ids,"Cohort"]!="Cooper")))
 print(paste("number of cooper samples in this file:",sum(sample_metadata_raw[ids,"Cohort"]=="Cooper")))
+table(sample_metadata_raw[ids,"Cohort"])
 
 # ####################################################################################################
 # ####################################################################################################
@@ -469,12 +467,8 @@ wait_for_job()
 # above the list of excluded snps was printed to a file in the job dir
 err_path = paste(job_dir,"chr_filter.err",sep="")
 log_path = paste(job_dir,"chr_filter.log",sep="")
-chr_filter = "--chr 0-22"
-if(!autosomal_chrs){
-  chr_filter = "--no-chr 0-22"
-}
 curr_cmd = paste("plink --bfile",paste(job_dir,"merged_mega_data",sep=''),
-                 chr_filter,
+                 "--chr 0-22",
                  "--missing --freq --make-bed --out",paste(job_dir,"merged_mega_data_autosomal",sep=''))
 curr_sh_file = "chr_filter.sh"
 print_sh_file(paste(job_dir,curr_sh_file,sep=''),
@@ -485,9 +479,7 @@ print("After removing non autosomal variants, data sizes are:")
 print(paste("number of samples:",length(readLines(paste(job_dir,"merged_mega_data_autosomal.fam",sep="")))))
 print(paste("number of snps:",length(readLines(paste(job_dir,"merged_mega_data_autosomal.bim",sep="")))))
 ids = read.table(paste(job_dir,"merged_mega_data_autosomal.fam",sep=""),stringsAsFactors = F)[,2]
-print(paste("number of cooper samples in this file:",sum(sample_metadata_raw[ids,"Cohort"]!="Cooper")))
-print(paste("number of cooper samples in this file:",sum(sample_metadata_raw[ids,"Cohort"]=="Cooper",na.rm = T)))
-print(paste("number of cooper samples in this file:",sum(sample_metadata_raw[ids,"Cohort"]=="Elite",na.rm = T)))
+table(sample_metadata_raw[ids,"Cohort"])
 
 # quick comparison of the data using TOP strand vs + strand
 # plus_bim = read.table("/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl_fwd_strand/raw.bim")
@@ -558,9 +550,7 @@ print("After removing non autosomal variants, data sizes are:")
 print(paste("number of samples:",length(readLines(paste(job_dir,"merged_mega_data_autosomal.fam",sep="")))))
 print(paste("number of snps:",length(readLines(paste(job_dir,"merged_mega_data_autosomal.bim",sep="")))))
 ids = read.table(paste(job_dir,"merged_mega_data_autosomal.fam",sep=""),stringsAsFactors = F)[,2]
-print(paste("number of cooper samples in this file:",sum(sample_metadata_raw[ids,"Cohort"]=="Cooper",na.rm = T)))
-print(paste("number of ELITE samples in this file:",sum(sample_metadata_raw[ids,"Cohort"]=="ELITE",na.rm = T)))
-print(paste("number of GP samples in this file:",sum(sample_metadata_raw[ids,"Cohort"]=="genepool",na.rm = T)))
+table(sample_metadata_raw[ids,"Cohort"])
 
 # Organize the new phenotypes
 
@@ -596,58 +586,58 @@ xx = sample_metadata_raw
 removed_info = xx[is.element(sample_metadata_raw_ids,removed),1:10]
 write.table(removed_info,file="removed_samples_info.txt",sep="\t",row.names = F,col.names = T,quote=F)
 
-####################################################################################################
-####################################################################################################
-####################################################################################################
-# GWAS vs. sex
-imputed_sex1 = read_plink_table(paste(input_bfile1,".sexcheck",sep=''))[,4]
-imputed_sex2 = read_plink_table(paste(input_bfile2,".sexcheck",sep=''))[,4]
-fam_samples = read.table(paste(job_dir,"merged_mega_data_autosomal.fam",sep=""),stringsAsFactors = F)
-subjects_for_analysis = fam_samples[,2]
-is_mega_consortium = !grepl(fam_samples[,1],pattern="^file")
-imputed_sex = c(
-  imputed_sex1[is.element(names(imputed_sex1),set=subjects_for_analysis[!is_mega_consortium])],
-  imputed_sex2[is.element(names(imputed_sex2),set=subjects_for_analysis[is_mega_consortium])]
-)
-length(intersect(names(imputed_sex),subjects_for_analysis)) == length(subjects_for_analysis) # must be TRUE
-imputed_sex = imputed_sex[subjects_for_analysis]
-all(names(imputed_sex) == fam_samples[,2])
-
-pheno_file = paste(job_dir,"fam_with_sex_info.txt",sep='')
-sex_fam_info = cbind(fam_samples[,1:2],imputed_sex)
-colnames(sex_fam_info) = c("FID","IID","sex")
-write.table(sex_fam_info,file=pheno_file,row.names = F,sep="\t",col.names = T,quote = F)
-err_path = paste(job_dir,"sex_gwas_qc.err",sep="")
-log_path = paste(job_dir,"sex_gwas_qc.log",sep="")
-curr_cmd = paste("plink2",
-                 "--bfile",paste(job_dir,"merged_mega_data_autosomal",sep=''),
-                 "--logistic hide-covar firth-fallback",
-                 paste("--pheno",pheno_file),
-                 paste("--pheno-name sex"),
-                 "--adjust",
-                 "--out",paste(job_dir,"sex_gwas_qc",sep=''))
-curr_sh_file = "sex_gwas_qc.sh"
-print_sh_file(paste(job_dir,curr_sh_file,sep=''),
-              get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,"plink/2.0a1",2,10000),curr_cmd)
-system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
-wait_for_job(120)
-
-# Look at the results 
-sex_gwas_qc_res = read.table(paste(job_dir,"sex_gwas_qc.sex.glm.logistic.hybrid.adjusted",sep=""),stringsAsFactors = F)
-table(sex_gwas_qc_res[,3]> 1e-5)
-sex_snps = sex_gwas_qc_res[sex_gwas_qc_res[,3]> 1e-5,2]
-extract_snps_using_plink(paste(job_dir,"merged_mega_data_autosomal",sep=""),sex_snps,job_dir,
-                         "_snps_to_keep_after_sex_gwas_qc","merged_mega_data_autosomal",
-                         batch_script_func=get_sh_default_prefix)
-wait_for_job(120)
-
-print("After removing non autosomal variants, data sizes are:")
-print(paste("number of samples:",length(readLines(paste(job_dir,"merged_mega_data_autosomal.fam",sep="")))))
-print(paste("number of snps:",length(readLines(paste(job_dir,"merged_mega_data_autosomal.bim",sep="")))))
-ids = read.table(paste(job_dir,"merged_mega_data_autosomal.fam",sep=""),stringsAsFactors = F)[,2]
-print(paste("number of cooper samples in this file:",sum(sample_metadata_raw[ids,"Cohort"]=="Cooper",na.rm = T)))
-print(paste("number of ELITE samples in this file:",sum(sample_metadata_raw[ids,"Cohort"]=="ELITE",na.rm = T)))
-print(paste("number of GP samples in this file:",sum(sample_metadata_raw[ids,"Cohort"]=="genepool",na.rm = T)))
+# ####################################################################################################
+# ####################################################################################################
+# ####################################################################################################
+# # GWAS vs. sex
+# imputed_sex1 = read_plink_table(paste(input_bfile1,".sexcheck",sep=''))[,4]
+# imputed_sex2 = read_plink_table(paste(input_bfile2,".sexcheck",sep=''))[,4]
+# fam_samples = read.table(paste(job_dir,"merged_mega_data_autosomal.fam",sep=""),stringsAsFactors = F)
+# subjects_for_analysis = fam_samples[,2]
+# is_mega_consortium = !grepl(fam_samples[,1],pattern="^file")
+# imputed_sex = c(
+#   imputed_sex1[is.element(names(imputed_sex1),set=subjects_for_analysis[!is_mega_consortium])],
+#   imputed_sex2[is.element(names(imputed_sex2),set=subjects_for_analysis[is_mega_consortium])]
+# )
+# length(intersect(names(imputed_sex),subjects_for_analysis)) == length(subjects_for_analysis) # must be TRUE
+# imputed_sex = imputed_sex[subjects_for_analysis]
+# all(names(imputed_sex) == fam_samples[,2])
+# 
+# pheno_file = paste(job_dir,"fam_with_sex_info.txt",sep='')
+# sex_fam_info = cbind(fam_samples[,1:2],imputed_sex)
+# colnames(sex_fam_info) = c("FID","IID","sex")
+# write.table(sex_fam_info,file=pheno_file,row.names = F,sep="\t",col.names = T,quote = F)
+# err_path = paste(job_dir,"sex_gwas_qc.err",sep="")
+# log_path = paste(job_dir,"sex_gwas_qc.log",sep="")
+# curr_cmd = paste("plink2",
+#                  "--bfile",paste(job_dir,"merged_mega_data_autosomal",sep=''),
+#                  "--logistic hide-covar firth-fallback",
+#                  paste("--pheno",pheno_file),
+#                  paste("--pheno-name sex"),
+#                  "--adjust",
+#                  "--out",paste(job_dir,"sex_gwas_qc",sep=''))
+# curr_sh_file = "sex_gwas_qc.sh"
+# print_sh_file(paste(job_dir,curr_sh_file,sep=''),
+#               get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,"plink/2.0a1",2,10000),curr_cmd)
+# system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
+# wait_for_job(120)
+# 
+# # Look at the results 
+# sex_gwas_qc_res = read.table(paste(job_dir,"sex_gwas_qc.sex.glm.logistic.hybrid.adjusted",sep=""),stringsAsFactors = F)
+# table(sex_gwas_qc_res[,3]> 1e-5)
+# sex_snps = sex_gwas_qc_res[sex_gwas_qc_res[,3]> 1e-5,2]
+# extract_snps_using_plink(paste(job_dir,"merged_mega_data_autosomal",sep=""),sex_snps,job_dir,
+#                          "_snps_to_keep_after_sex_gwas_qc","merged_mega_data_autosomal",
+#                          batch_script_func=get_sh_default_prefix)
+# wait_for_job(120)
+# 
+# print("After removing non autosomal variants, data sizes are:")
+# print(paste("number of samples:",length(readLines(paste(job_dir,"merged_mega_data_autosomal.fam",sep="")))))
+# print(paste("number of snps:",length(readLines(paste(job_dir,"merged_mega_data_autosomal.bim",sep="")))))
+# ids = read.table(paste(job_dir,"merged_mega_data_autosomal.fam",sep=""),stringsAsFactors = F)[,2]
+# print(paste("number of cooper samples in this file:",sum(sample_metadata_raw[ids,"Cohort"]=="Cooper",na.rm = T)))
+# print(paste("number of ELITE samples in this file:",sum(sample_metadata_raw[ids,"Cohort"]=="ELITE",na.rm = T)))
+# print(paste("number of GP samples in this file:",sum(sample_metadata_raw[ids,"Cohort"]=="genepool",na.rm = T)))
 
 # ####################################################################################################
 # ####################################################################################################
@@ -743,7 +733,9 @@ analysis_name = "our_data_ld_prune"
 err_path = paste(job_dir,analysis_name,"_ld_report.err",sep="")
 log_path = paste(job_dir,analysis_name,"_ld_report.log",sep="")
 curr_cmd = paste("plink --bfile",paste(job_dir,"merged_mega_data_autosomal",sep=''),
-                 "--maf 0.05 --indep-pairwise 250 10",0.1,
+                 "--maf 0.05",
+                 # "--indep-pairwise 250 10",0.1, # Before July 2019
+                 "--indep-pairwise 500 10",0.3, # After: we want more variables here...
                  "--out",paste(job_dir,analysis_name,"_plink.prune",sep=""))
 curr_sh_file = paste(analysis_name,"_ld_report.sh",sep="")
 print_sh_file(paste(job_dir,curr_sh_file,sep=''),
@@ -784,7 +776,7 @@ print_sh_file(paste(job_dir,curr_sh_file,sep=''),
 system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
 wait_for_job(120)
 
-# Code below wraps all relevant metadata and print it into a file
+# Code below wraps all relevant metadata and prints it into a file
 imputed_sex1 = read_plink_table(paste(input_bfile1,".sexcheck",sep=''))[,4]
 imputed_sex2 = read_plink_table(paste(input_bfile2,".sexcheck",sep=''))[,4]
 fam_samples = read.table(paste(job_dir,"merged_mega_data_autosomal.fam",sep=""),stringsAsFactors = F)

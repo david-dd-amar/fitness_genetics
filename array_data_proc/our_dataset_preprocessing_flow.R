@@ -830,9 +830,6 @@ write.table(covariate_matrix,file=
 table(covariate_matrix[,"Cohort"])
 table(covariate_matrix[,"Cohort"],covariate_matrix[,"batch"])
 
-# !! At this point we have our directly genotyped data. Subsequent analyses can follow but this
-# is the data we should use for the initial QCs, especially when integrating with external datasets.
-
 ####################################################################################################
 ####################################################################################################
 ####################################################################################################
@@ -1668,10 +1665,11 @@ system(paste("sbatch",paste(curr_dir,curr_sh_file,sep='')))
 ####################################################################################################
 
 # Locally, should be commented out before running as a batch
-setwd("/Users/David/Desktop/elite/november2018_analysis/mega_with_gp/")
+# setwd("/Users/David/Desktop/elite/november2018_analysis/mega_with_gp/")
+setwd("/Users/David/Desktop/elite/july2019_analysis/")
 d = read.delim("integrated_sample_metadata_and_covariates.txt",stringsAsFactors = F)
 rownames(d) = d$IID
-d2 = read.delim("../../metadata/june_2018_integrated_info/merged_metadata_file_stanford3k_elite_cooper.txt")
+d2 = read.delim("../metadata/june_2018_integrated_info/merged_metadata_file_stanford3k_elite_cooper.txt")
 d2_ids = paste(d2$SentrixBarcode_A,d2$SentrixPosition_A,sep="_")
 samp_id = d2$Sample_ID
 altsamp_id = d2$alt_sample_id
@@ -1681,6 +1679,7 @@ is_jap = grepl(altsamp_id,pattern="JA"); names(is_jap) = d2_ids
 table(d$Cohort)
 d$Cohort[d$Cohort=="2"]="ELITE"
 d$Cohort[d$Cohort=="1"] = "Cooper"
+d$is_jap = is_jap[rownames(d)]
 
 # Cluster by the first two PCs
 set.seed(123)
@@ -1688,11 +1687,11 @@ pc_x = as.matrix(d[,paste("PC",1:2,sep="")])
 rownames(pc_x) = rownames(d)
 
 to_rem = rep(F,nrow(d))
-for(j in 1:20){
+for(j in 1:10){
   x = d[,paste("PC",j,sep="")]
   x = (x-mean(x))/sd(x)
-  print(sum(abs(x)>6))
-  to_rem[abs(x)>6] = T
+  print(sum(abs(x)>8))
+  to_rem[abs(x)>8] = T
 }
 table(to_rem)
 # pc_x = pc_x[!to_rem,]
@@ -1718,90 +1717,59 @@ table(to_rem)
 #   xlim = c(-0.02,0.02),ylim = c(-0.05,0.1))
 # legend(x="topright",names(res[[1]]),fill = res[[1]],cex=1.3,ncol = 4)
 
+library(ggplot2)
 
-inds = 1:nrow(d)
-res = two_d_plot_visualize_covariate(d$PC1[inds],
-    d$PC2[inds],d$Cohort[inds],d$Cohort[inds],
-    main = "Cooper and Elite",xlab="PC1",ylab="PC2",lwd=2,cex.axis=1.4,cex.lab=1.4)
-legend(x="topleft",names(res[[1]]),
-       fill = res[[1]],cex=1.1)
+inds = !is.na(d$Cohort)
+# inds = 1:nrow(d)
+ggplot(d[inds,],aes(x=PC1, y=PC2,shape=Cohort,color=Cohort)) + 
+  geom_point(size=2) + ggtitle("PCs 1 and 2") + 
+  theme(plot.title = element_text(hjust = 0.5))
+ggplot(d[inds,],aes(x=PC3, y=PC4,shape=Cohort,color=Cohort)) + 
+  geom_point(size=2) + ggtitle("PCs 1 and 2") + 
+  theme(plot.title = element_text(hjust = 0.5))
+ggplot(d[inds,],aes(x=PC5, y=PC6,shape=Cohort,color=Cohort)) + 
+  geom_point(size=2) + ggtitle("PCs 1 and 2") + 
+  theme(plot.title = element_text(hjust = 0.5))
+ggplot(d[inds,],aes(x=PC1, y=PC2,shape=Cohort,color=is_jap)) + 
+  geom_point(size=2) + ggtitle("PCs 1 and 2") + 
+  theme(plot.title = element_text(hjust = 0.5))
 
-res = two_d_plot_visualize_covariate(d$PC3[inds],
-    d$PC4[inds],d$Cohort[inds],d$Cohort[inds],
-    main = "Cooper and Elite",xlab="PC3",ylab="PC4",lwd=2,cex.axis=1.4,cex.lab=1.4)
-legend(x="topright",names(res[[1]]),
-       fill = res[[1]],cex=1.1)
+# manual_clustering = d$PC1 < 0 & d$PC2 < 0.02 # Before July 2019
+manual_clustering = d$PC1 < 0 & d$PC2 < 0.02 # After July 2019
+d$manual_clustering = manual_clustering
+ggplot(d[inds,],aes(x=PC1, y=PC2,shape=Cohort,color=manual_clustering)) + 
+  geom_point(size=2) + ggtitle("PCs 1 and 2") + 
+  theme(plot.title = element_text(hjust = 0.5))
 
-res = two_d_plot_visualize_covariate(d$PC5[inds],
-    d$PC6[inds],d$Cohort[inds],d$Cohort[inds],
-    main = "Cooper and Elite",xlab="PC5",ylab="PC6",lwd=2,cex.axis=1.4,cex.lab=1.4)
-legend(x="topright",names(res[[1]]),
-       fill = res[[1]],cex=1.1)
-
-manual_clustering = d$PC1 < 0 & d$PC2 < 0.02
 names(manual_clustering) = rownames(d)
 table(manual_clustering,to_rem)
+table(manual_clustering)
 table(manual_clustering,d$Cohort)
 table(manual_clustering,is_jap[names(manual_clustering)])
+manual_clustering[to_rem] = F
+table(manual_clustering)
+table(manual_clustering,d$Cohort)
 
 save(manual_clustering,file="manual_clustering.RData")
 
-res = two_d_plot_visualize_covariate(d$PC1[inds],
-  d$PC2[inds],manual_clustering[inds],manual_clustering[inds],
-  main = "Inferred EUs",xlab="PC1",ylab="PC2",lwd=2,cex.axis=1.4,cex.lab=1.4)
-legend(x="topright",names(res[[1]]),fill = res[[1]],cex=1.1,ncol = 1)
-
-inds = 1:nrow(d)
-cohort_name = c("Cooper","ELITE")
-res = two_d_plot_visualize_covariate(d$PC13[inds],
-    d$PC12[inds],d$Cohort[inds],d$Cohort[inds],
-    main = "Cooper and Elite",xlab="PC13",ylab="PC12",lwd=2,cex.axis=1.4,cex.lab=1.4,
-    xlim = c(-0.1,0.1),ylim = c(-0.1,0.1))
-legend(x="topleft",cohort_name[as.numeric(names(res[[1]]))],
-       fill = res[[1]],cex=1.3)
-
-res = two_d_plot_visualize_covariate(d$PC2[inds],
-      d$PC3[inds],kmeans_res[inds],kmeans_res[inds],
-      main = "PCA+Clustering",xlab="PC2",ylab="PC3",lwd=2,cex.axis=1.4,cex.lab=1.4)
-legend(x="bottomright",names(res[[1]]),fill = res[[1]],cex=1.3)
-
-res = two_d_plot_visualize_covariate(d$PC3[inds],
-    d$PC2[inds],d$Cohort[inds],d$Cohort[inds],
-    main = "Cooper and Elite",xlab="PC3",ylab="PC2",lwd=2,cex.axis=1.4,cex.lab=1.4)
-legend(x="topleft",cohort_name[as.numeric(names(res[[1]]))],
-       fill = res[[1]],cex=1.3)
-
-res = two_d_plot_visualize_covariate(d$PC1[inds],
-    d$PC2[inds],d$batch[inds],d$batch[inds],
-    main = "Cooper and Elite",xlab="PC1",ylab="PC2",cex.axis=1.4,cex.lab=1.4)
-legend(x="topleft",cohort_name[as.numeric(names(res[[1]]))],
-       fill = res[[1]],cex=1.3)
-
-curr_is_jap = is_jap[rownames(d)]
-res = two_d_plot_visualize_covariate(d$PC1[inds],
-    d$PC2[inds],curr_is_jap[inds],curr_is_jap[inds],
-    main = "Is JA sample?",xlab="PC1",ylab="PC2")
-legend(x="topleft",cohort_name[as.numeric(names(res[[1]]))],
-       fill = res[[1]],cex=1.3)
-
-# Check number of clusters in PCA plot
-wss <- sapply(1:10,
-              function(k){kmeans(pc_x, k, nstart=50,iter.max = 15 )$tot.withinss})
-wss <- sapply(1:20,function(k){tot_wss_hluct(k,h,pc_x)})
-
-plot(1:length(wss), wss,
-     type="b", pch = 19, frame = FALSE,cex.lab=1.5,lwd=2,cex.axis=1.4,
-     xlab="Number of clusters K",
-     ylab="Total within-clusters sum of squares")
-
-pc_ps = c()
-for(j in 1:20){
-  # pc_ps[j] = compute_pc_vs_discrete_variable_association_p(d[,paste("PC",j,sep="")],
-  #                                                          d$Cohort)
-  pc_ps[j] = compute_pc_vs_binary_variable_association_p(d[,paste("PC",j,sep="")],
-                                                         d$Cohort)
-}
-p.adjust(pc_ps)
+# # Check number of clusters in PCA plot
+# wss <- sapply(1:10,
+#               function(k){kmeans(pc_x, k, nstart=50,iter.max = 15 )$tot.withinss})
+# wss <- sapply(1:20,function(k){tot_wss_hluct(k,h,pc_x)})
+# 
+# plot(1:length(wss), wss,
+#      type="b", pch = 19, frame = FALSE,cex.lab=1.5,lwd=2,cex.axis=1.4,
+#      xlab="Number of clusters K",
+#      ylab="Total within-clusters sum of squares")
+# 
+# pc_ps = c()
+# for(j in 1:20){
+#   # pc_ps[j] = compute_pc_vs_discrete_variable_association_p(d[,paste("PC",j,sep="")],
+#   #                                                          d$Cohort)
+#   pc_ps[j] = compute_pc_vs_binary_variable_association_p(d[,paste("PC",j,sep="")],
+#                                                          d$Cohort)
+# }
+# p.adjust(pc_ps)
 
 
 pc_rocs = c()

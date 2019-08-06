@@ -858,13 +858,11 @@ print("After selecting the EUs, data sizes are:")
 print(paste("number of samples:",length(readLines(paste(job_dir,"merged_mega_data_autosomal_eu_selected.fam",sep="")))))
 print(paste("number of snps:",length(readLines(paste(job_dir,"merged_mega_data_autosomal_eu_selected.bim",sep="")))))
 ids = read.table(paste(job_dir,"merged_mega_data_autosomal_eu_selected.fam",sep=""),stringsAsFactors = F)[,2]
-print(paste("number of ELITE samples in this file:",sum(sample_metadata_raw[ids,"Cohort"]=="ELITE",na.rm = T)))
-print(paste("number of cooper samples in this file:",sum(sample_metadata_raw[ids,"Cohort"]=="Cooper",na.rm = T)))
-print(paste("number of genepool samples in this file:",sum(sample_metadata_raw[ids,"Cohort"]=="genepool",na.rm = T)))
-
-curr_gp_data = sample_metadata_raw[ids,]
-curr_gp_data = curr_gp_data[curr_gp_data[,"Cohort"]=="genepool",]
-table(is.na(curr_gp_data$Age..at.test.)) 
+table(sample_metadata_raw[ids,"Cohort"])
+    
+# curr_gp_data = sample_metadata_raw[ids,]
+# curr_gp_data = curr_gp_data[curr_gp_data[,"Cohort"]=="genepool",]
+# table(is.na(curr_gp_data$Age..at.test.)) 
 
 # Load covariates, create a new dir for GWAS and reruns of PCA
 curr_dir = paste(job_dir,"eu_gwas/",sep="")
@@ -873,7 +871,8 @@ analysis_name = "our_data_ld_prune"
 err_path = paste(curr_dir,analysis_name,"_ld_report.err",sep="")
 log_path = paste(curr_dir,analysis_name,"_ld_report.log",sep="")
 curr_cmd = paste("plink --bfile",paste(job_dir,"merged_mega_data_autosomal_eu_selected",sep=''),
-                 "--maf 0.05 --indep-pairwise 250 10",0.1,
+                 # "--maf 0.05 --indep-pairwise 250 10",0.1, # Before July 2019
+                 "--maf 0.05 --indep-pairwise 500 10",0.3, # After: we want more variables here...
                  "--out",paste(curr_dir,analysis_name,"_plink.prune",sep=""))
 curr_sh_file = paste(analysis_name,"_ld_report.sh",sep="")
 print_sh_file(paste(curr_dir,curr_sh_file,sep=''),
@@ -1007,9 +1006,9 @@ out_files = out_files[grepl("logistic$",out_files)]
 out_files = out_files[!grepl("fuma",out_files)]
 for(ff in out_files){
   print(ff)
-  res = read.table(paste(curr_dir,ff,sep=""),stringsAsFactors = F,header=T)
-  print(paste("num variants with p<1e-06:",sum(as.numeric(res[,"P"]<1e-6))))
-  print(paste("num variants with p<5e-08:",sum(as.numeric(res[,"P"]<5e-8))))
+  res = fread(paste(curr_dir,ff,sep=""),stringsAsFactors = F,data.table = F)
+  print(paste("num variants with p<1e-06:",sum(as.numeric(res[,"P"]<1e-6),na.rm = T)))
+  print(paste("num variants with p<5e-08:",sum(as.numeric(res[,"P"]<5e-8),na.rm = T)))
   fuma_res = res[,c("CHR","BP","OR","P")]
   colnames(fuma_res) = c("chromosome","position","OR","P-value")
   write.table(fuma_res,file=paste(curr_dir,"fuma_",ff,sep=""),quote=F,col.names = T,row.names = F,
@@ -1022,8 +1021,8 @@ out_files = out_files[!grepl("fuma",out_files)]
 for(ff in out_files){
   print(ff)
   res = read.table(paste(curr_dir,ff,sep=""),stringsAsFactors = F,header=T)
-  print(paste("num variants with p<1e-06:",sum(as.numeric(res[,"P"]<1e-6))))
-  print(paste("num variants with p<5e-08:",sum(as.numeric(res[,"P"]<5e-8))))
+  print(paste("num variants with p<1e-06:",sum(as.numeric(res[,"P"]<1e-6),na.rm = T)))
+  print(paste("num variants with p<5e-08:",sum(as.numeric(res[,"P"]<5e-8),na.rm = T)))
   fuma_res = res[,c("CHR","BP","BETA","P")]
   colnames(fuma_res) = c("chromosome","position","beta","P-value")
   write.table(fuma_res,file=paste(curr_dir,"fuma_",ff,sep=""),quote=F,col.names = T,row.names = F,
@@ -1206,38 +1205,6 @@ system(paste("sbatch",paste(curr_dir,curr_sh_file,sep='')))
 # mkdir ~/apps/wrayner_strand/
 # cd ~/apps/wrayner_strand
 # wget http://www.well.ox.ac.uk/~wrayner/strand/update_build.sh
-
-####################################################################################################
-####################################################################################################
-####################################################################################################
-
-# !!!!!!!!!!!!!!!!!!!!
-# Code beyond this point should be moved to another script
-# We stop here because at this point we have MEGA EU data after standard QC steps
-
-# ####################################################################################################
-# ####################################################################################################
-# ####################################################################################################
-# # Run GWAS for each PC
-# pheno_file = paste(job_dir,"integrated_sample_metadata_and_covariates.phe",sep='')
-# curr_bfile = "merged_mega_data_autosomal_after_maf"
-# for (j in 1:5){
-#   err_path = paste(job_dir,"all_mega_data_gwas_PC",j,".err",sep="")
-#   log_path = paste(job_dir,"all_mega_data_gwas_PC",j,".log",sep="")
-#   curr_cmd = paste("plink2",
-#                    "--bfile",paste(job_dir,curr_bfile,sep=''),
-#                    "--linear hide-covar",
-#                    paste("--pheno-name",paste("PC",j,sep="")),
-#                    paste("--pheno",pheno_file),
-#                    paste("--covar",pheno_file),
-#                    "--covar-name sex,age",
-#                    "--adjust",
-#                    "--out",paste(job_dir,"all_mega_data_gwas_PC",j,"",sep=''))
-#   curr_sh_file = paste("all_mega_data_gwas_PC",j,".sh",sep="")
-#   print_sh_file(paste(job_dir,curr_sh_file,sep=''),
-#                 get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,"plink/2.0a1",2,10000),curr_cmd)
-#   system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
-# }
 # 
 # ####################################################################################################
 # ####################################################################################################
@@ -1358,188 +1325,6 @@ system(paste("sbatch",paste(curr_dir,curr_sh_file,sep='')))
 # write.table(covariate_matrix,file=
 #               paste(job_dir,"integrated_sample_metadata_and_covariates_after_pca1.phe",sep=''),
 #             sep=" ",quote=F,row.names = F)
-# 
-# ####################################################################################################
-# ####################################################################################################
-# ####################################################################################################
-# # Quick GWAS runs between elite and genepool
-# covariate_matrix = read.delim(paste(job_dir,"integrated_sample_metadata_and_covariates_after_pca1.txt",sep=''),
-#                               stringsAsFactors = F)
-# rownames(covariate_matrix) = covariate_matrix$IID
-# 
-# # read our fam file
-# fam_info = read_plink_table(paste(job_dir,"merged_mega_data_autosomal_after_maf_after_pca.fam",sep=""),has_header = F)
-# iid_to_fid = fam_info[,1]
-# 
-# # PC vs cohort p-values
-# pc_ps = c()
-# for(j in 1:20){
-#   pc_ps[j] = compute_pc_vs_binary_variable_association_p(
-#     covariate_matrix[,paste("PC",j,sep="")],
-#     covariate_matrix[,"Cohort"]
-#   )
-# }
-# pc_ps = p.adjust(pc_ps)
-# pc_ind = max(which(pc_ps<0.01))
-# 
-# # Logistic: Cooper vs. Elite: without batch but with the selected PCs
-# pheno_file = paste(job_dir,"integrated_sample_metadata_and_covariates_after_pca1.phe",sep='')
-# curr_bfile = "merged_mega_data_autosomal_after_maf_after_pca"
-# 
-# err_path = paste(job_dir,"cooper_vs_elite.err",sep="")
-# log_path = paste(job_dir,"cooper_vs_elite.log",sep="")
-# curr_cmd = paste("plink2",
-#                  "--bfile",paste(job_dir,curr_bfile,sep=''),
-#                  "--logistic hide-covar firth-fallback",
-#                  paste("--pheno",pheno_file),
-#                  paste("--pheno-name Cohort"),
-#                  paste("--covar",pheno_file),
-#                  paste("--covar-name sex,age,",paste(paste("PC",1:pc_ind,sep=""),collapse=","),sep=""),
-#                  "--adjust",
-#                  "--out",paste(job_dir,"cooper_vs_elite",sep=''))
-# curr_sh_file = "cooper_vs_elite.sh"
-# print_sh_file(paste(job_dir,curr_sh_file,sep=''),
-#               get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,"plink/2.0a1",2,10000),curr_cmd)
-# system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
-# 
-# 
-# ####################################################################################################
-# ####################################################################################################
-# ####################################################################################################
-# # Run GWAS for each PC
-# pheno_file = paste(job_dir,"integrated_sample_metadata_and_covariates_after_pca1.phe",sep='')
-# curr_bfile = "merged_mega_data_autosomal_after_maf_after_pca"
-# for (j in 1:20){
-#   err_path = paste(job_dir,"gwas_PC",j,".err",sep="")
-#   log_path = paste(job_dir,"gwas_PC",j,".log",sep="")
-#   curr_cmd = paste("plink2",
-#                    "--bfile",paste(job_dir,curr_bfile,sep=''),
-#                    "--linear hide-covar",
-#                    paste("--pheno-name",paste("PC",j,sep="")),
-#                    paste("--pheno",pheno_file),
-#                    paste("--covar",pheno_file),
-#                    "--covar-name sex,age",
-#                    "--adjust",
-#                    "--out",paste(job_dir,"gwas_PC",j,"",sep=''))
-#   curr_sh_file = paste("gwas_PC",j,".sh",sep="")
-#   print_sh_file(paste(job_dir,curr_sh_file,sep=''),
-#                 get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,"plink/2.0a1",2,10000),curr_cmd)
-#   system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
-# }
-# 
-# ####################################################################################################
-# ####################################################################################################
-# ####################################################################################################
-# # Run cooper running times GWAS
-# cooper_metadata = read.delim("/oak/stanford/groups/euan/projects/fitness_genetics/metadata/cooper_metadata.txt",
-#                              stringsAsFactors = F,sep="\t")
-# covariate_matrix = read.delim(paste(job_dir,"integrated_sample_metadata_and_covariates_after_pca1.txt",sep=''),
-#                               stringsAsFactors = F)
-# 
-# # Create the pheno file for the analysis
-# # 1. Parse the treadmill times
-# xt = cooper_metadata$Treadmill.time
-# new_xt = c()
-# for(x in xt){
-#   arr = strsplit(x,split=":")[[1]]
-#   if(length(arr)>2){arr = arr[-3]}
-#   new_xt = c(new_xt,
-#              as.numeric(arr[1])+as.numeric(arr[2])/60)
-# }
-# names(new_xt) = as.character(cooper_metadata[,1])
-# 
-# new_xt = qnorm((rank(new_xt)-0.5)/length(new_xt))
-# 
-# # 2. Cut the cov matrix to have cooper samples only
-# inds = is.element(covariate_matrix$Sample_ID,set=as.character(cooper_metadata[,1]))
-# covariate_matrix = covariate_matrix[inds,]
-# covariate_matrix[,"Treadmill.time"] = new_xt[as.character(covariate_matrix$Sample_ID)]
-# table(is.na(covariate_matrix[,"Treadmill.time"]))
-# 
-# # 3. PC vs. time correlations
-# pc_ps = c()
-# for(j in 1:20){
-#   x1 = covariate_matrix[,paste("PC",j,sep="")]
-#   x2 = covariate_matrix[,"Treadmill.time"]
-#   pc_ps[j] = cor.test(x1,x2,method="spearman")$p.value
-# }
-# 
-# write.table(covariate_matrix,file=
-#               paste(job_dir,"cooper_metadata_and_covariates.phe",sep=''),
-#             sep=" ",quote=F,row.names = F)
-# 
-# # Run the GWAS
-# pheno_file = paste(job_dir,"cooper_metadata_and_covariates.phe",sep='')
-# err_path = paste(job_dir,"cooper_treadmill_times.err",sep="")
-# log_path = paste(job_dir,"cooper_treadmill_times.log",sep="")
-# curr_cmd = paste("plink2",
-#                  "--bfile",paste(job_dir,curr_bfile,sep=''),
-#                  "--linear hide-covar",
-#                  paste("--pheno",pheno_file),
-#                  paste("--pheno-name Treadmill.time"),
-#                  paste("--covar",pheno_file),
-#                  paste("--covar-name sex,age,batch,",paste(paste("PC",1:3,sep=""),collapse=","),sep=""),
-#                  "--adjust",
-#                  "--out",paste(job_dir,"cooper_treadmill_times",sep=''))
-# curr_sh_file = "cooper_treadmill_times.sh"
-# print_sh_file(paste(job_dir,curr_sh_file,sep=''),
-#               get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,"plink/2.0a1",2,10000),curr_cmd)
-# system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
-# wait_for_job()
-# 
-# ####################################################################################################
-# ####################################################################################################
-# ####################################################################################################
-# # Run ELITE VO2 GWAS
-# elite_metadata = read.delim("/oak/stanford/groups/euan/projects/fitness_genetics/metadata/elite_metadata.txt",
-#                              stringsAsFactors = F,sep="\t")
-# covariate_matrix = read.delim(paste(job_dir,"integrated_sample_metadata_and_covariates_after_pca1.txt",sep='')
-#                               ,stringsAsFactors = F)
-# 
-# # change the vo2 feature names
-# colnames(elite_metadata)[grepl("VO2",colnames(elite_metadata),ignore.case = T)] = c("vo2","vo2_l")
-# new_xt = elite_metadata[,"vo2"]
-# new_xt = qnorm((rank(new_xt)-0.5)/length(new_xt))
-# names(new_xt) = elite_metadata[,"Sample_ID"]
-# 
-# # Cut the cov matrix to have cooper samples only
-# inds = is.element(covariate_matrix$Sample_ID,set=as.character(elite_metadata[,1]))
-# covariate_matrix = covariate_matrix[inds,]
-# covariate_matrix[,"VO2max..ml.kg.min."] = new_xt[as.character(covariate_matrix$Sample_ID)]
-# colnames(covariate_matrix)[grepl("VO2",colnames(covariate_matrix),ignore.case = T)] = c("vo2","vo2_l")
-# covariate_matrix = covariate_matrix[!is.na(covariate_matrix[,"vo2"]),]
-# quantile(covariate_matrix[,"vo2"])
-# 
-# # 3. PC vs. time correlations
-# pc_ps = c()
-# for(j in 1:20){
-#   x1 = covariate_matrix[,paste("PC",j,sep="")]
-#   x2 = covariate_matrix[,"vo2"]
-#   pc_ps[j] = cor.test(x1,x2,method="spearman")$p.value
-# }
-# 
-# write.table(covariate_matrix,file=
-#               paste(job_dir,"elite_metadata_and_covariates.phe",sep=''),
-#             sep=" ",quote=F,row.names = F)
-# 
-# # Run the GWAS
-# pheno_file = paste(job_dir,"elite_metadata_and_covariates.phe",sep='')
-# err_path = paste(job_dir,"elite_treadmill_times.err",sep="")
-# log_path = paste(job_dir,"elite_treadmill_times.log",sep="")
-# curr_cmd = paste("plink2",
-#                  "--bfile",paste(job_dir,curr_bfile,sep=''),
-#                  "--linear hide-covar",
-#                  paste("--pheno",pheno_file),
-#                  paste("--pheno-name vo2"),
-#                  paste("--covar",pheno_file),
-#                  paste("--covar-name sex,age,batch,",paste(paste("PC",1:3,sep=""),collapse=","),sep=""),
-#                  "--adjust",
-#                  "--out",paste(job_dir,"elite_treadmill_times",sep=''))
-# curr_sh_file = "elite_treadmill_times.sh"
-# print_sh_file(paste(job_dir,curr_sh_file,sep=''),
-#               get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,"plink/2.0a1",2,10000),curr_cmd)
-# system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
-# wait_for_job()
 # 
 # ####################################################################################################
 # ####################################################################################################

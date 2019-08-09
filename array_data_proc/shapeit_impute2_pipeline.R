@@ -320,18 +320,27 @@ rownames(our_data_info) = our_data_info$rs_id
 # x1 = -log(gwas_res[inds,3],base=10)
 # x2 = our_data_info[inds,]$concord_type0
 our_low_concord_snps = as.character(our_data_info$rs_id[our_data_info$concord_type0 < 0.8])
+length(our_low_concord_snps) / nrow(our_data_info)
 info_files = list.files(info_dir)
 info_files = paste(info_dir,info_files,sep="")
 info_files = info_files[!grepl("by_sample",info_files)]
 low_cert_snps = c()
+all_imputed_snp_scores = c()
 for(ff in info_files){
   curr_data = read.table(ff,header=T,stringsAsFactors = F)
+  curr_scores = curr_data$certainty
+  names(curr_scores) = curr_data$rs_id
+  all_imputed_snp_scores = c(all_imputed_snp_scores,
+                             curr_scores)
   curr_excluded = curr_data$rs_id[curr_data$certainty < 0.9]
   low_cert_snps = c(low_cert_snps,curr_excluded)
   print(length(low_cert_snps))
+  print(length(curr_excluded)/nrow(curr_data))
 }
 save(our_data_info,low_cert_snps,our_low_concord_snps,
+     all_imputed_snp_scores,
      file=paste(info_dir,"our_data_info.RData",sep=""))
+length(low_cert_snps)/length(all_imputed_snp_scores)
 
 to_rem = c(low_cert_snps,our_low_concord_snps)
 to_rem_snp_file = "impute_qc_snps_to_remove"
@@ -341,6 +350,16 @@ for(j in 1:22){
   curr_analysis_name = paste(to_rem_snp_file,j,sep="")
   exclude_snps_using_plink(bfile,to_rem,curr_out_path,curr_analysis_name,bfile)
 }
+
+# How many snps do we have in the data?
+total_num_snps = 0
+for(j in 1:22){
+  bimfile = paste("chr",j,".bim",sep="")
+  d = fread(bimfile)
+  total_num_snps = total_num_snps + nrow(d)
+  rm(d);gc()
+}
+
 
 ############################################
 ############################################
@@ -387,64 +406,64 @@ for (j in 1:22){
   curr_fs = paste(impute2_out_path,"check_bim_chr",j,'/',"chr",j,"*",sep="")
   system(paste("mv",curr_fs,chrs_dir))  
 }
-# 8.4 merge the bim files
-# 8.4.1 Create a list of beds
-all_out_bed_files = list.files(chrs_dir)
-all_out_bed_files = all_out_bed_files[grepl(".bed$",all_out_bed_files)]
-all_out_bed_files = gsub(".bed","",all_out_bed_files)
-chr_num = as.numeric(gsub("chr","",all_out_bed_files))
-all_out_bed_files = all_out_bed_files[order(chr_num)]
-all_out_bed_files = paste(chrs_dir,all_out_bed_files,sep="")
-length(all_out_bed_files)
-allfiles_path = paste(chrs_dir,"allfiles.txt",sep="")
-write.table(t(t(all_out_bed_files[-1])),
-            file = allfiles_path,sep="",row.names = F,col.names = F,quote = F)
-# 8.4.2  Create the allele files
-out_force_allele_file = paste(chrs_dir,"Force_allele.txt",sep="")
-for (j in 1:22){
-  curr_dir = paste(impute2_out_path,"check_bim_chr",j,'/',sep="")
-  curr_files = list.files(curr_dir)
-  curr_file = curr_files[grepl("Force",curr_files)&grepl("chr",curr_files)]
-  curr_file = paste(curr_dir,curr_file,sep="")
-  if(j==1){
-    system(paste("less",curr_file,">",out_force_allele_file))
-  }
-  if(j>1){
-    system(paste("less",curr_file,">>",out_force_allele_file))
-  }
-}
-# Run the merge
-err_path = paste(chrs_dir,"merge_beds.err",sep="")
-log_path = paste(chrs_dir,"merge_beds.log",sep="")
-curr_cmd = paste("plink --bfile",all_out_bed_files[1],
-                 "--merge-list",allfiles_path,
-                 "--reference-allele",out_force_allele_file,
-                 "--freq",
-                 "--threads 8",
-                 "--make-bed --out",paste(chrs_dir,"merged_geno",sep=''))
-curr_sh_file = "merged_beds.sh"
-print_sh_file(paste(chrs_dir,curr_sh_file,sep=''),
-              get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,Ncpu=8,mem_size=64000),curr_cmd)
-system(paste("sbatch",paste(chrs_dir,curr_sh_file,sep='')))
-wait_for_job(120)
+# # OPTIONAL: 8.4 merge the bim files
+# # 8.4.1 Create a list of beds
+# all_out_bed_files = list.files(chrs_dir)
+# all_out_bed_files = all_out_bed_files[grepl(".bed$",all_out_bed_files)]
+# all_out_bed_files = gsub(".bed","",all_out_bed_files)
+# chr_num = as.numeric(gsub("chr","",all_out_bed_files))
+# all_out_bed_files = all_out_bed_files[order(chr_num)]
+# all_out_bed_files = paste(chrs_dir,all_out_bed_files,sep="")
+# length(all_out_bed_files)
+# allfiles_path = paste(chrs_dir,"allfiles.txt",sep="")
+# write.table(t(t(all_out_bed_files[-1])),
+#             file = allfiles_path,sep="",row.names = F,col.names = F,quote = F)
+# # 8.4.2  Create the allele files
+# out_force_allele_file = paste(chrs_dir,"Force_allele.txt",sep="")
+# for (j in 1:22){
+#   curr_dir = paste(impute2_out_path,"check_bim_chr",j,'/',sep="")
+#   curr_files = list.files(curr_dir)
+#   curr_file = curr_files[grepl("Force",curr_files)&grepl("chr",curr_files)]
+#   curr_file = paste(curr_dir,curr_file,sep="")
+#   if(j==1){
+#     system(paste("less",curr_file,">",out_force_allele_file))
+#   }
+#   if(j>1){
+#     system(paste("less",curr_file,">>",out_force_allele_file))
+#   }
+# }
+# # Run the merge
+# err_path = paste(chrs_dir,"merge_beds.err",sep="")
+# log_path = paste(chrs_dir,"merge_beds.log",sep="")
+# curr_cmd = paste("plink --bfile",all_out_bed_files[1],
+#                  "--merge-list",allfiles_path,
+#                  "--reference-allele",out_force_allele_file,
+#                  "--freq",
+#                  "--threads 8",
+#                  "--make-bed --out",paste(chrs_dir,"merged_geno",sep=''))
+# curr_sh_file = "merged_beds.sh"
+# print_sh_file(paste(chrs_dir,curr_sh_file,sep=''),
+#               get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,Ncpu=8,mem_size=64000),curr_cmd)
+# system(paste("sbatch",paste(chrs_dir,curr_sh_file,sep='')))
+# wait_for_job(120)
 
-#########################################################
-#########################################################
-#########################################################
-#########################################################
-# QA: compare imputed and directly genotyped
-bfile1 = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl_mega_separate_recalls/1000g/merged_mega_data_autosomal"
-bfile2 = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/mega_eu_imp/impute2_1000gRef_out/check_bim_res/merged_geno"
-
-bim1 = read.table(paste(bfile1,".bim",sep=""),stringsAsFactors = F)
-bim2 = read.table(paste(bfile2,".bim",sep=""),stringsAsFactors = F)
-rownames(bim1) = bim1[,2]
-rownames(bim2) = bim2[,2]
-
-intr = intersect(bim1[,2],bim2[,2])
-x1 = bim1[intr,]
-x2 = bim2[intr,]
-colSums(x1!=x2)
+# #########################################################
+# #########################################################
+# #########################################################
+# #########################################################
+# # QA: compare imputed and directly genotyped
+# bfile1 = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl_mega_separate_recalls/1000g/merged_mega_data_autosomal"
+# bfile2 = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/mega_eu_imp/impute2_1000gRef_out/check_bim_res/merged_geno"
+# 
+# bim1 = read.table(paste(bfile1,".bim",sep=""),stringsAsFactors = F)
+# bim2 = read.table(paste(bfile2,".bim",sep=""),stringsAsFactors = F)
+# rownames(bim1) = bim1[,2]
+# rownames(bim2) = bim2[,2]
+# 
+# intr = intersect(bim1[,2],bim2[,2])
+# x1 = bim1[intr,]
+# x2 = bim2[intr,]
+# colSums(x1!=x2)
 
 
 

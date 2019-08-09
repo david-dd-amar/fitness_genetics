@@ -1,17 +1,12 @@
 
+chrs = paste("chr",c(1:22),sep="")
 script_file = "/home/users/davidama/repos/fitness_genetics/R/gwas_flow_helper_functions.R"
 source(script_file)
 
 # # Our imputation
 # dataset = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/mega_with_genepool_imp/impute2_1000gRef_out/"
-# # Michigan server with HRC as reference
-# dataset = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/mega_with_genepool_imp/mich_hrc/beds/"
-# # Michigan server with 1000G as reference
-# dataset = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/mega_with_genepool_imp/mich_1000g/beds/"
 # New: august 2019
 dataset = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/mega_reclustered_imp/impute2_1000gRef_out/"
-
-chrs = paste("chr",c(1:22),sep="")
 
 # This is the project's raw annotation file
 mega_covars_path_raw = "/oak/stanford/groups/euan/projects/fitness_genetics/metadata/merged_metadata_file_stanford3k_elite_cooper.txt"
@@ -22,33 +17,13 @@ mega_covars_path_raw = "/oak/stanford/groups/euan/projects/fitness_genetics/meta
 mega_covars_path = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/mega_reclustered_with_genepool_/integrated_sample_metadata_and_covariates.phe"
 
 # These files determine the subject sets and their PCA (i.e., use EU or not)
-# Also, the output path
+# Also, the output path.
 
-# # All
-# pca_results = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/mega_with_genepool/merged_mega_data_autosomal.eigenvec"
-# out_path = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/mega_with_genepool_imp/gwas_res_v1/"
-# system(paste("mkdir",out_path))
-# 
 # # EU
 # pca_results = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/mega_with_genepool/eu_gwas/merged_mega_data_autosomal.eigenvec"
 # out_path = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/mega_with_genepool_imp/gwas_res_eu_v1/"
 # system(paste("mkdir",out_path))
 # 
-# # EU WO age
-# pca_results = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/mega_with_genepool/eu_gwas/merged_mega_data_autosomal.eigenvec"
-# out_path = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/mega_with_genepool_imp/gwas_res_eu_v1_wo_age/"
-# system(paste("mkdir",out_path))
-# 
-# # EU + Michigan impute + HRC
-# pca_results = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/mega_with_genepool/eu_gwas/merged_mega_data_autosomal.eigenvec"
-# out_path = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/mega_with_genepool_imp/gwas_res_eu_mich_hrc/"
-# system(paste("mkdir",out_path))
-# 
-# # EU + Michigan impute + HRC
-# pca_results = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/mega_with_genepool/eu_gwas/merged_mega_data_autosomal.eigenvec"
-# out_path = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/mega_with_genepool_imp/gwas_res_eu_mich_1000g/"
-# system(paste("mkdir",out_path))
-
 # New run: August 2019
 pca_results = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/mega_reclustered_with_genepool_/eu_gwas/merged_mega_data_autosomal.eigenvec"
 out_path = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/mega_reclustered_imp/eu_gwas/"
@@ -59,7 +34,6 @@ system(paste("mkdir",out_path))
 # Define the pheno and cov files
 covs_file = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/mega_reclustered_with_genepool_/eu_gwas/all_covs_and_pheno.phe"
 
-############################################################################
 ############################################################################
 ############################################################################
 ############################################################################
@@ -154,7 +128,6 @@ for(num_pcs in 0:7){
   }
 }
 
-############################################################################
 ############################################################################
 ############################################################################
 ############################################################################

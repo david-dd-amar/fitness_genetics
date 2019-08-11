@@ -270,8 +270,10 @@ covars$Age[is.na(as.numeric(covars$Age))] = NA
 curr_cov_file = paste(curr_dir,"mega_ukbb_covars_with_pcs.phe",sep="")
 write.table(covars,file=curr_cov_file,
             row.names = F,col.names = T,quote=F,sep=" ")
+curr_sample_file = paste(out_path,"mega_ukbb_eu_fam.fam",sep="")
+
 # Run the GWAS: try different numbers of PCs
-chrs= paste("chr",1:22,sep="")
+chrs=paste("chr",1:22,sep="")
 for(num_pcs in tested_pcs_sets){
   cov_string = paste("--covar-name sex,Age,",paste("PC",1:num_pcs,sep="",collapse=","),sep="")
   
@@ -333,11 +335,11 @@ for(num_pcs in tested_pcs_sets){
   }
 }
 
-
 ####################################################################################################
 ####################################################################################################
 ####################################################################################################
 # Create FUMA files
+curr_dir = paste(out_path,"eu_analysis/",sep="")
 
 # Merge the results into single files
 concatenate_res_files<-function(res_files,res_file){
@@ -351,28 +353,23 @@ concatenate_res_files<-function(res_files,res_file){
   }
 }
 
-# March 2019: we take the GP vs. UKBB adjusted for 3 PCs
-nn = "3"
+gwas_job_names = c("gp_vs_ukbb",
+    "cooper_vs_ukbb","elite_vs_ukbb")
+
+all_path_files = list.files(curr_dir)
 for(num_pcs in tested_pcs_sets){
-  curr_path = paste(bfiles,"eu_gp_vs_ukbb_analysis_",nn,"/gwas/",sep="")
-  all_files = list.files(curr_path)
-  all_files = all_files[grepl(paste("pcs",num_pcs,sep=""),all_files) &
-                          grepl("elite_vs_ukbb.glm.logistic.hybrid$",all_files)]
-  res_files = paste(curr_path,all_files,sep="")
-  res_file = paste(curr_path,"elite_gwas_res_all_pcs",num_pcs,".assoc",sep="")
-  concatenate_res_files(res_files,res_file)
-  all_files = list.files(curr_path)
-  all_files = all_files[grepl(paste("pcs",num_pcs,sep=""),all_files) &
-                          grepl("cooper_vs_ukbb.glm.logistic.hybrid$",all_files)]
-  res_files = paste(curr_path,all_files,sep="")
-  res_file = paste(curr_path,"cooper_gwas_res_all_pcs",num_pcs,".assoc",sep="")
-  concatenate_res_files(res_files,res_file)
-  all_files = list.files(curr_path)
-  all_files = all_files[grepl(paste("pcs",num_pcs,sep=""),all_files) &
-                          grepl("gp_vs_ukbb.glm.logistic.hybrid$",all_files)]
-  res_files = paste(curr_path,all_files,sep="")
-  res_file = paste(curr_path,"gp_gwas_res_all_pcs",num_pcs,".assoc",sep="")
-  concatenate_res_files(res_files,res_file)
+  for(jobname in gwas_job_names){
+    res_files = all_path_files[grepl(jobname,all_path_files)]
+    res_files = res_files[grepl("glm",res_files)]
+    res_files = res_files[grepl(paste("pcs",num_pcs,sep=""),res_files)]
+    res_files = res_files[!grepl("\\.id$",res_files)]
+    res_files = res_files[!grepl("adjusted$",res_files)]
+    res_files = paste(curr_dir,res_files,sep="")
+    print(res_files)
+    res_file = paste(curr_dir,jobname,num_pcs,"_all.assoc",sep="")
+    if(is.element(res_file,set=list.files(curr_dir,full.names = T))){next}
+    concatenate_res_files(res_files,res_file)
+  }
 }
 
 get_lambda_from_log_file<-function(f){
@@ -385,114 +382,85 @@ get_lambda_from_log_file<-function(f){
 }
 
 all_lambdas = list()
-all_lambdas[["elite"]] = list()
-all_lambdas[["cooper"]] = list()
-for(cc in c("elite","cooper","gp")){
+all_path_files = list.files(curr_dir)
+for(jobname in gwas_job_names){
+  all_lambdas[[jobname]] = list()
   for(num_pcs in tested_pcs_sets){
-    curr_path = paste(bfiles,"eu_gp_vs_ukbb_analysis_",nn,"/gwas/",sep="")
-    all_log_files = list.files(curr_path)
-    all_log_files = all_log_files[grepl(paste("pcs",num_pcs,sep=""),all_log_files)]
-    all_log_files = all_log_files[grepl("log$",all_log_files)]
-    all_log_files = all_log_files[grepl("pcs",all_log_files)]
-    curr_files = all_log_files[grepl(num_pcs,all_log_files) & grepl(cc,all_log_files)]
-    curr_files = paste(curr_path,curr_files,sep="")
-    curr_lambdas = sapply(curr_files, get_lambda_from_log_file)
-    print(paste(cc,num_pcs,mean(curr_lambdas,na.rm=T)))
-    all_lambdas[[cc]][[as.character(num_pcs)]]=curr_lambdas
+    res_files = all_path_files[grepl(jobname,all_path_files)]
+    res_files = res_files[grepl("log$",res_files)]
+    res_files = res_files[grepl("chr",res_files)]
+    res_files = res_files[grepl(paste("pcs",num_pcs,sep=""),res_files)]
+    res_files = paste(curr_dir,res_files,sep="")
+    curr_lambdas = sapply(res_files, get_lambda_from_log_file)
+    print(paste(num_pcs,mean(curr_lambdas,na.rm=T)))
+    all_lambdas[[jobname]][[as.character(num_pcs)]]=curr_lambdas
   }
 }
-sapply(all_lambdas,sapply,median,na.rm=T)
-save(all_lambdas,file=paste(out_path,"all_lambdas.RData",sep=""))
+save(all_lambdas,file=paste(curr_dir,"all_lambdas.RData",sep=""))
 
 # reformat and write to fuma files
-file2pvals = list()
+# assumption: job 1 is gp vs the ref (e.g., ukbb)
 library(data.table,lib.loc = "~/R/packages/")
-mhc_region = c(25000000,35000000)
+all_results = list()
 for(num_pcs in tested_pcs_sets){
-  curr_path = paste(bfiles,"eu_gp_vs_ukbb_analysis_",nn,"/gwas/",sep="")
-  res_file = paste(curr_path,"elite_gwas_res_all_pcs",num_pcs,".assoc",sep="")
-  res_file2 = paste(curr_path,"fuma_elite_gwas_res_all_pcs",num_pcs,".assoc",sep="")
-  res = fread(res_file,header=T,stringsAsFactors = F,data.table = F)
-  # exclude mhc
-  is_mhc = res[,1]==6 & res[,2]>mhc_region[1] & res[,2]<mhc_region[2]
-  res = res[!is_mhc,]
-  ps = as.numeric(res[,"P"])
-  print(paste("elite 1e-8",num_pcs,sum(ps<1e-8,na.rm=T)))
-  print(paste("elite 1e-6",num_pcs,sum(ps<1e-6,na.rm=T)))
-  res = res[,c(1:2,ncol(res))]
-  colnames(res) = c("chromosome","position","P-value")
-  write.table(res,file=res_file2,col.names = T,row.names = F,quote = F,sep=" ")
-  file2pvals[[res_file]] = res
-  
-  res_file = paste(curr_path,"cooper_gwas_res_all_pcs",num_pcs,".assoc",sep="")
-  res_file2 = paste(curr_path,"fuma_cooper_gwas_res_all_pcs",num_pcs,".assoc",sep="")
-  res=NULL
-  try({res = fread(res_file,header=T,stringsAsFactors = F,data.table = F)})
-  if(is.null(res)){res = fread(res_file,header=T,stringsAsFactors = F,data.table = F,sep="\t")}
-  # exclude mhc
-  is_mhc = res[,1]==6 & res[,2]>mhc_region[1] & res[,2]<mhc_region[2]
-  res = res[!is_mhc,]
-  ps = as.numeric(res[,"P"])
-  print(paste("cooper 1e-8",num_pcs,sum(ps<1e-8,na.rm=T)))
-  print(paste("cooper 1e-6",num_pcs,sum(ps<1e-6,na.rm=T)))
-  res = res[,c(1:2,ncol(res))]
-  colnames(res) = c("chromosome","position","P-value")
-  write.table(res,file=res_file2,col.names = T,row.names = F,quote = F,sep=" ")
-  file2pvals[[res_file]] = res
-  
-  res_file = paste(curr_path,"gp_gwas_res_all_pcs",num_pcs,".assoc",sep="")
-  res_file2 = paste(curr_path,"fuma_gp_gwas_res_all_pcs",num_pcs,".assoc",sep="")
-  res=NULL
-  try({res = fread(res_file,header=T,stringsAsFactors = F,data.table = F)})
-  if(is.null(res)){res = fread(res_file,header=T,stringsAsFactors = F,data.table = F,sep="\t")}  # exclude mhc
-  is_mhc = res[,1]==6 & res[,2]>mhc_region[1] & res[,2]<mhc_region[2]
-  res = res[!is_mhc,]
-  ps = as.numeric(res[,"P"])
-  print(paste("GP 1e-8",num_pcs,sum(ps<1e-8,na.rm=T)))
-  print(paste("GP 1e-6",num_pcs,sum(ps<1e-6,na.rm=T)))
-  res = res[,c(1:2,ncol(res))]
-  colnames(res) = c("chromosome","position","P-value")
-  write.table(res,file=res_file2,col.names = T,row.names = F,quote = F,sep=" ")
-  file2pvals[[res_file]] = res
+  gp_vs_ref_res = NULL
+  for(jobname in gwas_job_names[1:2]){
+    res_file = paste(curr_dir,jobname,num_pcs,"_all.assoc",sep="")
+    res_file2 = paste(curr_dir,"fuma_",jobname,num_pcs,"_all.assoc",sep="")
+    res = fread(res_file,header=T,stringsAsFactors = F,data.table = F)
+    ps = as.numeric(res[,"P"])
+    ps[is.na(ps)] = 1
+    names(ps) = res[,3]
+    print(paste(jobname,"1e-8",num_pcs,sum(ps<1e-8,na.rm=T)))
+    print(paste(jobname,"1e-6",num_pcs,sum(ps<1e-6,na.rm=T)))
+    colnames(res)[1:2] = c("chromosome","position")
+    colnames(res)[colnames(res)=="P"] = "P-value"
+    fuma_res = res
+    write.table(fuma_res,file=res_file2,col.names = T,row.names = F,quote = F,sep=" ")
+    all_results[[paste(jobname,num_pcs,sep=";")]] = res
+  }
 }
 
-# Compare two results
-names(file2pvals)[8:9]
-x1 = file2pvals[[8]] 
-x2 = file2pvals[[9]]
-all(x1[,2]==x2[,2])
-p1 = as.numeric(x1[,3])
-p2 = as.numeric(x2[,3])
-inds = !is.na(p1) & !is.na(p2)
-cor(p1[inds],p2[inds])
-table(p1[inds]<1e-8 & p2[inds] > 0.001)
-table(p2[inds]<1e-8 & p1[inds] > 0.001)
-
-cor.test(-log(p1[inds]),-log(p2[inds]))
-cor(-log(p1[inds]),-log(p2[inds]))
-
-curr_path = paste(bfiles,"eu_gp_vs_ukbb_analysis_",nn,"/gwas/",sep="")
-res_file2 = paste(curr_path,"fuma_cooper_gwas_res_20pcs_cleaned_1e6_0.001.assoc",sep="")
-inds2 = p1 < 1e-6 & p2 > 0.001
-inds2[is.na(inds2)]=F
-sum(inds2,na.rm=T)
-fuma_res = x1[inds2,]
-write.table(fuma_res,file=res_file2,col.names = T,row.names = F,quote = F,sep=" ")
-
-# Compare two results
-names(file2pvals)[5:6]
-x1 = file2pvals[[5]] 
-x2 = file2pvals[[6]]
-all(x1[,2]==x2[,2])
-p1 = as.numeric(x1[,3])
-p2 = as.numeric(x2[,3])
-inds = !is.na(p1) & !is.na(p2)
-curr_path = paste(bfiles,"eu_gp_vs_ukbb_analysis_",nn,"/gwas/",sep="")
-res_file2 = paste(curr_path,"fuma_cooper_gwas_res_10pcs_cleaned_1e6_0.001.assoc",sep="")
-inds2 = p1 < 1e-6 & p2 > 0.001
-inds2[is.na(inds2)]=F
-fuma_res = x1[inds2,]
-write.table(fuma_res,file=res_file2,col.names = T,row.names = F,quote = F,sep=" ")
+# Filtered results
+ref_vs_discovery_analysis<-function(ref,discv,p=0.01){
+  ps = ref[,"P-value"]
+  ps[is.na(ps)] = 1
+  to_rem = ref[ps<=p,3]
+  discv = discv[!is.element(discv[,3],set=to_rem),]
+  return(discv)
+}
+for(num_pcs in tested_pcs_sets){
+  # GP as ref, cooper as discovery
+  ref = all_results[[paste(gwas_job_names[1],num_pcs,sep=";")]]
+  discv = all_results[[paste(gwas_job_names[2],num_pcs,sep=";")]]
+  filtered_discv = ref_vs_discovery_analysis(ref,discv)
+  print(paste(num_pcs,"Cooper as discovery:",
+              sum(as.numeric(filtered_discv[,"P-value"])<1e-10,na.rm=T)))
+  filtered_discv_file = paste(curr_dir,"fuma_",
+              gwas_job_names[2],num_pcs,"_GPfiltered0.001_all.assoc",sep="")
+  write.table(filtered_discv,file=filtered_discv_file,
+              col.names = T,row.names = F,quote = F,sep=" ")
+  # GP as ref, elite as discovery
+  ref = all_results[[paste(gwas_job_names[1],num_pcs,sep=";")]]
+  discv = all_results[[paste(gwas_job_names[3],num_pcs,sep=";")]]
+  filtered_discv = ref_vs_discovery_analysis(ref,discv)
+  print(paste(num_pcs,"Elite as discovery:",
+              sum(as.numeric(filtered_discv[,"P-value"])<1e-10,na.rm=T)))
+  filtered_discv_file = paste(curr_dir,"fuma_",
+              gwas_job_names[3],num_pcs,"_GPfiltered0.001_all.assoc",sep="")
+  write.table(filtered_discv,file=filtered_discv_file,
+              col.names = T,row.names = F,quote = F,sep=" ")
+  # Cooper as ref, GP as discovery
+  ref = all_results[[paste(gwas_job_names[2],num_pcs,sep=";")]]
+  discv = all_results[[paste(gwas_job_names[1],num_pcs,sep=";")]]
+  filtered_discv = ref_vs_discovery_analysis(ref,discv)
+  print(paste(num_pcs,"GP as discovery:",
+              sum(as.numeric(filtered_discv[,"P-value"])<1e-10,na.rm=T)))
+  filtered_discv_file = paste(curr_dir,"fuma_",
+              gwas_job_names[1],num_pcs,"_Cooperfiltered0.001_all.assoc",sep="")
+  write.table(filtered_discv,file=filtered_discv_file,
+              col.names = T,row.names = F,quote = F,sep=" ")
+}
 
 ####################################################################################################
 ####################################################################################################
@@ -507,7 +475,8 @@ d2 = read.table("20k_rand_controls_sex_age_with_info.txt",stringsAsFactors=F,hea
 source("~/Desktop/repos/fitness_genetics/R/gwas_flow_helper_functions.R")
 
 # pca on all
-pcax = read_pca_res("run_pca.eigenvec")
+pcax = read_pca_res("run_pca.eigenvec") # all samples
+pcax = read_pca_res("eu_pca/run_pca.eigenvec") # EUs
 d = read.table("integrated_sample_metadata_and_covariates.phe",
                header=T,stringsAsFactors = F)
 rownames(d) = d$IID
@@ -534,7 +503,7 @@ curr_cex[curr_cohorts[inds]=="UKBB"] = 0.1
 res = two_d_plot_visualize_covariate(
   pcax[inds,1],pcax[inds,2],curr_cohorts[inds],curr_cohorts[inds],
             xlab="PC1",ylab="PC2",lwd=4,cex=curr_cex)
-legend(x="bottomleft",names(res[[1]]),fill = res[[1]],cex=1.4)
+legend(x="bottomright",names(res[[1]]),fill = res[[1]],cex=1.4)
 par(mfrow=c(2,2))
 res = two_d_plot_visualize_covariate(pcax[inds,3],pcax[inds,4],curr_cohorts[inds],curr_cohorts[inds],
             xlab="PC3",ylab="PC4",lwd=3,cex=curr_cex)

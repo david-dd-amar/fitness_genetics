@@ -1,20 +1,39 @@
+
 library(data.table,lib.loc = "~/R/packages")
+
+# direct data
+is_direct_geno = T
 gwas_dir = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/mega_reclustered_with_genepool_/eu_gwas"
 bimfile = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/mega_reclustered_with_genepool_/merged_mega_data_autosomal.bim"
 check_bim_map_to_rsids = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/mega_reclustered_with_genepool_/1000g/ID-merged_mega_data_autosomal-1000G.txt"
 
+# imputed data
+is_direct_geno = F
+gwas_dir = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/mega_reclustered_imp/eu_gwas_maf0.01/gwas_num_pcs_5/"
+bimfile = NULL
+check_bim_map_to_rsids = NULL
+
 setwd(gwas_dir)
-allfiles = list.files(".")
-allfiles = allfiles[grepl("linear$",allfiles)|grepl("logistic$",allfiles)]
-allfiles = allfiles[!grepl("fuma",allfiles)]
 
-bim = fread(bimfile,data.table = F,stringsAsFactors = F)
-rownames(bim) = bim[,2]
+if(is_direct_geno){
+  allfiles = list.files(".")
+  allfiles = allfiles[grepl("linear$",allfiles)|grepl("logistic$",allfiles)]
+  allfiles = allfiles[!grepl("fuma",allfiles)]
+  
+  # Set the required data to map snp ids to rsids
+  bim = fread(bimfile,data.table = F,stringsAsFactors = F)
+  rownames(bim) = bim[,2]
+  bim_to_rsid = fread(check_bim_map_to_rsids,data.table = F,stringsAsFactors = F)
+  rsids = sapply(bim_to_rsid[,2],function(x)strsplit(x,split=":")[[1]][1])
+  names(rsids) = bim_to_rsid[,1]
+  table(grepl("rs",rsids))
+}
+if(!is_direct_geno){
+  
+}
 
-bim_to_rsid = fread(check_bim_map_to_rsids,data.table = F,stringsAsFactors = F)
-rsids = sapply(bim_to_rsid[,2],function(x)strsplit(x,split=":")[[1]][1])
-names(rsids) = bim_to_rsid[,1]
-table(grepl("rs",rsids))
+
+
 
 # Prepare the input files
 system(paste("mkdir ld_hub_input"))

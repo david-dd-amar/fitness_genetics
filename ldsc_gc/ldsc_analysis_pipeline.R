@@ -14,6 +14,9 @@ bimfile = NULL
 check_bim_map_to_rsids = NULL
 
 setwd(gwas_dir)
+ldsc_path = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/ldsc/ldsc/"
+ldsc_snp_list_path = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/ldsc/from_toturial/w_hm3.snplist"
+ldsc_snps = fread(ldsc_snp_list_path,stringsAsFactors = F,data.table = F)
 
 if(is_direct_geno){
   allfiles = list.files(".")
@@ -49,11 +52,18 @@ for(file in allfiles){
   N_ind = which(grepl("nmiss|obs_ct",names(d),ignore.case = T))[1]
   p_ind = which(names(d)=="P")[1]
   rsid_ind = which(grepl("ID|SNP",names(d),ignore.case = F))[1]
-  a1_ind = which(names(d)=="A1")
-  a2_ind = which(grepl("A2|REF",names(d),ignore.case = F))[1]
+  a2_ind = which(grepl("ALT|A1",names(d),ignore.case = F))[1]
+  a1_ind = which(grepl("REF|A2",names(d),ignore.case = F))[1]
   ldhub_out = d[,c(rsid_ind,a1_ind,a2_ind,N_ind,zstat_ind,p_ind)]
-  
   colnames(ldhub_out) = c("SNP","A1","A2","N","Z","P")
+  rows_to_rem = is.na(as.numeric(as.character(ldhub_out$Z)))
+  ldhub_out = ldhub_out[!rows_to_rem,]
+  
+  # Optional: reduce to the ldsc snp set
+  ldhub_out = ldhub_out[is.element(ldhub_out$SNP,set=ldsc_snps$SNP),]
+  print("ldsc input data size:")
+  print(dim(ldhub_out))
+  
   outfile = paste("ld_hub_input/",file,sep="")
   write.table(ldhub_out,file=outfile,row.names = F,col.names = T,sep="\t",quote = F)
   # system(paste("zip",paste(outfile,".zip",sep=""),outfile))
@@ -64,8 +74,18 @@ for(file in allfiles){
 #   system(paste("zip",paste(outfile,".zip",sep=""),outfile,"&"))
 # }
 
+# make sure this is run outside R (?)
 system("source activate ldsc")
-setwd(paste(gwas_dir,"ld_hub_input/"))
+setwd(paste(gwas_dir,"ld_hub_input/",sep=""))
+for(file in allfiles){
+  system(paste(
+    "python", paste(ldsc_path,"munge_sumstats.py",sep=""),
+    "--sumstats", paste(gwas_dir,"ld_hub_input/",file,sep=""),
+    "--merge-alleles", ldsc_snp_list_path,
+    "--out","test"
+  ))
+  break
+}
 
 # Some commands
 # python ../ldsc/munge_sumstats.py --sumstats elite_vo2_ml_kg_min_PCs4.assoc.linear --merge-alleles w_hm3.snplist --out elite_vo2

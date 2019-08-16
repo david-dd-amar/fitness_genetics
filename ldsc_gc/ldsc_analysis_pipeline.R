@@ -1,4 +1,26 @@
 
+get_sh_prefix_one_node_specify_cpu_and_mem <- function(err="",log="",plink_pkg = "plink/1.90b5.3",Ncpu,mem_size,time="6:00:00"){
+  partition_line = "#SBATCH --partition=euan,mrivas,normal,owners"
+  return(
+    c(
+      "#!/bin/bash",
+      "#",
+      paste("#SBATCH --time=",time,sep=""),
+      partition_line,
+      "#SBATCH --nodes=1",
+      paste("#SBATCH -c",Ncpu),
+      paste("#SBATCH --mem=",mem_size,sep=""),
+      paste("#SBATCH --error",err),
+      paste("#SBATCH --out",log),
+      "",
+      "module load biology",
+      "source activate ldsc",
+      paste("module load",plink_pkg)
+    )
+  )
+}
+
+
 library(data.table,lib.loc = "~/R/packages")
 
 # direct data
@@ -14,9 +36,32 @@ bimfile = NULL
 check_bim_map_to_rsids = NULL
 
 setwd(gwas_dir)
+
+# For external ld score info
 ldsc_path = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/ldsc/ldsc/"
 ldsc_snp_list_path = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/ldsc/from_toturial/"
 ldsc_snps = fread(paste(ldsc_snp_list_path,"w_hm3.snplist",sep=""),stringsAsFactors = F,data.table = F)
+
+# Run ldscore per chromosome in our imputed data
+imp_data_path = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/mega_reclustered_imp/impute2_1000gRef_out/"
+imp_data_ldsc_out = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/mega_reclustered_imp/ldsc/"
+system(paste("mkdir",imp_data_ldsc_out))
+chrs = paste("chr",c(1:22),sep="")
+script_file = "/home/users/davidama/repos/fitness_genetics/R/gwas_flow_helper_functions.R"
+source(script_file)
+for(chr in chrs){
+  curr_cmd = paste(
+                "python", paste(ldsc_path,"ldsc.py",sep=""),
+                "--bfile", paste(imp_data_path,chr,sep=""),
+                "--l2 --ld-wind-cm 1",
+                "--yes-really",
+                "--out", paste(imp_data_ldsc_out,chr,sep="")
+             )
+  run_plink_command(curr_cmd,imp_data_ldsc_out,
+                    chr,
+                    get_sh_prefix_one_node_specify_cpu_and_mem,
+                    Ncpu=4,mem_size=16000,plink_pkg="plink/2.0a1",time="12:00:00")
+}
 
 if(is_direct_geno){
   allfiles = list.files(".")

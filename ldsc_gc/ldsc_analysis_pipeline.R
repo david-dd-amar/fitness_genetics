@@ -15,8 +15,8 @@ check_bim_map_to_rsids = NULL
 
 setwd(gwas_dir)
 ldsc_path = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/ldsc/ldsc/"
-ldsc_snp_list_path = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/ldsc/from_toturial/w_hm3.snplist"
-ldsc_snps = fread(ldsc_snp_list_path,stringsAsFactors = F,data.table = F)
+ldsc_snp_list_path = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/ldsc/from_toturial/"
+ldsc_snps = fread(paste(ldsc_snp_list_path,"w_hm3.snplist",sep=""),stringsAsFactors = F,data.table = F)
 
 if(is_direct_geno){
   allfiles = list.files(".")
@@ -39,6 +39,7 @@ if(!is_direct_geno){
 
 # Prepare the input files
 system(paste("mkdir ld_hub_input"))
+setwd(gwas_dir)
 for(file in allfiles){
   print(file)
   d = fread(file,data.table = F,stringsAsFactors = F)
@@ -81,10 +82,16 @@ for(file in allfiles){
   system(paste(
     "python", paste(ldsc_path,"munge_sumstats.py",sep=""),
     "--sumstats", paste(gwas_dir,"ld_hub_input/",file,sep=""),
-    "--merge-alleles", ldsc_snp_list_path,
-    "--out","test"
+    "--merge-alleles", paste(ldsc_snp_list_path,"w_hm3.snplist",sep=""),
+    "--out",file
   ))
-  break
+  system(paste(
+    "python", paste(ldsc_path,"ldsc.py",sep=""),
+    "--h2", paste(file,".sumstats.gz",sep=""),
+    "--ref-ld-chr", paste(ldsc_snp_list_path,"eur_w_ld_chr/",sep=""),
+    "--w-ld-chr", paste(ldsc_snp_list_path,"eur_w_ld_chr/",sep=""),
+    "--out",paste(file,"_h2",sep="")
+  ))
 }
 
 # Some commands

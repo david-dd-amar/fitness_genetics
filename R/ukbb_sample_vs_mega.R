@@ -12,6 +12,17 @@ external_control_ids = "/oak/stanford/groups/euan/projects/fitness_genetics/ukbb
 external_covars_path = "/oak/stanford/groups/euan/projects/fitness_genetics/ukbb/20k_rand_controls_sex_age_with_info.txt"
 our_metadata = "/oak/stanford/groups/euan/projects/fitness_genetics/metadata/merged_metadata_file_stanford3k_elite_cooper.txt"
 
+# Our imputed data (for mega and ukbb), generated on July 2019
+bfiles = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/mega_with_genepool_imp/with_our_imp_ukbb/"
+external_data_mafs = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/mega_with_genepool_imp/with_our_imp_ukbnew_bed_1.frq"
+our_data_mafs = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/mega_with_genepool_imp/with_our_imp_ukbb/new_bed_2.frq"
+out_path = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/mega_with_genepool_imp/with_our_imp_ukbb/gwas/"
+our_covars_path = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/mega_with_genepool/integrated_sample_metadata_and_covariates.phe"
+external_control_ids = "/oak/stanford/groups/euan/projects/fitness_genetics/ukbb/20k_rand_controls_sex_age.txt"
+external_covars_path = "/oak/stanford/groups/euan/projects/fitness_genetics/ukbb/20k_rand_controls_sex_age_with_info.txt"
+our_metadata = "/oak/stanford/groups/euan/projects/fitness_genetics/metadata/merged_metadata_file_stanford3k_elite_cooper.txt"
+
+
 try({system(paste("mkdir",out_path))})
 chrs=1:22
 

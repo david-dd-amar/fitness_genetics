@@ -26,13 +26,27 @@ mega_covars_path = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis
 # 
 # New run: August 2019
 pca_results = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/mega_reclustered_with_genepool_/eu_gwas/merged_mega_data_autosomal.eigenvec"
+# 5% maf
 out_path = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/mega_reclustered_imp/eu_gwas/"
 system(paste("mkdir",out_path))
-out_path = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/mega_reclustered_imp/eu_gwas_maf0.01/"
-system(paste("mkdir",out_path))
+# # 1% maf
+# out_path = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/mega_reclustered_imp/eu_gwas_maf0.01/"
+# system(paste("mkdir",out_path))
 
 # Define the pheno and cov files
 covs_file = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/mega_reclustered_with_genepool_/eu_gwas/all_covs_and_pheno.phe"
+
+# # Add Cooper vs. ELITE
+# covs = read.table(covs_file,header = T,sep=" ",stringsAsFactors = F)
+# elite_vs_cooper = covs$elite_vs_gp
+# cooper_inds = is.na(elite_vs_cooper)
+# elite_vs_cooper[elite_vs_cooper==1] = NA
+# elite_vs_cooper[cooper_inds] = 1
+# table(elite_vs_cooper)
+# covs$elite_vs_cooper = elite_vs_cooper
+# write.table(covs,file=covs_file,sep=" ",quote = F,row.names = F,col.names = T)
+
+tested_pcs = c(5,10,20)
 
 ############################################################################
 ############################################################################
@@ -41,20 +55,39 @@ cooper_pheno_file = covs_file
 elite_pheno_file = covs_file
 
 # Run the GWAS: try different numbers of PCs
-for(num_pcs in 0:7){
+for(num_pcs in tested_pcs){
   cov_string = "--covar-name sex,age"
   if(num_pcs > 0){
     cov_string = paste("--covar-name sex,age,",paste("PC",1:num_pcs,sep="",collapse=","),sep="")
   }
   curr_path = paste(out_path,"gwas_num_pcs_",num_pcs,"/",sep="")
   system(paste("mkdir",curr_path))
+  
+  # Elite vs. Cooper
+  for(chr in chrs){
+    curr_cmd = paste("plink2 --bfile",paste(dataset,chr,sep=''),
+                     "--logistic firth-fallback hide-covar",
+                     "--pheno",elite_pheno_file,
+                     "--pheno-name elite_vs_cooper",
+                     "--covar",covs_file,
+                     "--maf 0.05",
+                     cov_string,
+                     "--allow-no-sex --adjust",
+                     "--threads",4,
+                     "--out",paste(curr_path,"elite_vs_cooper_gwas_res_pcs",num_pcs,"_",chr,sep="")
+    )
+    run_plink_command(curr_cmd,curr_path,paste("elite_vs_cooper_gwas_res_pcs",num_pcs,"_",chr,sep=""),
+                      get_sh_prefix_one_node_specify_cpu_and_mem,Ncpu=4,mem_size=16000,plink_pkg="plink/2.0a1")
+  }
+  
+  # Cooper vs. GP
   for(chr in chrs){
     curr_cmd = paste("plink2 --bfile",paste(dataset,chr,sep=''),
                      "--logistic firth-fallback hide-covar",
                      "--pheno",cooper_pheno_file,
                      "--pheno-name cooper_vs_gp",
                      "--covar",covs_file,
-                     "--maf 0.01",
+                     "--maf 0.05",
                      cov_string,
                      "--allow-no-sex --adjust",
                      "--threads",4,
@@ -63,13 +96,15 @@ for(num_pcs in 0:7){
     run_plink_command(curr_cmd,curr_path,paste("cooper_gwas_res_pcs",num_pcs,"_",chr,sep=""),
                       get_sh_prefix_one_node_specify_cpu_and_mem,Ncpu=4,mem_size=16000,plink_pkg="plink/2.0a1")
   }
+  
+  # Elite vs. GP
   for(chr in chrs){
     curr_cmd = paste("plink2 --bfile",paste(dataset,chr,sep=''),
                      "--logistic firth-fallback hide-covar",
                      "--pheno",elite_pheno_file,
                      "--pheno-name elite_vs_gp",
                      "--covar",covs_file,
-                     "--maf 0.01",
+                     "--maf 0.05",
                      cov_string,
                      "--allow-no-sex --adjust",
                      "--threads",4,
@@ -86,7 +121,7 @@ for(num_pcs in 0:7){
                      "--pheno",covs_file,
                      "--pheno-name VO2max..ml.kg.min.",
                      "--covar",covs_file,
-                     "--maf 0.01",
+                     "--maf 0.05",
                      cov_string,
                      "--allow-no-sex --adjust",
                      "--threads",4,
@@ -101,7 +136,7 @@ for(num_pcs in 0:7){
                      "--pheno",covs_file,
                      "--pheno-name VO2max..l.",
                      "--covar",covs_file,
-                     "--maf 0.01",
+                     "--maf 0.05",
                      cov_string,
                      "--allow-no-sex --adjust",
                      "--threads",4,
@@ -117,7 +152,7 @@ for(num_pcs in 0:7){
                      "--pheno",covs_file,
                      "--pheno-name Treadmill.time",
                      "--covar",covs_file,
-                     "--maf 0.01",
+                     "--maf 0.05",
                      cov_string,
                      "--allow-no-sex --adjust",
                      "--threads",4,
@@ -140,18 +175,21 @@ concatenate_res_files<-function(res_files,res_file){
       system(paste("less",res_files[j],">",res_file))
     }
     if(j>1){
-      system(paste("less",res_files[j],"| grep -v SNP >>",res_file))
+      system(paste("less",res_files[j],"| grep -v CH >>",res_file))
     }
   }
 }
 
-gwas_job_names = c("cooper_gwas_res_pcs",
+gwas_job_names = c(
+              "elite_vs_cooper_gwas_res_pcs",
+              "cooper_gwas_res_pcs",
               "elite_gwas_res_pcs",
               "elite_vo2_ml_kg_min_PCs",
               "elite_vo2max_l_PCs",
-              "cooper_treadmill_time_PCs")
+              "cooper_treadmill_time_PCs"
+)
 
-for(num_pcs in 0:7){
+for(num_pcs in tested_pcs){
   curr_path = paste(out_path,"gwas_num_pcs_",num_pcs,"/",sep="")
   all_path_files = list.files(curr_path)
   for(jobname in gwas_job_names){
@@ -178,7 +216,7 @@ get_lambda_from_log_file<-function(f){
 all_lambdas = list()
 for(cc in gwas_job_names){
   all_lambdas[[cc]] = list()
-  for(num_pcs in 0:7){
+  for(num_pcs in tested_pcs){
     curr_path = paste(out_path,"gwas_num_pcs_",num_pcs,"/",sep="")
     all_log_files = list.files(curr_path)
     all_log_files = all_log_files[grepl("log$",all_log_files)]
@@ -190,13 +228,14 @@ for(cc in gwas_job_names){
     print(paste(cc,num_pcs,mean(curr_lambdas,na.rm=T)))
     all_lambdas[[cc]][[as.character(num_pcs)]]=curr_lambdas
   }
+  break
 }
 sapply(all_lambdas,sapply,median,na.rm=T)
 save(all_lambdas,file=paste(out_path,"all_lambdas.RData",sep=""))
 
 # reformat and write to fuma files
 library(data.table,lib.loc = "~/R/packages/")
-for(num_pcs in 7:0){
+for(num_pcs in tested_pcs){
   curr_path = paste(out_path,"gwas_num_pcs_",num_pcs,"/",sep="")
   for(jobname in gwas_job_names){
     res_file = paste(curr_path,jobname,num_pcs,"_all.assoc",sep="")
@@ -209,8 +248,111 @@ for(num_pcs in 7:0){
     colnames(res)[colnames(res)=="P"] = "P-value"
     fuma_res = res
     write.table(fuma_res,file=res_file2,col.names = T,row.names = F,quote = F,sep=" ")
+    break
   }
 }
+
+# ELITE: meta-analysis using plink
+meta_analysis_jobs = c(
+  "elite_vs_cooper_gwas_res_pcs",
+  "elite_gwas_res_pcs"
+)
+
+# Use plink1
+library(data.table,lib.loc = "~/R/packages/")
+for(num_pcs in tested_pcs){
+  curr_path = paste(out_path,"gwas_num_pcs_",num_pcs,"/",sep="")
+  # get the results files
+  files_str = ""
+  for(jobname in meta_analysis_jobs){
+    res_file = paste(curr_path,jobname,num_pcs,"_all.assoc",sep="")
+    # print an alternative for plink1
+    res = fread(res_file,header=T,stringsAsFactors = F,data.table = F)
+    colnames(res)[3] = "SNP"
+    colnames(res)[1] = "CHR"
+    colnames(res)[2] = "BP"
+    colnames(res)[4] = "A2"
+    res_file2 = paste(curr_path,jobname,num_pcs,"_all_plink1.assoc",sep="")
+    files_str = paste(files_str,res_file2,sep=" ")
+    fwrite(res,file=res_file2,sep="\t",quote = F,row.names = F,col.names = T)
+  }
+  curr_cmd = paste("plink --meta-analysis",files_str,
+                   "--threads",8,
+                   "--out",paste(curr_path,"elite_metaanalysis_PCs",num_pcs,sep="")
+  )
+  run_plink_command(curr_cmd,curr_path,paste("elite_metaanalysis_PCs",num_pcs,sep=""),
+                    get_sh_prefix_one_node_specify_cpu_and_mem,Ncpu=8,mem_size=32000)
+}
+
+# Read the results of the meta-analysis
+for(num_pcs in tested_pcs){
+  curr_path = paste(out_path,"gwas_num_pcs_",num_pcs,"/",sep="")
+  res_file = paste(curr_path,"elite_metaanalysis_PCs",num_pcs,".meta",sep="")
+  res = fread(res_file,header=T,stringsAsFactors = F,data.table = F)
+  print(table(res$P < 5e-08))
+  res_file2 = paste(curr_path,"fuma_elite_metaanalysis_PCs",num_pcs,".meta",sep="")
+  colnames(res)[1:2] = c("chromosome","position")
+  colnames(res)[colnames(res)=="P"] = "P-value"
+  fwrite(res,file=res_file2,col.names = T,row.names = F,quote = F,sep=" ")
+}
+
+# # ELITE: meta-analysis in R
+# library(metafor,lib.loc = "~/R/packages/")
+# library(data.table,lib.loc = "~/R/packages/")
+# library(parallel)
+# meta_analysis_jobs = c(
+#   "elite_vs_cooper_gwas_res_pcs",
+#   "elite_gwas_res_pcs")
+# run_simple_meta <- function(x){
+#   n = length(x)
+#   yi = x[1:(n/2)]
+#   vi = x[((n/2)+1):n]
+#   m = NULL
+#   try({m = rma.uni(yi,vi)})
+#   if(is.null(m)){
+#     v = c(0,1e-05,1)
+#   }
+#   else{
+#     v = c(m$beta[1],m$se[1],m$pval[1])
+#   }
+#   names(v) = c("log_OR","se","pval")
+#   return(v)
+# }
+for(num_pcs in tested_pcs){
+  curr_path = paste(out_path,"gwas_num_pcs_",num_pcs,"/",sep="")
+  Yi = c()
+  Vi = c()
+  P = c()
+  Z = c()
+  snp_names = c()
+  for(jobname in meta_analysis_jobs){
+    res_file = paste(curr_path,jobname,num_pcs,"_all.assoc",sep="")
+    res = fread(res_file,header=T,stringsAsFactors = F,data.table = F)
+    stats = log(as.numeric(res$OR))
+    stats_var = (as.numeric(res$SE))^2
+    names(stats) = res[,3]
+    names(stats_var) = names(stats)
+    Yi = cbind(Yi,stats)
+    Vi = cbind(Vi,stats_var)
+    P = cbind(P,as.numeric(res$P))
+    Z = cbind(Z,as.numeric(res$Z_STAT))
+    snp_names = cbind(snp_names,res$ID)
+  }
+  # QA
+  # table(apply(snp_names, 1, function(x)all(x==x[1])))
+  meta_stats = cbind(Yi,Vi)
+  # ignore these rows
+  to_rem = apply(is.na(meta_stats),1,any) | (rowSums(Vi) == 0)
+  # run the analysis
+  cl = makeCluster(detectCores(),type="FORK")
+  system.time({meta_results = t(parLapply(cl,meta_stats[!to_rem,],run_simple_meta))})
+  save(meta_results,file=paste(curr_path,"elite_meta_results.RData",sep=""))
+}
+
+
+
+
+
 
 
 

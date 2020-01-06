@@ -12,6 +12,7 @@ get_sh_prefix_one_node_specify_cpu_and_mem <- function(err="",log="",plink_pkg =
       paste("#SBATCH --mem=",mem_size,sep=""),
       paste("#SBATCH --error",err),
       paste("#SBATCH --out",log),
+      paste("#SBATCH -x sh-113-15")
       "",
       "module load biology",
       "source activate ldsc",
@@ -60,7 +61,7 @@ for(chr in chrs){
   run_plink_command(curr_cmd,imp_data_ldsc_out,
                     chr,
                     get_sh_prefix_one_node_specify_cpu_and_mem,
-                    Ncpu=4,mem_size=16000,plink_pkg="plink/2.0a1",time="12:00:00")
+                    Ncpu=8,mem_size=64000,plink_pkg="plink/2.0a1",time="12:00:00")
 }
 
 if(is_direct_geno){

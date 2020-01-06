@@ -1,21 +1,25 @@
 
 out_path = "/oak/stanford/groups/euan/projects/fitness_genetics/ukbb/gwas/"
 
-rivaslab_pheno_codes_file = "home/users/davidama/repos/ukbb-tools/05_gbe/phenotype_info.tsv"
-rivaslab_codes = read.delim(rivaslab_pheno_codes_file,stringsAsFactors = F,header=F)
+rivaslab_pheno_codes_file = "/home/users/davidama/repos/ukbb-tools/05_gbe/phenotype_info.tsv"
+rivaslab_codes = read.delim(rivaslab_pheno_codes_file,stringsAsFactors = F,header=T)
 rownames(rivaslab_codes) = rivaslab_codes[,1]
-
+activity_phenotypes = rivaslab_codes[
+  grepl("activity",rivaslab_codes[,2],ignore.case = T) & 
+    !grepl("anxi",rivaslab_codes[,2],ignore.case = T) &
+    !grepl("depression",rivaslab_codes[,2],ignore.case = T),1]
+activity_phenotypes = union(activity_phenotypes,
+                            c(  "VigActivityN" = "INI1003040",
+                                "ModActivityN" = "INI1003039"))
 tested_phenotypes = c(
   "Exercise_HR" = "INI20005983",
   "MaxWD" = "INI30005983",
   "Recovery" = "INI40005983",
-  "RestingHR" = "INI102",
-  "VigActivityN" = "INI1003040",
-  "ModActivityN" = "INI1003039"
+  "RestingHR" = "INI102"
 )
 
 ethnicity_path = "/oak/stanford/groups/mrivas/private_data/ukbb/24983/sqc/population_stratification/"
-ethnicity = "white_b"
+ethnicity = "white_british.phe"
 eth_files = list.files(ethnicity_path)
 eth_file = eth_files[grepl(ethnicity,eth_files)]
 eth_file = paste(ethnicity_path,eth_file,sep='')
@@ -45,7 +49,7 @@ print(dim(phe))
 additional_phe_paths = "/oak/stanford/groups/mrivas/ukbb/24983/phenotypedata/extras/physical_activity/phe/"
 additional_phe_files = list.files(additional_phe_paths)
 additional_phe = c()
-for(phe_code in tested_phenotypes){
+for(phe_code in c(activity_phenotypes,tested_phenotypes)){
   currfile = additional_phe_files[grepl(phe_code,additional_phe_files)]
   if(length(currfile)==0){next}
   print(paste(phe_code,"was found in the extras dir"))
@@ -62,6 +66,31 @@ for(phe_code in tested_phenotypes){
 }
 additional_phe[additional_phe==-9] = NA
 phe = cbind(phe,additional_phe)
+
+# PCA of the physical activity scores
+act_phe = phe[,intersect(colnames(phe),activity_phenotypes)]
+act_pca = prcomp(act_phe,retx = T)
+vars = act_pca$sdev^2
+cumsum(vars/sum(vars)) # 78% of the variability in PC1
+# corr between PC1 and the other scores
+pc1_corrs = c(cor(act_pca$x[,1],act_phe)) # positive correlation
+names(pc1_corrs) = rivaslab_codes[colnames(act_phe),2]
+# make sure we are positively correlated with activity
+PC1 = act_pca$x[,1]
+if(sum(pc1_corrs<0)/length(pc1_corrs) >0.5){PC1 = -PC1}
+
+ExHR = additional_phe[,tested_phenotypes[1]]
+rHR = phe[,tested_phenotypes[4]]
+normExHR = ExHR^2 / rHR
+scoresMat = cbind(ExHR,rHR,normExHR,PC1)
+scoresMat = scoresMat[!apply(is.na(scoresMat),1,any),]
+cor(scoresMat)
+
+tb = table(normExHR < quantile(normExHR,na.rm = T,probs = 0.1),
+      PC1 < quantile(PC1,na.rm = T,probs = 0.1))
+# tb = table(ExHR > quantile(ExHR,na.rm = T,probs = 0.9),
+#            rHR > quantile(rHR,na.rm = T,probs = 0.9))
+fisher.test(tb)
 
 # Create folders with a phe file and a covariate file
 PCs = c(5,10)

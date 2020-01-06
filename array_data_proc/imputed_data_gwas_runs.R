@@ -29,9 +29,9 @@ pca_results = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/mega
 # 5% maf
 out_path = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/mega_reclustered_imp/eu_gwas/"
 system(paste("mkdir",out_path))
-# # 1% maf
-# out_path = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/mega_reclustered_imp/eu_gwas_maf0.01/"
-# system(paste("mkdir",out_path))
+# 1% maf
+out_path = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/mega_reclustered_imp/eu_gwas_maf0.01/"
+system(paste("mkdir",out_path))
 
 # Define the pheno and cov files
 covs_file = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/mega_reclustered_with_genepool_/eu_gwas/all_covs_and_pheno.phe"
@@ -47,6 +47,7 @@ covs_file = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/mega_r
 # write.table(covs,file=covs_file,sep=" ",quote = F,row.names = F,col.names = T)
 
 tested_pcs = c(5,10,20)
+maf_line = "--maf 0.01"
 
 ############################################################################
 ############################################################################
@@ -70,7 +71,7 @@ for(num_pcs in tested_pcs){
                      "--pheno",elite_pheno_file,
                      "--pheno-name elite_vs_cooper",
                      "--covar",covs_file,
-                     "--maf 0.05",
+                     maf_line,
                      cov_string,
                      "--allow-no-sex --adjust",
                      "--threads",4,
@@ -87,7 +88,7 @@ for(num_pcs in tested_pcs){
                      "--pheno",cooper_pheno_file,
                      "--pheno-name cooper_vs_gp",
                      "--covar",covs_file,
-                     "--maf 0.05",
+                     maf_line,
                      cov_string,
                      "--allow-no-sex --adjust",
                      "--threads",4,
@@ -104,7 +105,7 @@ for(num_pcs in tested_pcs){
                      "--pheno",elite_pheno_file,
                      "--pheno-name elite_vs_gp",
                      "--covar",covs_file,
-                     "--maf 0.05",
+                     maf_line,
                      cov_string,
                      "--allow-no-sex --adjust",
                      "--threads",4,
@@ -121,7 +122,7 @@ for(num_pcs in tested_pcs){
                      "--pheno",covs_file,
                      "--pheno-name VO2max..ml.kg.min.",
                      "--covar",covs_file,
-                     "--maf 0.05",
+                     maf_line,
                      cov_string,
                      "--allow-no-sex --adjust",
                      "--threads",4,
@@ -136,7 +137,7 @@ for(num_pcs in tested_pcs){
                      "--pheno",covs_file,
                      "--pheno-name VO2max..l.",
                      "--covar",covs_file,
-                     "--maf 0.05",
+                     maf_line,
                      cov_string,
                      "--allow-no-sex --adjust",
                      "--threads",4,
@@ -152,7 +153,7 @@ for(num_pcs in tested_pcs){
                      "--pheno",covs_file,
                      "--pheno-name Treadmill.time",
                      "--covar",covs_file,
-                     "--maf 0.05",
+                     maf_line,
                      cov_string,
                      "--allow-no-sex --adjust",
                      "--threads",4,
@@ -228,7 +229,6 @@ for(cc in gwas_job_names){
     print(paste(cc,num_pcs,mean(curr_lambdas,na.rm=T)))
     all_lambdas[[cc]][[as.character(num_pcs)]]=curr_lambdas
   }
-  break
 }
 sapply(all_lambdas,sapply,median,na.rm=T)
 save(all_lambdas,file=paste(out_path,"all_lambdas.RData",sep=""))
@@ -247,8 +247,7 @@ for(num_pcs in tested_pcs){
     colnames(res)[1:2] = c("chromosome","position")
     colnames(res)[colnames(res)=="P"] = "P-value"
     fuma_res = res
-    write.table(fuma_res,file=res_file2,col.names = T,row.names = F,quote = F,sep=" ")
-    break
+    fwrite(fuma_res,file=res_file2,col.names = T,row.names = F,quote = F,sep=" ")
   }
 }
 

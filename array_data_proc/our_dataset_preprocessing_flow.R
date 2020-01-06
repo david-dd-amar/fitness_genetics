@@ -1561,7 +1561,9 @@ write.table(t(t(manual_clustering)),file="manual_clustering.txt",sep="\t",
 # }
 # p.adjust(pc_ps)
 
-
+source("~/Desktop/repos/fitness_genetics/R/gwas_flow_helper_functions.R")
+pcax = as.matrix(d[,paste("PC",1:40,sep="")])
+pcax = pcax[manual_clustering,]
 pc_rocs = c()
 for(j in 1:40){
   curr_inds = d[,"Cohort"] == "ELITE" | d[,"Cohort"]=="Cooper"

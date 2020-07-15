@@ -1,0 +1,18 @@
+These are the analysis scripts, ordered according to the analysis steps:
+1. parse_vcfs_and_liftover.sh - liftover elite's raw data and filter the vcf using GATK's best practices 
+	generates: elite_n267_joint_hg38.filtered.biallelic.anno.vcf.gz
+2. process_elite_vcf.sh - analyze the filtered vcf above using PLINK, filter variants by maf, hwe, and missingness
+	generates plink output files in /oak/stanford/groups/euan/projects/elite/ukbb_exome/elite_analyze_vcf 
+3. analyze_vs_ref_and_pop.sh - take the elite and ukbb pgens as input, a pop file (file with sample ids to include), a set of thresholds (e.g., for MAF)
+	limits the data to the given pop
+	compute variant statistics in each cohort separately (elite, ukbb)
+	filter the data, run ld prune, pca, relatedness
+	output is kept in the eu_beds dir
+
+# helper scripts:
+* extract_freq_vars.R - helper function that intersects two PLINK's freq files with an input threshold for each file
+			prints the output the the stdout
+* intersect_bims.R - takes two bim files and: 
+			(1) generates chr:pos:ref:alt ids for each file and print a new bim for each file, 
+			(2) take the variant intersection, and 
+			(3) print a file with the intersection, can be use with --extract in plink.

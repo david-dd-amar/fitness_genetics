@@ -1,0 +1,13 @@
+Make sure that the input vcfs (e.g., elite) has the "chrXX" chromosome format (see export options in plink)
+These are later removed when the data are compared to the afreq files
+
+Here we use our bcftools to intersect our vcfs with gnomad and then take the EU AFs from the gnomad files for the remaining variants.
+See the create_files.sh script
+It also uses the extract_eu_info.R script to get the relavant columns from the output vcf files from the bcftools isec commands.
+
+compare_freq_with_gnomad.R - given the gnomad eu summary tables from the scripts above, this R script can be used to compare a "afreq" file from 
+plink to the gnomad eu table. It computes P-values and also output the AFs. DO NOT confuse this script with the helper script compare_maf_to_gnomad.R
+whose goal is to simply compare the AFs of an "afreq" file and a gnomad table and extracts a set of variant ids whose AFs do not agree with gnomAD.
+
+
+

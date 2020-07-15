@@ -23,26 +23,31 @@ script_file = "/home/users/davidama/repos/fitness_genetics/R/gwas_flow_helper_fu
 source(script_file)
 
 # Define out dir
-# job_dir = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/no_recl_mega_separate_recalls/"
-# job_dir = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/mega_with_genepool/"
-job_dir = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/mega_reclustered_with_genepool_/"
+job_dir = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/mega_all_batches/"
 # set the job's directory
 try({system(paste("mkdir",job_dir),wait = T)})
 setwd(job_dir)
 
-# Each recalling has a set of parameters
+# # Each recalling has a set of parameters
+# # 1. MEGG: recalled alone (MEGG: MEGA global)
+# input_bfile1 = "/oak/stanford/groups/euan/projects/fitness_genetics/illu_processed_plink_data/no_reclustering/non_MEGA_Cons_recall/raw"
+# snp_report_file1 = "/oak/stanford/groups/euan/projects/fitness_genetics/illu_processed_plink_data/no_reclustering/non_MEGA_Cons_recall/SNP_Table.txt"
+# sample_report_file1 = "/oak/stanford/groups/euan/projects/fitness_genetics/illu_processed_plink_data/no_reclustering/non_MEGA_Cons_recall/Samples_Table.txt"
+# 
+# # 2. MEGC (MEGA Consortium) - reclustred
+# input_bfile2 = "/oak/stanford/groups/euan/projects/fitness_genetics/illu_processed_plink_data/batch1_megc_reclustered/PLINK_260719_0306/batch1_megac_reclustered"
+# snp_report_file2 = "/oak/stanford/groups/euan/projects/fitness_genetics/illu_processed_plink_data/batch1_megc_reclustered/SNP_Table.txt"
+# sample_report_file2 = "/oak/stanford/groups/euan/projects/fitness_genetics/illu_processed_plink_data/batch1_megc_reclustered/Samples_Table.txt"
+
 # 1. MEGG: recalled alone (MEGG: MEGA global)
-input_bfile1 = "/oak/stanford/groups/euan/projects/fitness_genetics/illu_processed_plink_data/no_reclustering/non_MEGA_Cons_recall/raw"
-snp_report_file1 = "/oak/stanford/groups/euan/projects/fitness_genetics/illu_processed_plink_data/no_reclustering/non_MEGA_Cons_recall/SNP_Table.txt"
-sample_report_file1 = "/oak/stanford/groups/euan/projects/fitness_genetics/illu_processed_plink_data/no_reclustering/non_MEGA_Cons_recall/Samples_Table.txt"
-# # 2. MEGC (MEGA Consortium)
-# input_bfile2 = "/oak/stanford/groups/euan/projects/fitness_genetics/illu_processed_plink_data/no_reclustering/MEGA_Consortium_recall/plink_test_mega_consortium_data"
-# snp_report_file2 = "/oak/stanford/groups/euan/projects/fitness_genetics/illu_processed_plink_data/no_reclustering/MEGA_Consortium_recall/SNP_Table.txt"
-# sample_report_file2 = "/oak/stanford/groups/euan/projects/fitness_genetics/illu_processed_plink_data/no_reclustering/MEGA_Consortium_recall/Samples_Table.txt"
+input_bfile1 = "/oak/stanford/groups/euan/projects/mega-cooper-elite-udn/data/genomestudio_projects/global_b37_no_reclustering/PLINK_020520_0243/global_b37_no_reclustering/"
+snp_report_file1 = "/oak/stanford/groups/euan/projects/mega-cooper-elite-udn/data/genomestudio_projects/global_b37_no_reclustering/SNP_Table.txt"
+sample_report_file1 = "/oak/stanford/groups/euan/projects/mega-cooper-elite-udn/data/genomestudio_projects/global_b37_no_reclustering/Samples_Table.txt"
+
 # 2. MEGC (MEGA Consortium) - reclustred
-input_bfile2 = "/oak/stanford/groups/euan/projects/fitness_genetics/illu_processed_plink_data/batch1_megc_reclustered/PLINK_260719_0306/batch1_megac_reclustered"
-snp_report_file2 = "/oak/stanford/groups/euan/projects/fitness_genetics/illu_processed_plink_data/batch1_megc_reclustered/SNP_Table.txt"
-sample_report_file2 = "/oak/stanford/groups/euan/projects/fitness_genetics/illu_processed_plink_data/batch1_megc_reclustered/Samples_Table.txt"
+input_bfile2 = "/oak/stanford/groups/euan/projects/mega-cooper-elite-udn/data/genomestudio_projects/consortium_b37_with_reclustering/PLINK_100520_1057/consortium_b37_with_reclustering"
+snp_report_file2 = "/oak/stanford/groups/euan/projects/mega-cooper-elite-udn/data/genomestudio_projects/consortium_b37_with_reclustering/SNP_Table.txt"
+sample_report_file2 = "/oak/stanford/groups/euan/projects/mega-cooper-elite-udn/data/genomestudio_projects/consortium_b37_with_reclustering/Samples_Table.txt"
 
 # Additional input
 bad_snps_file = "/oak/stanford/groups/euan/projects/fitness_genetics/bad_mega_snps.txt"

@@ -1,40 +1,61 @@
-# This script takes all the paths form the project's README,
-# searches for all idats and read them using illuminaio
-README_path = "/oak/stanford/groups/euan/projects/fitness_genetics/README"
+# This script goes over idat files and read them using illuminaio
 RLIBS_path = "/oak/stanford/groups/euan/projects/mega-cooper-elite-udn/rpackages/"
-WD_path = "/oak/stanford/groups/euan/projects/fitness_genetics/"
+WD_path = "/oak/stanford/groups/euan/projects/mega-cooper-elite-udn/data/"
+# within the WD
+data_paths = c(
+  "raw/stanford3k/idats/",
+  "raw/idats_may_2018",
+  "raw/elite_batch_2019",
+  "raw/elite_batch_2020"
+)
 
 setwd(WD_path)
-# source("https://bioconductor.org/biocLite.R")
-# biocLite("illuminaio",lib="rpackages")
-# biocLite("crlmm",lib=RLIBS_path)
-library("oligoClasses",lib=RLIBS_path)
-library("preprocessCore",lib=RLIBS_path)
-library("illuminaio",lib=RLIBS_path)
-library("crlmm",lib=RLIBS_path)
 
-# Get paths from README
-data_paths = c()
-for(l in readLines(README_path)){
-  if(!grepl("PATH=",l)){next}
-  data_paths=c(data_paths,strsplit(l,split="PATH=")[[1]][2])
+# Older R versions
+# # source("https://bioconductor.org/biocLite.R")
+# # biocLite("illuminaio",lib="rpackages")
+# # biocLite("crlmm",lib=RLIBS_path)
+# library("oligoClasses",lib=RLIBS_path)
+# library("preprocessCore",lib=RLIBS_path)
+# library("illuminaio",lib=RLIBS_path)
+# library("crlmm",lib=RLIBS_path)
+
+# On R 3.6.0
+# Preinstalled in R, install if required
+cran_packages = c(
+  "bitops","RCurl","rJava","openssl","bit64","RSQLite"
+)
+for(pkg in cran_packages){
+  library(pkg,character.only = T)
+}
+
+# When installing packages below, tell R to update the outdated packages
+# (R will ask you whether to update or not)
+# install.packages("BiocManager",lib=RLIBS_path,dependencies = T)
+bioc_packages = c("GenomicRanges","GenomeInfoDb",
+                  "BiocGenerics","zlibbioc",
+                  "affyio","Biobase","IRanges","oligoClasses",
+                  "preprocessCore","illuminaio")
+# for(pkg in bioc_packages){
+#   BiocManager::install(pkg,lib = RLIBS_path,dependencies=T)
+# }
+
+for(pkg in bioc_packages){
+  library(pkg,lib.loc = RLIBS_path,character.only = T)
 }
 
 data_path_idats = list()
-for(p in data_paths[4]){
+for(p in data_paths){
   cmd = paste("find",p,"|grep \"idat$\" > tmp.txt")
   print(cmd)
   system(cmd)
   data_path_idats[[p]] = readLines("tmp.txt")
-  print(data_path_idats[[p]])
   system("rm tmp.txt")
 }
-data_path_idats = data_path_idats[sapply(data_path_idats,length)>0]
+sapply(data_path_idats,length)/2
 
-#idat_files = as.character(read.table("analysis/all_idat_files.txt")[,1])
-#batches = sapply(idat_files,function(x)strsplit(x,split="_")[[1]][1])
-
-illuminaio_extract_idat_metadata<-function(obj){
+illuminaio_extract_idat_metadata<-function(path){
+  obj = illuminaio::readIDAT(path)
 	rem = which(sapply(obj,length)>500)
 	obj = obj[-rem]
 	ukns = unname(unlist(obj$Unknowns))
@@ -46,32 +67,44 @@ illuminaio_extract_idat_metadata<-function(obj){
 	chipType = obj$ChipType
 	#info_table = obj$RunInfo
 	#field_table = obj$fields
-	# learn our sample id 
-	ind = which(grepl('-',ukns) & grepl("_",ukns))
-	sample_id = ""
-	if(length(ind)>0){
-		sample_id = strsplit(ukns[ind[1]],split='_')[[1]][2]
-	}
-	return(c(
-		sample_id = sample_id,
-		ukns,versionNum=version,date=date_scanned,nSNPs=nSNPs,is_red=is_red,
+	print(path)
+	return(list(
+	  path=path, unknowns = ukns,
+		versionNum = version, date=date_scanned,
+		nSNPs=nSNPs,is_red=is_red,
 		chip_type=chipType
 	))
 }
 
+try_idat_read_several_times<-function(path,tries = 10){
+  for(j in 1:tries){
+    res = illuminaio_extract_idat_metadata(path)
+    if(length(res)==7){return(res)}
+  }
+  return(NULL)
+}
+# illuminaio_extract_idat_metadata(data_path_idats[[1]][[1]])
+
 # Read all idats and keep the metadata
 idats_metadata = list()
-try({load("idats_metadata.RData")})
+library(parallel)
+# Calculate the number of cores
+no_cores <- detectCores() - 1
 for(nn1 in names(data_path_idats)){
-	for (nn2 in data_path_idats[[nn1]]){
-		if(is.element(nn2,set=names(idats_metadata))){next}
-		obj = readIDAT(nn2)
-		mdata = illuminaio_extract_idat_metadata(obj)
-		idats_metadata[[nn2]] = c(mdata,ashleylab_batch_name = nn1)
-		save(idats_metadata,file="idats_metadata.RData")
-		print(length(idats_metadata))
-	}
+  print(nn1)
+  idats_metadata[[nn1]] = mclapply(data_path_idats[[nn1]],illuminaio_extract_idat_metadata,mc.cores = 32)
+  names(idats_metadata[[nn1]]) = data_path_idats[[nn1]]
+  save(idats_metadata,file="idats_metadata.RData")
 }
+
+sapply(idats_metadata,length) == sapply(data_path_idats,length)
+lengths = sapply(idats_metadata,function(x)sapply(x,length))
+sapply(lengths,table)
+all(sapply(idats_metadata[[1]],function(x)x$path) == names(idats_metadata[[1]]))
+
+# Relevant only if there are NULL objects that were read
+# fail_examples = which(lengths[[4]]==0)[1:5]
+# data_path_idats[[4]][fail_examples]
 
 # Compare the may 2018 new batch to the old one from 2017
 library(tools)
@@ -81,6 +114,10 @@ files2017 = sort(list.dirs(path2017,full.names=T,recursive=F))
 names(files2017) = sort(list.dirs(path2017,full.names=F,recursive=F))
 files2018 = sort(list.dirs(path2018,full.names=T,recursive=F))
 names(files2018) = sort(list.dirs(path2018,full.names=F,recursive=F))
+print(length(intersect(names(files2017),names(files2018))))
+print(length(setdiff(names(files2017),names(files2018))))
+print(length(setdiff(names(files2018),names(files2017))))
+print(length(union(names(files2017),names(files2018))))
 for(nn in intersect(names(files2017),names(files2018))){
 	files1 = list.files(files2017[nn],full.names=T)
 	names(files1) = list.files(files2017[nn],full.names=F)
@@ -89,6 +126,18 @@ for(nn in intersect(names(files2017),names(files2018))){
 	print(all(names(files1)==names(files2)))
 	comp = md5sum(files1)==md5sum(files2)
 	print(table(comp))
+}
+
+# Create a file with paths, sample ids, and batches
+load("idats_metadata.RData")
+df = c()
+for(nn in names(idats_metadata)){
+  print(nn)
+  x = sapply(idats_metadata[[nn]],unlist)
+  x = t(x)
+  rownames(x) = NULL
+  print(x[1:5,2:8])
+  df = rbind(df,x)
 }
 
 

@@ -1,0 +1,51 @@
+WARNING: ignoring environment value of R_HOME
+[1] "After reading the non-genetic data, these are the cohort numbers:"
+
+  Cooper    ELITE genepool 
+    1535      739     1995 
+
+   1    2 
+ 739 1535 
+
+   1    2 
+1995 1535 
+
+   1    2 
+1995  739 
+[1] "Before adding PCs, dim is:"
+[1] 4378   15
+[1] "After adding PCs, dim is:"
+[1] 4378   27
+[1] "Num NAs in PC1:"
+[1] 84
+[1] "After  adding EU PCs, dim is:"
+[1] 4378   38
+[1] "Num NAs in EU_PC1:"
+[1] 896
+[1] "Variable names after merges:"
+ [1] "#IID"               "Sample_ID"          "Shipment.date"     
+ [4] "Cohort"             "Sex_input_data"     "Age..at.test."     
+ [7] "VO2max..ml.kg.min." "VO2max..l."         "Treadmill.time.sec"
+[10] "Ethnicity"          "Weight_kg"          "Height_cm"         
+[13] "cooper_vs_elite"    "cooper_vs_gp"       "elite_vs_gp"       
+[16] "X.FID.x"            "PC1"                "PC2"               
+[19] "PC3"                "PC4"                "PC5"               
+[22] "PC6"                "PC7"                "PC8"               
+[25] "PC9"                "PC10"               "is_eu"             
+[28] "X.FID.y"            "EU_PC1"             "EU_PC2"            
+[31] "EU_PC3"             "EU_PC4"             "EU_PC5"            
+[34] "EU_PC6"             "EU_PC7"             "EU_PC8"            
+[37] "EU_PC9"             "EU_PC10"           
+[1] "Agreement table between non-genetic data sex records and the genetic prediction"
+   
+       1    2
+  F   12 1336
+  M 2475   23
+[1] "After merging the two sources for sex info, these are the final numbers (1=M, taking the non-genetic info by default):"
+
+   1    2 
+2771 1588 
+[1] "Number of sex NAs:"
+[1] "Non genetic data: 489"
+[1] "Genetic data: 62"
+[1] "Merged: 19"

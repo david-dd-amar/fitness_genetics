@@ -369,8 +369,8 @@ write.table(t(t(rel_to_remove)),file="/oak/stanford/groups/euan/projects/fitness
 # plink --bfile sexd_split --indep-pairphase 20000 2000 0.5 --chr 23-24 --out sexd_split
 # plink --bfile sexd_split --extract sexd_split.prune.in --make-bed --out sexd_split_pruned
 # plink --bfile sexd_split_pruned --check-sex --out ${file}
-# Thus for each a raw input bfile we have a .sexcheck file we can read
-
+# Thus for each a raw input bfile we have a .sexcheck file we can read - these are considered
+# when creating the master phenotypic table
 
 
 ####################################################################################################
@@ -412,6 +412,36 @@ print_sh_file(paste(job_dir,curr_sh_file,sep=''),
 system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
 wait_for_job(60)
 
+# Repeat the LD and PCA, this time exclude the EU PCA outliers
+# from /oak/stanford/groups/euan/projects/fitness_genetics/pheno/eu_pca_outliers.phe
+err_path = paste(job_dir,"eu_ld_report2.err",sep="")
+log_path = paste(job_dir,"eu_ld_report2.log",sep="")
+curr_cmd = paste("plink2 --bfile",paste(job_dir,"merged_mega_data",sep=''),
+                 "--maf 0.01",
+                 "--indep-pairwise 50 10",0.1,
+                 "--chr 1-22",
+                 "--keep /oak/stanford/groups/euan/projects/fitness_genetics/pheno/eu_ids.phe",
+                 "--remove /oak/stanford/groups/euan/projects/fitness_genetics/pheno/eu_pca_outliers.phe",
+                 "--out",paste(job_dir,"merged_mega_data.eu2",sep=""))
+curr_sh_file = "eu_ld_report2.sh"
+print_sh_file(paste(job_dir,curr_sh_file,sep=''),
+              get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,Ncpu=2,mem_size=16000),curr_cmd)
+system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
+
+# PCA
+err_path = paste(job_dir,"eu_pca2.err",sep="")
+log_path = paste(job_dir,"eu_pca2.log",sep="")
+curr_cmd = paste("plink2 --bfile",paste(job_dir,"merged_mega_data",sep=''),
+                 "--extract", paste(job_dir,"merged_mega_data.eu2.prune.in",sep=''),
+                 "--pca",
+                 "--keep /oak/stanford/groups/euan/projects/fitness_genetics/pheno/eu_ids.phe",
+                 "--remove /oak/stanford/groups/euan/projects/fitness_genetics/pheno/eu_pca_outliers.phe",
+                 "--out",paste(job_dir,"merged_mega_data.eu2",sep=""))
+curr_sh_file = "eu_pca2.sh"
+print_sh_file(paste(job_dir,curr_sh_file,sep=''),
+              get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,Ncpu=4,mem_size=32000),curr_cmd)
+system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
+wait_for_job(60)
 # At this point we have all the data we need:
 # Pheno - EUs, PCs, EU PCs, sex checks, failed samples, relatedness results
 # Filtered merged data
@@ -450,111 +480,6 @@ wait_for_job(60)
 ####################################################################################################
 ####################################################################################################
 ####################################################################################################
-# Here we analyze the results of some of the jobs above to determine the final set of subjects
-# for the analysis. We basically exclude sex check failures and low call rate samples.
-
-# compare to known sex from the metadata
-metadata_sex = sample_metadata_raw$Sex_input_data
-names(metadata_sex) = rownames(sample_metadata_raw)
-
-imputed_sex1 = read_plink_table(paste(input_bfile1,".sexcheck",sep=''))[,4]
-imputed_sex2 = read_plink_table(paste(input_bfile2,".sexcheck",sep=''))[,4]
-inds1 = intersect(names(imputed_sex1),names(metadata_sex))
-inds2 = intersect(names(imputed_sex2),names(metadata_sex))
-
-sex_errs1 = inds1[imputed_sex1[inds1] == "0" | ((imputed_sex1[inds1] !="2" & metadata_sex[inds1]=="F") | (imputed_sex1[inds1] !="1"& metadata_sex[inds1]=="M"))]
-sex_errs2 = inds2[imputed_sex2[inds2] == "0" | ((imputed_sex2[inds2] !="2" & metadata_sex[inds2]=="F") | (imputed_sex2[inds2] !="1"& metadata_sex[inds2]=="M"))]
-sex_errs = union(sex_errs1,sex_errs2)
-ids = read.table(paste(job_dir,"merged_mega_data_autosomal.fam",sep=""),stringsAsFactors = F)[,2]
-print(paste("sex errors on the raw data, number of errors:",length(sex_errs)))
-sex_errs = intersect(sex_errs,ids)
-print(paste("number of errors in samples that survived prev filters:",length(sex_errs)))
-
-# Check the ids and compare to the exome data
-# Create a report with the sex errors
-m = sample_metadata_raw[sex_errs,]$Cohort
-m = cbind(sample_metadata_raw[sex_errs,"Sample_ID"],m)
-rownames(m) = sex_errs
-colnames(m) = c("Sample_ID","Cohort")
-write.table(m,file=paste(job_dir,"sex_impute_analysis_report.txt",sep=''),sep="\t",quote=F)
-
-# Add imputed sex
-imputed_sex1 = read_plink_table(paste(input_bfile1,".sexcheck",sep=''))[,4]
-imputed_sex2 = read_plink_table(paste(input_bfile2,".sexcheck",sep=''))[,4]
-fam_samples = read.table(paste(job_dir,"merged_mega_data_autosomal.fam",sep=""),stringsAsFactors = F)
-subjects_for_analysis = fam_samples[,2]
-is_mega_consortium = !grepl(fam_samples[,1],pattern="^file")
-imputed_sex = c(
-  imputed_sex1[is.element(names(imputed_sex1),set=subjects_for_analysis[!is_mega_consortium])],
-  imputed_sex2[is.element(names(imputed_sex2),set=subjects_for_analysis[is_mega_consortium])]
-)
-length(intersect(names(imputed_sex),subjects_for_analysis)) == length(subjects_for_analysis) # must be TRUE
-imputed_sex = imputed_sex[subjects_for_analysis]
-all(names(imputed_sex) == fam_samples[,2])
-
-final_sample_set_pheno = cbind(sample_metadata_raw[ids,],missinigness_report[ids,"F_MISS"],imputed_sex[ids])
-save(final_sample_set_pheno,file=paste(job_dir,"final_sample_set_pheno.RData",sep=""))
-
-
-# TBD
-####################################################################################################
-####################################################################################################
-####################################################################################################
-
-err_path = paste(job_dir,"final_data_pca.err",sep="")
-log_path = paste(job_dir,"final_data_pca.log",sep="")
-curr_cmd = paste("plink --bfile",paste(job_dir,"merged_mega_data_autosomal",sep=''),
-                 "--extract", paste(job_dir,analysis_name,"_plink.prune.prune.in",sep=""),
-                 "--pca 40 --out",paste(job_dir,"merged_mega_data_autosomal",sep=''))
-curr_sh_file = "final_data_pca.sh"
-print_sh_file(paste(job_dir,curr_sh_file,sep=''),
-              get_sh_default_prefix(err_path,log_path),curr_cmd)
-system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
-# relatedness
-err_path = paste(job_dir,"final_data_rl.err",sep="")
-log_path = paste(job_dir,"final_data_rl.log",sep="")
-curr_cmd = paste("plink --bfile",paste(job_dir,"merged_mega_data_autosomal",sep=''),
-                 "--extract", paste(job_dir,analysis_name,"_plink.prune.prune.in",sep=""),
-                 "--genome --min 0.2 --out",paste(job_dir,"merged_mega_data_autosomal",sep=''))
-curr_sh_file = "final_data_rl.sh"
-print_sh_file(paste(job_dir,curr_sh_file,sep=''),
-              get_sh_default_prefix(err_path,log_path),curr_cmd)
-system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
-# frq on all
-err_path = paste(job_dir,"final_data_fr.err",sep="")
-log_path = paste(job_dir,"final_data_fr.log",sep="")
-curr_cmd = paste("plink --bfile",paste(job_dir,"merged_mega_data_autosomal",sep=''),
-                 "--freq --out",paste(job_dir,"merged_mega_data_autosomal",sep=''))
-curr_sh_file = "final_data_fr.sh"
-print_sh_file(paste(job_dir,curr_sh_file,sep=''),
-              get_sh_default_prefix(err_path,log_path),curr_cmd)
-system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
-wait_for_job(120)
-
-# Code below wraps all relevant metadata and prints it into a file
-imputed_sex1 = read_plink_table(paste(input_bfile1,".sexcheck",sep=''))[,4]
-imputed_sex2 = read_plink_table(paste(input_bfile2,".sexcheck",sep=''))[,4]
-fam_samples = read.table(paste(job_dir,"merged_mega_data_autosomal.fam",sep=""),stringsAsFactors = F)
-pca_res = read_pca_res(paste(job_dir,"merged_mega_data_autosomal.eigenvec",sep=""))
-all(is.element(fam_samples[,2],set=rownames(sample_metadata_raw))) # this should be TRUE
-all(rownames(pca_res) == fam_samples[,2]) # this should be true as well
-subjects_for_analysis = fam_samples[,2]
-is_mega_consortium = !grepl(fam_samples[,1],pattern="^file")
-imputed_sex = c(
-  imputed_sex1[is.element(names(imputed_sex1),set=subjects_for_analysis[!is_mega_consortium])],
-  imputed_sex2[is.element(names(imputed_sex2),set=subjects_for_analysis[is_mega_consortium])]
-)
-length(intersect(names(imputed_sex),subjects_for_analysis)) == length(subjects_for_analysis) # must be TRUE
-imputed_sex = imputed_sex[subjects_for_analysis]
-
-
-####################################################################################################
-####################################################################################################
-####################################################################################################
-####################################################################################################
-####################################################################################################
-####################################################################################################
-
 
 # Run the GWASs
 covs_file = paste(curr_dir,"all_covs_and_pheno.phe",sep="")

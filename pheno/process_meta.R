@@ -1,7 +1,7 @@
 # Input files for our analyses below:
 # 1. "merged_metadata_mega.tsv" - the main non-genetic phenotypic data sheet, has IIDs as first column
 # 2. mega_all_pca.phe - PCA results when using all samples, includes and "is_eu" column
-# 3. merged_mega_data.eu.eigenvec - PCA of the EU subjects
+# 3. merged_mega_data.eu2.eigenvec - PCA of the EU subjects after excluding EU PCA outliers
 # 4. Sex check files (for imputation)
 library(data.table)
 
@@ -63,7 +63,7 @@ print(sum(is.na(d$PC1)))
 rownames(d) = d[[1]]
 
 # 3. Add the EU PCs
-d3 = read.delim("merged_mega_data.eu.eigenvec",stringsAsFactors=F,header=T)
+d3 = read.delim("/oak/stanford/groups/euan/projects/fitness_genetics/analysis/mega_all_batches/merged_mega_data.eu3.eigenvec",stringsAsFactors=F,header=T)
 colnames(d3) = gsub("PC","EU_PC",colnames(d3))
 iid_col_d3 = names(d3)[grepl("IID",names(d3))]
 d = merge(d,d3,by.x="#IID",by.y=iid_col_d3,all.x=T)

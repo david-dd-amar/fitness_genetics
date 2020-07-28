@@ -299,11 +299,34 @@ print(paste("number of snps:",length(readLines(paste(job_dir,"merged_mega_data.b
 ####################################################################################################
 ####################################################################################################
 ####################################################################################################
+
+# Define the set of bad snps
+bad_snps = readLines(bad_snps_file)
+bim_info = fread(paste(job_dir,"merged_mega_data.bim",sep=''),stringsAsFactors = F,data.table = F)
+jhu_snps = bim_info[grepl("JHU",bim_info[,2]),2]
+poly_snps = bim_info[
+  (bim_info[,5] == "A" & bim_info[,6] == "T") | 
+    (bim_info[,5] == "T" & bim_info[,6] == "A") |
+    (bim_info[,5] == "G" & bim_info[,6] == "C") |
+    (bim_info[,5] == "C" & bim_info[,6] == "G") , 2
+  ]
+
+all_bad_snps = union(union(bad_snps,jhu_snps),poly_snps)
+write.table(t(t(all_bad_snps)),
+            file="/oak/stanford/groups/euan/projects/fitness_genetics/analysis/all_bad_snps.txt",
+            row.names = F,col.names = F,quote = F)
+
+####################################################################################################
+####################################################################################################
+####################################################################################################
+
 # LD, Rel/Kin, PCA, metadata load
 err_path = paste(job_dir,"ld_report.err",sep="")
 log_path = paste(job_dir,"ld_report.log",sep="")
 curr_cmd = paste("plink2 --bfile",paste(job_dir,"merged_mega_data",sep=''),
                  "--maf 0.01",
+                 "--exclude /oak/stanford/groups/euan/projects/fitness_genetics/analysis/all_bad_snps.txt",
+                 "--geno 0.01",
                  "--indep-pairwise 50 10",0.1,
                  "--chr 1-22",
                  "--out",paste(job_dir,"merged_mega_data",sep=""))
@@ -389,6 +412,8 @@ err_path = paste(job_dir,"eu_ld_report.err",sep="")
 log_path = paste(job_dir,"eu_ld_report.log",sep="")
 curr_cmd = paste("plink2 --bfile",paste(job_dir,"merged_mega_data",sep=''),
                  "--maf 0.01",
+                 "--exclude /oak/stanford/groups/euan/projects/fitness_genetics/analysis/all_bad_snps.txt",
+                 "--geno 0.01",
                  "--indep-pairwise 50 10",0.1,
                  "--chr 1-22",
                  "--keep /oak/stanford/groups/euan/projects/fitness_genetics/pheno/eu_ids.phe",
@@ -412,12 +437,34 @@ print_sh_file(paste(job_dir,curr_sh_file,sep=''),
 system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
 wait_for_job(60)
 
+# Define the PCA outliers along the EU PCs
+# use 6 SDs as a threshold
+eu_pca_outliers  = c()
+eu_pca = fread(paste(job_dir,"merged_mega_data.eu.eigenvec",sep=""),stringsAsFactors = F,data.table = F)
+rownames(eu_pca) = eu_pca$IID
+eu_pca = eu_pca[,-c(1:2)]
+print(head(eu_pca))
+for (pc in 1:10){
+  pcv = eu_pca[[paste0("PC",pc)]]
+  names(pcv) = rownames(eu_pca)
+  outls = names(pcv)[(abs(pcv-mean(pcv,na.rm=T)))/sd(pcv,na.rm=T) > 6]
+  print(length(outls))
+  outls = outls[!is.na(outls)]
+  eu_pca_outliers = union(eu_pca_outliers,outls)
+}
+eu_pca_outliers = c("IID",eu_pca_outliers)
+print(length(eu_pca_outliers))
+write.table(t(t(eu_pca_outliers)),file="/oak/stanford/groups/euan/projects/fitness_genetics/pheno/eu_pca_outliers.phe",
+            row.names=F,col.names=F,sep="\t",quote=F)
+
 # Repeat the LD and PCA, this time exclude the EU PCA outliers
 # from /oak/stanford/groups/euan/projects/fitness_genetics/pheno/eu_pca_outliers.phe
 err_path = paste(job_dir,"eu_ld_report2.err",sep="")
 log_path = paste(job_dir,"eu_ld_report2.log",sep="")
 curr_cmd = paste("plink2 --bfile",paste(job_dir,"merged_mega_data",sep=''),
                  "--maf 0.01",
+                 "--exclude /oak/stanford/groups/euan/projects/fitness_genetics/analysis/all_bad_snps.txt",
+                 "--geno 0.01",
                  "--indep-pairwise 50 10",0.1,
                  "--chr 1-22",
                  "--keep /oak/stanford/groups/euan/projects/fitness_genetics/pheno/eu_ids.phe",
@@ -441,7 +488,30 @@ curr_sh_file = "eu_pca2.sh"
 print_sh_file(paste(job_dir,curr_sh_file,sep=''),
               get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,Ncpu=4,mem_size=32000),curr_cmd)
 system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
-wait_for_job(60)
+
+# Check if we have additional outliers
+eu_pca_outliers = readLines("/oak/stanford/groups/euan/projects/fitness_genetics/pheno/eu_pca_outliers.phe")[-1]
+eu_pca = fread(paste(job_dir,"merged_mega_data.eu2.eigenvec",sep=""),stringsAsFactors = F,data.table = F)
+rownames(eu_pca) = eu_pca$IID
+eu_pca = eu_pca[,-c(1:2)]
+print(head(eu_pca))
+sum_new_outliers = 0
+for (pc in 1:10){
+  pcv = eu_pca[[paste0("PC",pc)]]
+  names(pcv) = rownames(eu_pca)
+  outls = names(pcv)[(abs(pcv-mean(pcv,na.rm=T)))/sd(pcv,na.rm=T) > 6]
+  outls = outls[!is.na(outls)]
+  print(length(outls))
+  sum_new_outliers = sum_new_outliers + length(outls)
+  eu_pca_outliers = union(eu_pca_outliers,outls)
+}
+eu_pca_outliers = c("IID",eu_pca_outliers)
+print(length(eu_pca_outliers))
+if(sum_new_outliers >0){
+  write.table(t(t(eu_pca_outliers)),file="/oak/stanford/groups/euan/projects/fitness_genetics/pheno/eu_pca_outliers.phe",
+              row.names=F,col.names=F,sep="\t",quote=F)
+}
+
 # At this point we have all the data we need:
 # Pheno - EUs, PCs, EU PCs, sex checks, failed samples, relatedness results
 # Filtered merged data
@@ -450,6 +520,23 @@ wait_for_job(60)
 #   Run GWAS
 #   Run imputation
 #   Analyze the data
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -939,8 +1026,7 @@ system(paste("sbatch",paste(curr_dir,curr_sh_file,sep='')))
 # # 142586   1977 
 # # > table(abs(x1-x2)>0.2)
 # # FALSE   TRUE 
-# # 143707    856 
-
+# # 143707    856
 
 ####################################################################################################
 ####################################################################################################

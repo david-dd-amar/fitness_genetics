@@ -39,7 +39,7 @@ snp_report_file2 = "/oak/stanford/groups/euan/projects/mega-cooper-elite-udn/dat
 sample_report_file2 = "/oak/stanford/groups/euan/projects/mega-cooper-elite-udn/data/genomestudio_projects/consortium_b37_with_reclustering/Samples_Table.txt"
 
 # Additional input
-bad_snps_file = "/oak/stanford/groups/euan/projects/fitness_genetics/bad_mega_snps.txt"
+bad_snps_file = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/bad_mega_snps.txt"
 build_fa = "/oak/stanford/groups/mrivas/public_data/genomes/hg19/hg19.fa"
 
 library(data.table)
@@ -315,6 +315,14 @@ all_bad_snps = union(union(bad_snps,jhu_snps),poly_snps)
 write.table(t(t(all_bad_snps)),
             file="/oak/stanford/groups/euan/projects/fitness_genetics/analysis/all_bad_snps.txt",
             row.names = F,col.names = F,quote = F)
+write.table(t(t(poly_snps)),
+            file="/oak/stanford/groups/euan/projects/fitness_genetics/analysis/poly_snps.txt",
+            row.names = F,col.names = F,quote = F)
+write.table(t(t(jhu_snps)),
+            file="/oak/stanford/groups/euan/projects/fitness_genetics/analysis/jhu_snps.txt",
+            row.names = F,col.names = F,quote = F)
+
+
 
 ####################################################################################################
 ####################################################################################################
@@ -544,6 +552,128 @@ print_sh_file(paste(job_dir,curr_sh_file,sep=''),
               get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,Ncpu=4,mem_size=32000),curr_cmd)
 system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
 
+
+####################################################################################################
+####################################################################################################
+####################################################################################################
+# Transform the dataset into HRC-based or 1000G-based data
+# TODO: Create an eu bed file before running
+
+# Run the check_bim analysis
+
+check_bim_script = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/check_bim/HRC-1000G-check-bim-NoReadKey.pl"
+check_bim_path = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/check_bim/"
+
+####################################
+# 1000G-based analysis
+####################################
+curr_dir = paste(job_dir,"checkbim_1000g_eu/",sep="")
+system(paste("mkdir -p",curr_dir))
+setwd(curr_dir)
+
+# Get the EU bed file
+err_path = paste(curr_dir,"eu_bed.err",sep="")
+log_path = paste(curr_dir,"eu_bed.log",sep="")
+curr_cmd = paste("plink2 --bfile",paste(job_dir,"merged_mega_data",sep=''),
+                 "--make-bed",
+                 "--keep /oak/stanford/groups/euan/projects/fitness_genetics/pheno/eu_ids.phe",
+                 "--remove /oak/stanford/groups/euan/projects/fitness_genetics/pheno/eu_pca_outliers.phe",
+                 "--out",paste(curr_dir,"merged_mega_data.eu",sep=""))
+curr_sh_file = "eu_bed.sh"
+print_sh_file(paste(curr_dir,curr_sh_file,sep=''),
+              get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,Ncpu=4,mem_size=32000),curr_cmd)
+system(paste("sbatch",paste(curr_dir,curr_sh_file,sep='')))
+readLines(log_path)
+
+err_path = paste(curr_dir,"addfreq.err",sep="")
+log_path = paste(curr_dir,"addfreq.log",sep="")
+curr_cmd = paste("plink --bfile",paste(curr_dir,"merged_mega_data.eu",sep=""),
+                 "--freq",
+                 "--out",paste(curr_dir,"merged_mega_data.eu",sep=""))
+curr_sh_file = "addfreq.sh"
+print_sh_file(paste(curr_dir,curr_sh_file,sep=''),
+              get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,Ncpu=4,mem_size=32000),curr_cmd)
+system(paste("sbatch",paste(curr_dir,curr_sh_file,sep='')))
+
+curr_bfile = "merged_mega_data.eu"
+check_if_bim_is_sorted(paste(paste(curr_dir,curr_bfile,".bim",sep='')))
+err_path = paste(curr_dir,"run_check_bim.err",sep="")
+log_path = paste(curr_dir,"run_check_bim.log",sep="")
+system(paste("cp",check_bim_script,curr_dir))
+curr_cmd = paste("perl", paste(curr_dir, "HRC-1000G-check-bim-NoReadKey.pl",sep=""),
+                 "-b", paste(curr_dir,curr_bfile,".bim",sep=''),
+                 "-f", paste(curr_dir,curr_bfile,".frq",sep=''),
+                 "-1000g -p EUR -t 0.3 -r ",
+                 paste0(check_bim_path,"1000GP_Phase3_combined.legend"))
+curr_sh_file = "run_check_bim.sh"
+print_sh_file(paste(curr_dir,curr_sh_file,sep=''),
+              get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,
+              mem_size = 64000,time="6:00:00",Ncpu = 4),curr_cmd)
+system(paste("sbatch",paste(curr_dir,curr_sh_file,sep='')))
+
+run_sh_lines = readLines(paste(curr_dir,"Run-plink.sh",sep=""))
+err_path = paste(curr_dir,"run_check_bim_update.err",sep="")
+log_path = paste(curr_dir,"run_check_bim_update.log",sep="")
+curr_sh_file = "run_check_bim_update.sh"
+print_sh_file(paste(curr_dir,curr_sh_file,sep=''),
+              get_sh_default_prefix(err_path,log_path),run_sh_lines)
+system(paste("sbatch",paste(curr_dir,curr_sh_file,sep='')))
+
+####################################
+# For HRC-based analysis
+####################################
+curr_dir = paste(job_dir,"checkbim_hrc_eu/",sep="")
+system(paste("mkdir -p",curr_dir))
+setwd(curr_dir)
+
+# Get the EU bed file
+err_path = paste(curr_dir,"eu_bed.err",sep="")
+log_path = paste(curr_dir,"eu_bed.log",sep="")
+curr_cmd = paste("plink2 --bfile",paste(job_dir,"merged_mega_data",sep=''),
+                 "--make-bed",
+                 "--keep /oak/stanford/groups/euan/projects/fitness_genetics/pheno/eu_ids.phe",
+                 "--remove /oak/stanford/groups/euan/projects/fitness_genetics/pheno/eu_pca_outliers.phe",
+                 "--out",paste(curr_dir,"merged_mega_data.eu",sep=""))
+curr_sh_file = "eu_bed.sh"
+print_sh_file(paste(curr_dir,curr_sh_file,sep=''),
+              get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,Ncpu=4,mem_size=32000),curr_cmd)
+system(paste("sbatch",paste(curr_dir,curr_sh_file,sep='')))
+readLines(log_path)
+
+err_path = paste(curr_dir,"addfreq.err",sep="")
+log_path = paste(curr_dir,"addfreq.log",sep="")
+curr_cmd = paste("plink --bfile",paste(curr_dir,"merged_mega_data.eu",sep=""),
+                 "--freq",
+                 "--out",paste(curr_dir,"merged_mega_data.eu",sep=""))
+curr_sh_file = "addfreq.sh"
+print_sh_file(paste(curr_dir,curr_sh_file,sep=''),
+              get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,Ncpu=4,mem_size=32000),curr_cmd)
+system(paste("sbatch",paste(curr_dir,curr_sh_file,sep='')))
+
+curr_bfile = "merged_mega_data.eu"
+#check_if_bim_is_sorted(paste(paste(curr_dir,curr_bfile,".bim",sep='')))
+err_path = paste(curr_dir,"run_check_bim.err",sep="")
+log_path = paste(curr_dir,"run_check_bim.log",sep="")
+system(paste("cp",check_bim_script,curr_dir))
+curr_cmd = paste("perl", paste(curr_dir, "HRC-1000G-check-bim-NoReadKey.pl",sep=""),
+                 "-b", paste(curr_dir,curr_bfile,".bim",sep=''),
+                 "-f", paste(curr_dir,curr_bfile,".frq",sep=''),
+                 "-hrc -p EUR -t 0.3 -r ",
+                 paste0(check_bim_path,"HRC.r1-1.GRCh37.wgs.mac5.sites.tab"))
+curr_sh_file = "run_check_bim.sh"
+print_sh_file(paste(curr_dir,curr_sh_file,sep=''),
+              get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,
+                                                         mem_size = 64000,time="6:00:00",Ncpu = 4),curr_cmd)
+system(paste("sbatch",paste(curr_dir,curr_sh_file,sep='')))
+
+run_sh_lines = readLines(paste(curr_dir,"Run-plink.sh",sep=""))
+err_path = paste(curr_dir,"run_check_bim_update.err",sep="")
+log_path = paste(curr_dir,"run_check_bim_update.log",sep="")
+curr_sh_file = "run_check_bim_update.sh"
+print_sh_file(paste(curr_dir,curr_sh_file,sep=''),
+              get_sh_default_prefix(err_path,log_path),run_sh_lines)
+system(paste("sbatch",paste(curr_dir,curr_sh_file,sep='')))
+
 # At this point we have all the data we need:
 # Pheno - EUs, PCs, EU PCs, sex checks, failed samples, relatedness results
 # Filtered merged data
@@ -588,78 +718,6 @@ system(paste("sbatch",paste(job_dir,curr_sh_file,sep='')))
 #   write.table(fuma_res,file=paste(curr_dir,"fuma_",ff,sep=""),quote=F,col.names = T,row.names = F,
 #               sep=" ")
 # }
-# ####################################################################################################
-# ####################################################################################################
-# ####################################################################################################
-# # Transform the dataset into HRC-based or 1000G-based data
-# # Run the check_bim analysis
-# 
-# curr_dir = paste(job_dir,"1000g/",sep="")
-# system(paste("mkdir",curr_dir))
-# setwd(curr_dir)
-# curr_bfile = "merged_mega_data_autosomal"
-# check_if_bim_is_sorted(paste(paste(job_dir,curr_bfile,".bim",sep='')))
-# err_path = paste(curr_dir,"run_check_bim.err",sep="")
-# log_path = paste(curr_dir,"run_check_bim.log",sep="")
-# system(paste("cp /home/users/davidama/apps/check_bim/HRC-1000G-check-bim-NoReadKey.pl",curr_dir))
-# # For 1000G-based analysis
-# curr_cmd = paste("perl", paste(curr_dir, "HRC-1000G-check-bim-NoReadKey.pl",sep=""),
-#                  "-b", paste(job_dir,curr_bfile,".bim",sep=''),
-#                  "-f", paste(job_dir,curr_bfile,".frq",sep=''),
-#                  "-1000g -p EUR -t 0.3 -r ",
-#                  "/home/users/davidama/apps/check_bim/1000GP_Phase3_combined.legend")
-# curr_sh_file = "run_check_bim.sh"
-# # print_sh_file(paste(curr_dir,curr_sh_file,sep=''),
-# #               get_sh_prefix_bigmem(err_path,log_path,mem_size = 256000,time="6:00:00"),curr_cmd)
-# # Try without bigmem
-# print_sh_file(paste(curr_dir,curr_sh_file,sep=''),
-#               get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,
-#               mem_size = 64000,time="6:00:00",Ncpu = 4),curr_cmd)
-# system(paste("sbatch",paste(curr_dir,curr_sh_file,sep='')))
-# wait_for_job()
-# wait_for_job()
-# system(paste("less ",curr_dir,"Run-plink.sh | grep TEMP > ",curr_dir,"Run-plink_1000g.sh",sep=""))
-# run_sh_lines = readLines(paste(curr_dir,"Run-plink_1000g.sh",sep=""))
-# run_sh_lines[1] = gsub(paste("plink --bfile",curr_bfile),paste("plink --bfile ",job_dir,curr_bfile,sep=""),run_sh_lines[1])
-# run_sh_lines = sapply(run_sh_lines,gsub,pattern = "-updated",replacement = "")
-# err_path = paste(curr_dir,"run_check_bim_update.err",sep="")
-# log_path = paste(curr_dir,"run_check_bim_update.log",sep="")
-# curr_sh_file = "run_check_bim_update.sh"
-# print_sh_file(paste(curr_dir,curr_sh_file,sep=''),
-#               get_sh_default_prefix(err_path,log_path),run_sh_lines)
-# system(paste("sbatch",paste(curr_dir,curr_sh_file,sep='')))
-# 
-# # For HRC-based analysis
-# curr_dir = paste(job_dir,"hrc/",sep="")
-# system(paste("mkdir",curr_dir))
-# setwd(curr_dir)
-# system(paste("cp /home/users/davidama/apps/check_bim/HRC-1000G-check-bim-NoReadKey.pl",curr_dir))
-# err_path = paste(curr_dir,"run_check_bim2.err",sep="")
-# log_path = paste(curr_dir,"run_check_bim2.log",sep="")
-# curr_cmd = paste("perl", paste(curr_dir, "HRC-1000G-check-bim-NoReadKey.pl",sep=""),
-#                  "-b", paste(job_dir,curr_bfile,".bim",sep=''),
-#                  "-f", paste(job_dir,curr_bfile,".frq",sep=''),
-#                  "-hrc -p EU -t 0.3 -r",
-#                  "/home/users/davidama/apps/check_bim/HRC.r1-1.GRCh37.wgs.mac5.sites.tab")
-# curr_sh_file = "run_check_bim2.sh"
-# # print_sh_file(paste(curr_dir,curr_sh_file,sep=''),
-# #               get_sh_prefix_bigmem(err_path,log_path,mem_size = 256000,time="6:00:00"),curr_cmd)
-# # Try without bigmem
-# print_sh_file(paste(curr_dir,curr_sh_file,sep=''),
-#               get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,
-#               mem_size = 64000,time="6:00:00",Ncpu = 4),curr_cmd)
-# system(paste("sbatch",paste(curr_dir,curr_sh_file,sep='')))
-# wait_for_job()
-# system(paste("less ",curr_dir,"Run-plink.sh | grep TEMP > ",curr_dir,"Run-plink_hrc.sh",sep=""))
-# run_sh_lines = readLines(paste(curr_dir,"Run-plink_hrc.sh",sep=""))
-# run_sh_lines[1] = gsub(paste("plink --bfile",curr_bfile),paste("plink --bfile ",job_dir,curr_bfile,sep=""),run_sh_lines[1])
-# run_sh_lines = sapply(run_sh_lines,gsub,pattern = "-updated",replacement = "")
-# err_path = paste(curr_dir,"run_check_bim_update.err",sep="")
-# log_path = paste(curr_dir,"run_check_bim_update.log",sep="")
-# curr_sh_file = "run_check_bim_update.sh"
-# print_sh_file(paste(curr_dir,curr_sh_file,sep=''),
-#               get_sh_default_prefix(err_path,log_path),run_sh_lines)
-# system(paste("sbatch",paste(curr_dir,curr_sh_file,sep='')))
 
 # To download and install the tools on the cluster
 # 1. Check bim:

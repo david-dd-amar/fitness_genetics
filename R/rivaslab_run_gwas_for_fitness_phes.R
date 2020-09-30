@@ -64,10 +64,31 @@ restHR_zs = -1*restHR_zs
 # Get the diff
 activity_minus_resthr = PC1_zs - restHR_zs
 
+# same as before but using normal z-scores
+# rank - high value == high score
+PC1_ranks = rank(PC1)/length(PC1)
+restHR_ranks = rank(restHR)/length(PC1)
+# fix 1 and 0 issues
+PC1_ranks[PC1_ranks==1] = max(PC1_ranks[PC1_ranks < 1])
+PC1_ranks[PC1_ranks==0] = min(PC1_ranks[PC1_ranks > 0])
+restHR_ranks[restHR_ranks==1] = max(restHR_ranks[restHR_ranks < 1])
+restHR_ranks[restHR_ranks==0] = min(restHR_ranks[restHR_ranks > 0])
+PC1_normz = qnorm(PC1_ranks)
+restHR_normz = qnorm(restHR_ranks)
+# these z-scores should be positively correlated with the actual scores:
+# sept 2020
+#> cor(PC1_normz,PC1)
+#[1] 0.8357246
+#cor(restHR,restHR_normz)
+#[1] 0.9909848
+activity_minus_resthr_znorm = PC1_normz - restHR_normz
+
 # print the final phe file
 curr_pcs = paste("PC",1:10,sep="")
 covariate_names = c("#FID","IID","sex","age","Array",curr_pcs)
-all_covs = cbind(phe[names(activity_minus_resthr),covariate_names],activity_minus_resthr)
+all_covs = cbind(phe[names(activity_minus_resthr),covariate_names],activity_minus_resthr,activity_minus_resthr_znorm)
+activityPC1 = PC1
+all_covs = cbind(all_covs,restHR,activityPC1)
 write.table(all_covs,file=paste(out_path,"activity_minus_resthr.phe",sep=""),
                 sep=" ",row.names = F,col.names = T,quote = F)
 

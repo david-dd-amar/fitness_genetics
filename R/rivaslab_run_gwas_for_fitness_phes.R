@@ -92,11 +92,42 @@ all_covs = cbind(all_covs,restHR,activityPC1)
 write.table(all_covs,file=paste(out_path,"activity_minus_resthr.phe",sep=""),
                 sep=" ",row.names = F,col.names = T,quote = F)
 
-# Genetics information in a bed file
-pgen_path = "/oak/stanford/groups/mrivas/private_data/ukbb/24983/imp/pgen/"
-all_bed_files = list.files(pgen_path)
-all_bed_files = all_bed_files[grepl("bed$",all_bed_files)]  
-all_bed_files = paste(pgen_path,all_bed_files,sep="")
+
+# Compare GWAS results
+###############################################################################
+###############################################################################
+###############################################################################
+out_path = "/oak/stanford/groups/euan/projects/fitness_genetics/ukbb/gwas/"
+setwd(out_path)
+library(data.table)
+
+gfiles = c(
+  "exercise.activity_minus_resthr_znorm.glm.linear",
+  "rhr.restHR.glm.linear",
+  "activityPC1.activityPC1.glm.linear",
+  "exercise.activity_minus_resthr.glm.linear"
+)
+
+gdata = list()
+for(gfile in gfiles){
+   gdata[[gfile]] = fread(gfile,data.table=F,header=T,stringsAsFactors=F)
+}
+for(gfile in gfiles){
+   rownames(gdata[[gfile]]) = gdata[[gfile]][,"ID"]
+}
+
+sapply(gdata,names)
+pthr = 1e-08
+variant_sets = lapply(gdata,function(x,pthr)x[x$P < pthr,"ID"],pthr=pthr)
+sapply(variant_sets,length)
+length(setdiff(variant_sets[[1]],variant_sets[[2]]))
+length(setdiff(variant_sets[[4]],variant_sets[[2]]))
+set1 = setdiff(variant_sets[[1]],variant_sets[[2]])
+gdata[[2]][set1,"P"]
+
+cor(gdata[[1]]$P,gdata[[2]]$P)
+cor(gdata[[1]]$BETA,gdata[[2]]$BETA)
+
 
 
 
@@ -108,6 +139,14 @@ all_bed_files = paste(pgen_path,all_bed_files,sep="")
 ###############################################################################
 ###############################################################################
 ###############################################################################
+
+# Genetics information in a bed file
+pgen_path = "/oak/stanford/groups/mrivas/private_data/ukbb/24983/imp/pgen/"
+all_bed_files = list.files(pgen_path)
+all_bed_files = all_bed_files[grepl("bed$",all_bed_files)]  
+all_bed_files = paste(pgen_path,all_bed_files,sep="")
+
+
 # Useful functions for our analyses below
 print_sh_file<-function(path,prefix,cmd){
   cmd = c(prefix,cmd)

@@ -92,6 +92,10 @@ all_covs = cbind(all_covs,restHR,activityPC1)
 write.table(all_covs,file=paste(out_path,"activity_minus_resthr.phe",sep=""),
                 sep=" ",row.names = F,col.names = T,quote = F)
 
+# Analyze the exercise test data
+###############################################################################
+###############################################################################
+###############################################################################
 
 # Compare GWAS results
 ###############################################################################

@@ -2,52 +2,41 @@
 # Define input for flow
 script_file = "/home/users/davidama/repos/fitness_genetics/R/gwas_flow_helper_functions.R"
 source(script_file)
-# Our dataset
-# our_data_bed_path = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/mega_with_genepool/1000g/merged_mega_data_autosomal"
-our_data_bed_path = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/mega_reclustered_with_genepool_/1000g/merged_mega_data_autosomal"
-# UKBB - 20k sample
-# our_data_bed_path = "/oak/stanford/groups/euan/projects/fitness_genetics/ukbb/ukbb_direct_20k_rand_controls_sex_age/merged_control_geno-1000g_updated"
+
+our_data_bed_path = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/mega_all_batches/checkbim_1000g_eu/merged_mega_data.eu-updated"
 
 # Include our direct geno as is: with genepool
-# job_dir = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/mega_with_genepool_imp/"
-job_dir = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/mega_reclustered_imp/"
-# UKBB - 20k sample
-# job_dir = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/ukbb_20k_imp/"
+job_dir = "/oak/stanford/groups/euan/projects/fitness_genetics/analysis/mega_all_batches/eu_imp/"
+system(paste("mkdir -p",job_dir))
 
-map_files_path = "/oak/stanford/groups/euan/projects/fitness_genetics/1000g/ref_data/1000GP_Phase3/"
+# input files (Sherlock)
 shapeit_path = "/home/users/davidama/apps/shapeit.v2.904.3.10.0-693.11.6.el7.x86_64/bin/shapeit"
 impute2_path = "/home/users/davidama/apps/impute2/impute_v2.3.2_x86_64_static/impute2"
 impute2_size = 1000000
+map_files_path = "/oak/stanford/groups/euan/projects/fitness_genetics/1000g/ref_data/1000GP_Phase3/"
 ref_for_phasing = "/oak/stanford/groups/euan/projects/fitness_genetics/1000g/ref_data/1000GP_Phase3/"
 
 # Libraries for the analysis
-library(data.table,lib.loc = "~/R/packages")
+library(data.table)
 
-system(paste("mkdir",job_dir))
-our_bim = fread(paste(our_data_bed_path,".bim",sep=""),stringsAsFactors = F,
-                data.table = F)
-
-# JHUs = our_bim[grepl("JHU",our_bim[,2]),2]
-# write.table(t(t(JHUs)),file=paste(job_dir,"JHUs.txt",sep=""),row.names = F,
-#             col.names = F,quote = F)
-
-# Split our data by chromosome and exclude variants with >5% missigness
+# Use the code below to split the bed or do it in the command line
 direct_geno_path = paste(job_dir,"direct_geno/",sep="")
-# Create a dir with bed file per chromosome
-system(paste("mkdir",direct_geno_path))
-setwd(direct_geno_path)
-for (j in 1:22){
-  err_path = paste("split",j,".err",sep="")
-  log_path = paste("split",j,".log",sep="")
-  curr_cmd = paste("plink --bfile",our_data_bed_path,
-                   "--chr",j,
-                   "--geno 0.05",
-                   # "--exclude",paste(job_dir,"JHUs.txt",sep=""),
-                   "--make-bed --out",paste(j,sep=''))
-  curr_sh_file = paste("split",j,".sh",sep="")
-  print_sh_file(curr_sh_file,get_sh_default_prefix(err_path,log_path),curr_cmd)
-  system(paste("sbatch",paste(curr_sh_file,sep='')))
-}
+
+# # Split our data by chromosome and exclude variants with >1% missigness
+# # Create a dir with bed file per chromosome
+# system(paste("mkdir",direct_geno_path))
+# setwd(direct_geno_path)
+# for (j in 1:22){
+#   err_path = paste("split",j,".err",sep="")
+#   log_path = paste("split",j,".log",sep="")
+#   curr_cmd = paste("plink --bfile",our_data_bed_path,
+#                    "--chr",j,
+#                    "--geno 0.01",
+#                    "--make-bed --out",paste(j,sep=''))
+#   curr_sh_file = paste("split",j,".sh",sep="")
+#   print_sh_file(curr_sh_file,get_sh_default_prefix(err_path,log_path),curr_cmd)
+#   system(paste("sbatch",paste(curr_sh_file,sep='')))
+# }
 
 map_files = list.files(map_files_path)
 map_files = map_files[grepl("^genetic_map",map_files)]
@@ -98,21 +87,21 @@ if(!is.null(ref_for_phasing)){
     curr_leg = legend_files[grepl(paste("chr",j,"\\.",sep=""),legend_files)]
     curr_gmap = map_files[grepl(paste("chr",j,"_",sep=""),map_files)]
     
-    # # Step 3A from the tutorial: strand checks
-    # err_path = paste("shapeit_run_check_",j,".err",sep="")
-    # log_path = paste("shapeit_run_check_",j,".log",sep="")
-    # curr_cmd = paste(shapeit_path,
-    #                  "-check --input-bed",curr_bed,curr_bim,curr_fam,
-    #                  "--input-map",curr_gmap,
-    #                  "--input-ref", curr_hap,curr_leg,sample_file,
-    #                  "--output-log",paste(j,".alignments",sep=''),
-    #                  "--thread 8 --seed 123456789")
-    # curr_sh_file = paste("shapeit_run_check_",j,".sh",sep="")
-    # print_sh_file(curr_sh_file,
-    #               get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,Ncpu = 8,mem_size = 16000),
-    #               curr_cmd)
-    # system(paste("sbatch",paste(curr_sh_file,sep='')))
-    # wait_for_job(waittime = 120)
+    # Step 3A from the tutorial: strand checks
+    err_path = paste("shapeit_run_check_",j,".err",sep="")
+    log_path = paste("shapeit_run_check_",j,".log",sep="")
+    curr_cmd = paste(shapeit_path,
+                     "-check --input-bed",curr_bed,curr_bim,curr_fam,
+                     "--input-map",curr_gmap,
+                     "--input-ref", curr_hap,curr_leg,sample_file,
+                     "--output-log",paste(j,".alignments",sep=''),
+                     "--thread 8 --seed 123456789")
+    curr_sh_file = paste("shapeit_run_check_",j,".sh",sep="")
+    print_sh_file(curr_sh_file,
+                  get_sh_prefix_one_node_specify_cpu_and_mem(err_path,log_path,Ncpu = 8,mem_size = 16000),
+                  curr_cmd)
+    #system(paste("sbatch",paste(curr_sh_file,sep='')))
+    #next
     
     # Step 3B: check if strand issues where found
     strand_files = list.files(shapeit_1000gOut_path)

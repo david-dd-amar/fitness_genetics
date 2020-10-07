@@ -8,7 +8,7 @@ get_sh_default_prefix<-function(err="",log="",time="6:00:00"){
       "#!/bin/bash",
       "#",
       paste("#SBATCH --time=",time,sep=""),
-      "#SBATCH --partition=euan,mrivas,normal,owners",
+      "#SBATCH --partition=euan,normal,owners",
       "#SBATCH --nodes=1",
       "#SBATCH --cpus-per-task=2",
       "#SBATCH --mem=16000",
@@ -26,9 +26,9 @@ get_sh_default_prefix<-function(err="",log="",time="6:00:00"){
 # plink2: plink/2.0a1
 get_sh_prefix_one_node_specify_cpu_and_mem<-function(err="",log="",
               Ncpu,mem_size,time="6:00:00"){
-  partition_line = "#SBATCH --partition=euan,mrivas,normal"
+  partition_line = "#SBATCH --partition=euan,normal"
   if(mem_size>128000){
-    partition_line = "#SBATCH --partition=bigmem,euan,mrivas"
+    partition_line = "#SBATCH --partition=bigmem,euan"
   }
   return(
     c(

@@ -1,0 +1,683 @@
+get_regex_cols<-function(cols,reg,...){return (cols[grepl(cols,pattern=reg,...)])}
+get_list_by_values<-function(x,values,min_size=1,values_to_ignore = NULL){
+  l = list()
+  val_set = sort(unique(values))
+  if(!is.null(values_to_ignore)){
+    val_set = setdiff(val_set,values_to_ignore)
+  }
+  for(v in val_set){
+    inds = values==v
+    if(sum(inds)<min_size){next}
+    l[[as.character(v)]] = x[inds]
+  }
+  return(l)
+}
+#Return the names of the columns of a particular matrix that match the desired pattern.
+get_regex_cols<-function(cols,reg,...){return (cols[grepl(cols,pattern=reg,...)])}
+get_last_index_that_fits_value<-function(x,val){
+  val_inds = which(x==val)
+  if(length(val_inds)==0){return(NA)}
+  return (val_inds[length(val_inds)])
+}
+# This function returns the first index within val that matches x.
+get_first_index_that_fits_value<-function(x,val){
+  val_inds = which(x==val)
+  if(length(val_inds)==0){return(NA)}
+  return(val_inds[1])
+}
+run_lm<-function(y,x,...){
+  obj = lm(y~.,data=data.frame(y,x))
+  return(obj)
+}
+
+#install.packages('hexbin',lib = '/home/davidama/R/x86_64-pc-linux-gnu-library/3.2/')
+try({library(hexbin,lib.loc='/home/davidama/R/x86_64-pc-linux-gnu-library/3.2/')})
+try({library(hexbin)})
+# A set of functions for dealing with vectors with different name set
+pairwise_plot<-function(x,y,func = joint.density.plot,sample_set = NULL,...){
+  intr = intersect(names(x),names(y))
+  if(!is.null(sample_set)){intr=intersect(sample_set,intr)}
+  func(x[intr],y[intr],...)
+}
+# R^2 based analysis
+get_lm_r2<-function(x)unlist(unname(summary(x)["r.squared"]))
+get_pairwise_corrs_matrix<-function(x,...){
+  n = ncol(x);cn = colnames(x)
+  m = diag(1,n)
+  rownames(m) = cn; colnames(m) = cn
+  for(i in 2:n){
+    for(j in 1:(i-1)){
+      inds = !apply(is.na(x[,c(i,j)]),1,any) & !apply(is.nan(x[,c(i,j)]),1,any)
+      corr = cor(x[inds,i],x[inds,j],...)
+      m[i,j] = corr; m[j,i]=corr
+    }
+  }
+  return(m)
+}
+get_pairwise_corrs_list<-function(x,...){
+  n = length(x);cn = names(x)
+  m = diag(1,n)
+  rownames(m) = cn; colnames(m) = cn
+  for(i in 2:n){
+    x1 = x[[i]]
+    x1 = x1[!is.na(x1)]
+    for(j in 1:(i-1)){
+      x2 = x[[j]]
+      x2 = x2[!is.na(x2)]
+      inds = intersect(names(x1),names(x2))
+      corr = cor(x1[inds],x2[inds],...)
+      m[i,j] = corr; m[j,i]=corr
+    }
+  }
+  return(m)
+}
+get_pairwise_corrs<-function(x,...){
+  if(is.null(dim(x))){
+    return(get_pairwise_corrs_list(x,...))
+  }
+  return(get_pairwise_corrs_matrix(x,...))
+}
+get_pairwise_sizes<-function(x,jaccard=F){
+  n = ncol(x);cn = colnames(x);m = diag(0,n)
+  rownames(m) = cn; colnames(m) = cn
+  for(i in 1:n){
+    for(j in 1:i){
+      inds1 = !apply(is.na(x[,c(i,j)]),1,any) & !apply(is.nan(x[,c(i,j)]),1,any)
+      n1 = sum(inds1)
+      if(jaccard){
+        inds2 = apply(!is.na(x[,c(i,j)]),1,any) & apply(!is.nan(x[,c(i,j)]),1,any)
+        n2 = sum(inds2)
+        n1 = n1/n2
+      }
+      m[i,j] = n1; m[j,i]=n1
+    }
+  }
+  return(m)
+}
+
+# Analyze the workload and time patterns
+# Step 1: get the "hockey" sticks
+# We take the exercise phase and plot the workloads vs time
+# We want to know if we see big deviations from the expected 
+# experiment in which the workloads manifest a roughly increasing
+# function.
+# ADD documentation (parameter names to their meaning)
+get_segment_input <- function(row,val_mat,val,mat2,eps=1e-5){
+  if(row%%100 == 0){print(row)}
+  start_index = as.integer(get_first_index_that_fits_value(val,val_mat[row,]))
+  end_index = as.integer(get_last_index_that_fits_value(val,val_mat[row,]))
+  # If there is no start/end, we will return NA for our calculated values.
+  if(is.na(start_index) || start_index == end_index){
+    return(list(values=c(),start_index=-1,end_index=-1,is_mono=F))
+  }
+  #Move the end index back until it is not NA.
+  while((is.na(mat2[row,end_index])||as.numeric(mat2[row,end_index])==0) && end_index > start_index){
+    end_index = end_index - 1
+  }
+  #Move up the starting index until it is not NA.
+  while((is.na(mat2[row,start_index])||as.numeric(mat2[row,start_index])==0) && start_index < end_index){
+    start_index = start_index + 1
+  }
+  #print(start_index);print(end_index)
+  # If there is no start/end, we will return values that indicate so.
+  if(is.na(start_index) || start_index == end_index){
+    return(list(values=c(),start_index=-1,end_index=-1,is_mono=F))
+  }
+  #Identify the index at which the first difference is identified.
+  #We account for the fact that sometimes there is missing data points
+  #in the middle of the recorded data points.
+  start_point = end_index
+  first_point_value = as.numeric(mat2[row,start_index])
+  for(index in start_index:(end_index-1)){
+    curr_point <- as.numeric(mat2[row,index])
+    if(is.na(curr_point)){next}
+    score_difference = curr_point - first_point_value
+    if (score_difference > eps){
+      start_point = index
+      break
+    }
+  }
+  # get some summary statistics
+  v = as.numeric(mat2[row,start_point:end_index])
+  #print(table(is.na(v)))
+  if(length(v)<2){return(list(values=c(),start_index=-1,end_index=-1,is_mono=F))}
+  is_monotone = all(v[1:(length(v)-1)]<=v[2:length(v)]+eps)
+  out_list = list()
+  out_list[["values"]] = v
+  out_list[["start_index"]] = start_point
+  out_list[["end_index"]] = end_index
+  out_list[["is_mono"]] = is_monotone
+  return(out_list)
+}
+
+# tests
+#m1 = matrix(rep(1,100),nrow=5,ncol=20)
+#for(j in 1:ncol(m1)){m1[,j]=j}
+#m2 = matrix(rep("Exercise",100),nrow=5,ncol=20)
+#get_segment_input(1,val_mat=m2, val="Exercise", mat2 = m1)
+#m1[,1:2] = NA ; m1[,15:20] = NA
+#get_segment_input(1,val_mat=m2, val="Exercise", mat2 = m1)
+#m2[,2:16] = "A"
+#get_segment_input(1,val_mat=m2, val="A", mat2 = m1)
+#m2 = matrix(rep("Exercise",100),nrow=5,ncol=20)
+#m2[,2:9] = "A"
+#get_segment_input(1,val_mat=m2, val="A", mat2 = m1)
+
+# source("https://bioconductor.org/biocLite.R")
+# biocLite("impute",lib=getwd())
+try({library("impute",lib.loc='/home/davidama/R/x86_64-pc-linux-gnu-library/3.2/')})
+try({library('impute')})
+
+# This function runs linear regression on a dependent variable y
+# and a set of covariates
+# OPTIONAL filter - additional_subcategories_to_exclude - which covariate categories to exclude
+# feature2subcategory - a mapping of covariates into categories
+# ... - parameters for knn.impute
+get_lm_residuals<-function(y,covs,use_categorical=T,max_num_classes=5, max_allowed_na_per = 0.2,
+                           feature_is_numeric,additional_subcategories_to_exclude=NULL,...){
+  inds = !is.na(y)
+  if(!is.null(additional_subcategories_to_exclude)){
+    col_inds = !is.element(colnames(covs),set=additional_subcategories_to_exclude)
+    covs = covs[,col_inds]
+  }
+  y = y[inds]
+  covs = covs[names(y),]
+  x = covs[,feature_is_numeric[colnames(covs)]]
+  x = as.matrix(x)
+  print(dim(x))
+  mode(x) = 'numeric'
+  if(any(is.na(covs))){
+    print ("Imputing missing values in numeric part")
+    x_imp = impute.knn(x,...)$data
+    print ("Done imputing missing values in numeric part")
+  }
+  else{
+    x_imp = x
+  }
+  if(use_categorical && sum(!feature_is_numeric[colnames(covs)])>0){
+    x2 = covs[,!feature_is_numeric[colnames(covs)]]
+    if(is.null(dim(x2))){x2=matrix(x2,ncol=1);colnames(x2)=colnames(covs[!feature_is_numeric[colnames(covs)]])}
+    new_x2 = c()
+    for (j in 1:ncol(x2)){
+      fx = x2[,j]
+      fx_table = table(as.character(fx))
+      if(sum(is.na(fx))/length(fx) >= max_allowed_na_per){next}    
+      if(length(fx_table)>max_num_classes || length(fx_table)<2){next}
+      if(!is.factor(fx)){fx = as.factor(fx)}
+      options(na.action='na.pass')
+      fx_mat = model.matrix(~fx+0,data=data.frame(fx))
+      colnames(fx_mat) = gsub(colnames(fx_mat),pattern="^fx",perl=T,replace="")
+      colnames(fx_mat) = paste(colnames(x2)[j],colnames(fx_mat),sep='_')
+      fx_mat = fx_mat[,apply(fx_mat,2,sd,na.rm=T)>0]
+      #if(all(is.na(fx_mat))){break}
+      if(length(fx_mat)==0){next}
+      new_x2 = cbind(new_x2,fx_mat)
+    }
+    if(any(is.na(new_x2))){
+      x2_imp = impute.knn(new_x2,...)$data
+    }
+    else{
+      x2_imp = new_x2
+    }
+    print("Done creating the discrete covariate matrix for the regression analysis")
+    print(dim(x2_imp))
+    x_imp = cbind(x_imp,x2_imp)
+  }
+  print("Done creating the covariate matrix for the regression analysis")
+  print(dim(x_imp))
+  lm_obj = lm(y~x_imp,na.action=na.exclude)
+  return(list(lm_obj=lm_obj,inds=inds))
+}
+
+# Create a list of matrices that correspond to the data gathered from the ECG Test.
+# The matrices created are: time, workload, phase, and heart rate.
+# This function gets a pheno data matrix that contains a single time series
+# (at most) per subject.
+extract_regex_matrices<-function(pheno_data){
+  regex_list = list()
+  regex_list[["time"]] = "ECG, phase time"
+  regex_list[["workload"]] = "ECG, load"
+  regex_list[["phase"]] = "ECG, trend phase name"
+  regex_list[["heartrate"]] = "ECG, heart rate"
+  regex_cols = list()
+  for(nn in names(regex_list)){
+    regex_cols[[nn]] = get_regex_cols(colnames(pheno_data),regex_list[[nn]])
+  }
+  regex_matrices = list()
+  for(nn in names(regex_list)){
+    regex_matrices[[nn]] = as.matrix(pheno_data[,regex_cols[[nn]]])
+  }
+  return(regex_matrices)
+}
+
+# The input here is an entry of tps_vs_wkls.
+# These objects are obtained after running get_segment_input
+extract_regression_input_from_tp_and_wklds<-function(curr_input){
+  if(!curr_input$is_mono || length(curr_input$value)<MIN_REGR_SIZE){
+    return(list(HR=c(),WD=c(),TP=c()))
+  }
+  ind1 = curr_input$start_index
+  ind2 = curr_input$end_index
+  x = as.numeric(regex_matrices[["heartrate"]][j,ind1:ind2])
+  y = as.numeric(regex_matrices[["workload"]][j,ind1:ind2])
+  z = as.numeric(regex_matrices$time[j,ind1:ind2])
+  inds = !is.na(x) & !is.na(y)
+  x=x[inds];y=y[inds];z=z[inds]
+  if(length(z)<MIN_REGR_SIZE){
+    return(list(HR=c(),WD=c(),TP=c()))
+  }
+  if(MERGE_SAME_WORKLOADS){
+    HR = as.numeric(tapply(x,y,mean,na.rm=T))
+    TP = as.numeric(tapply(z,y,mean,na.rm=T))
+    WD = as.numeric(tapply(y,y,mean,na.rm=T))
+    return(list(HR=HR,WD=WD,TP=TP))
+  }
+  else{
+    return(list(HR=x,WD=y,TP=z))
+  }
+}
+
+# This function first performs a set of tests:
+# 1. That the quality rho_exercise score is high
+# 2. That there are time points (i.e., > MIN_REGR_SIZE)
+# 3. That the regression coefficient is positive and the R2 is high
+# If the current subject data fails in any of them
+# then the functions returns NA
+# Otherwise an lm object is returned.
+get_lm_object_for_hr_prediction<-function(lm_input,rho_exercise,
+                                          thr1=RHO_Q_THRESHOLD,thr2=R2_Q_THRESHOLD){
+  if(is.null(lm_input) || is.na(rho_exercise) || rho_exercise< thr1){
+    return(NA)
+  }
+  WD = lm_input$WD; HR = lm_input$HR;TP = lm_input$TP
+  if(is.null(WD) || length(WD) < 5){
+    return(NA)
+  }
+  lm_obj = lm(HR~WD)
+  if (lm_obj$coefficients[2]<0 | get_lm_r2(lm_obj) < thr2){
+    return(NA)
+  }
+  return (lm_obj)
+}
+
+get_prediction_from_lm_object_for_hr<-function(obj,WD){
+  if(is.null(obj) || is.na(obj)){
+    return(NA)
+  }
+  return (unname(predict(obj,data.frame(WD=WD))))
+}
+
+# Like the exercise phase analysis, this function tests
+# the data and then computes the score.
+# If any of the following tests fail, the function returns NA:
+# 1. There is a rho_test score and it is high
+# 2. There is a time point that is close enough to the requested one
+get_rest_phase_fitness_score<-function(rest_data,rho_rest,rest_time = 60,
+                                       smooth_data=T,use_ratio=T,max_time_diff = 3){
+  TP = rest_data$TP
+  HR = as.numeric(rest_data$HR)
+  WD = as.numeric(rest_data$WD)
+  v1=c();v2=c();v3=c()
+  if(is.na(rho_rest) || rho_rest> -0.5){
+    return(NA)
+  }
+  if(smooth_data && length(HR)>3){
+    try({
+      HR_smoothed = smooth.spline(HR)
+      HR = HR_smoothed$y
+    })
+  }
+  tt = rest_time
+  tt_char = as.character(tt)
+  t_diffs = abs(TP-tt)
+  inds = which(t_diffs<=max_time_diff)
+  if(length(inds)==0 || sum(inds)==0){return(NA)}
+  tt_ind = which(t_diffs==min(t_diffs))[1]
+  if(!use_ratio){return(HR[1] - HR[tt_ind])}
+  return(HR[tt_ind]/HR[1])
+}
+
+# A function that merges the results of the fitness scores computation
+merge_scores_set<-function(l,plot_class_averages = T,get_subj_classes=F,...){
+  all_subjects = c()
+  for(x in l){
+    all_subjects = union(all_subjects,names(x))
+  }
+  l = lapply(l,function(x)x[!is.na(x)])
+  scores = rep(0,length(all_subjects));classes = rep(NA,length(all_subjects));counts = rep(0,length(all_subjects))
+  names(scores) = all_subjects;names(classes) = all_subjects;names(counts) = all_subjects
+  for(nn in names(l)){
+    curr_scores = l[[nn]]
+    curr_names = names(curr_scores)
+    scores[curr_names] = scores[curr_names] + curr_scores
+    counts[curr_names] = counts[curr_names] + 1
+    curr_classes = classes[curr_names]
+    curr_na_classes = is.na(curr_classes)
+    curr_classes[curr_na_classes] = nn
+    curr_classes[!curr_na_classes] = "multiple"
+    classes[curr_names] = curr_classes
+  }
+  table(counts)
+  tests = all(is.na(classes[counts==0]))
+  tests = tests & all(names(which(counts=="multiple")) == names(which(counts>1)))
+  scores[counts>1] = scores[counts>1]/counts[counts>1]
+  scores[counts==0] = NA
+  d = data.frame(scores=scores,classes=classes)
+  if(plot_class_averages){plot.design(d,...)}
+  if(get_subj_classes){return(classes)}
+  return(d)
+}
+
+get_pcs_for_score_set<-function(scores,max_allowed_na_per=0.2,max_num_classes=10,num_pcs=1){
+  x = scores
+  if(is.null(dim(x))){return(scores)}
+  feature_is_numeric = apply(scores,2,function(x)!all(is.na(as.numeric(x))))
+  x1 = as.matrix(x[,feature_is_numeric])
+  mode(x1) = 'numeric'
+  x2 = as.matrix(x[,!feature_is_numeric])
+  print ("Imputing missing values in numeric part")
+  if(any(is.na(mat))){
+    x_imp = impute.knn(x1)$data
+  }
+  else{
+    x_imp = x1
+  }
+  print ("Done imputing missing values in numeric part")
+  # if(sum(!feature_is_numeric)>0){
+  #   new_x2 = c()
+  #   for (j in 1:ncol(x2)){
+  #     fx = x2[,j]
+  #     fx_table = table(as.character(fx))
+  #     if(sum(is.na(fx))/length(fx) >= max_allowed_na_per){next}    
+  #     if(length(fx_table)>max_num_classes || length(fx_table)<2){next}
+  #     if(!is.factor(fx)){fx = as.factor(fx)}
+  #     options(na.action='na.pass')
+  #     fx_mat = model.matrix(~fx+0,data=data.frame(fx))
+  #     colnames(fx_mat) = gsub(colnames(fx_mat),pattern="^fx",perl=T,replace="")
+  #     colnames(fx_mat) = paste(colnames(x2)[j],colnames(fx_mat),sep='_')
+  #     fx_mat = fx_mat[,apply(fx_mat,2,sd,na.rm=T)>0]
+  #     if(length(fx_mat)==0){next}
+  #     new_x2 = cbind(new_x2,fx_mat)
+  #   }
+  #   x2_imp = impute.knn(new_x2)$data
+  #   print("Done creating the discrete covariate matrix for the regression analysis")
+  #   print(dim(x2_imp))
+  #   x_imp = cbind(x_imp,x2_imp)
+  # }
+  print("Done creating the covariate matrix for the regression analysis")
+  print(dim(x_imp))
+  pca_obj = prcomp(x_imp,retx = T)
+  plot(pca_obj)
+  return(pca_obj$x[,1:num_pcs])
+}
+
+merge_feature_columns<-function(curr_cols,take_first=F){
+  v = curr_cols[,1]
+  for(j in 2:ncol(curr_cols)){
+    if(take_first){
+      curr_NAs = is.na(v)
+      v[curr_NAs] = curr_cols[curr_NAs,j]
+    }
+    else{
+      curr_non_NAs = !is.na(curr_cols[,j])
+      v[curr_non_NAs] = curr_cols[curr_non_NAs,j]
+    }
+  }
+  return (v)
+}
+
+merge_columns_by_their_features<-function(pheno_data,pheno_data_feature2name,...){
+  new_pheno_dat = data.frame(subjnames = rownames(pheno_data))
+  for(nn in unique(pheno_data_feature2name)){
+    curr_cols = pheno_data[,pheno_data_feature2name == nn]
+    if(sum(pheno_data_feature2name == nn)==1){
+      v = data.frame(nn = curr_cols)
+    }
+    else{
+      v = data.frame(nn = merge_feature_columns(curr_cols),...)
+    }
+    new_pheno_dat = cbind(new_pheno_dat,v)
+    colnames(new_pheno_dat)[ncol(new_pheno_dat)] = nn
+  }
+  if(ncol(new_pheno_dat)>2){
+    rownames(new_pheno_dat) = new_pheno_dat[,1]
+    new_pheno_dat = new_pheno_dat[,-1]
+  }
+  else{
+    v = new_pheno_dat[,2]
+    names(v) = new_pheno_dat[,1]
+    return (v)
+  }
+  return(new_pheno_dat)
+}
+
+extract_feature_cols_by_category<-function(cols,cols2names,names2cats,category){
+  curr_features = c()
+  for(nn in cols){
+    curr_name = cols2names[nn]
+    curr_cat = names2cats[curr_name]
+    if(is.na(curr_cat)){next}
+    if(curr_cat==category){
+      curr_features = c(curr_features,nn)
+    }
+  }
+  return(curr_features)
+}
+
+gaus_norm<-function(x){
+  x_r = (rank(x)-0.5)/length(x)
+  x_n = qnorm(x_r)
+  return(x_n)
+}
+# For printing a scores vector for gwas
+print_scores_vector_for_gwas<-function(v,fname){
+  nn = names(v)
+  m = cbind(nn,nn,v)
+  colnames(m) = c("FID","IID","RHR")
+  write.table(m,file=fname,sep="\t",quote=F,row.names = F)
+}
+
+# Code for MR
+# The functions below compute linear coefficients and their standard error
+# If y is a binary vector: do logistic regression
+get_lm_stats<-function(x,y,force_linear=F){
+  if(!force_linear && length(unique(y[!is.na(y)]))==2){
+    o = glm(y~x,family=binomial(link='logit'))
+    o = summary(o)$coefficients
+  }
+  else{
+    o = summary(lm(y~x))$coefficients
+  }
+  b = o[-1,1];s = o[-1,2];p = o[-1,4]
+  return(c(b,s,p))
+}
+get_lm_stats_with_covs<-function(x,y,covs,force_linear=F){
+  if(is.null(covs)){return (get_lm_stats(x,y))}
+  d = data.frame(x,y,covs)
+  if (is.element("batch",set=colnames(d))||is.element("batch",set=names(d))){
+    d$batch = factor(d$batch)
+  }
+  if(!force_linear && length(unique(y[!is.na(y)]))==2){
+    o = glm(y~.,family=binomial(link='logit'),data=d)
+    o = summary(o)$coefficients
+    #print(o)
+  }
+  else{
+    o = summary(lm(y~.,data=d))$coefficients
+  }
+  b = o["x",1];s = o["x",2];p = o["x",4]
+  return(c(b,s,p))
+}
+library('MendelianRandomization')
+run_mr_analysis<-function(expo_v,outcome_v,snps,covs=NULL,plot_mr_in=T,min_effect_size=0,force_linear=F){
+  covs = covs[rownames(snps),]
+  
+  expo_snps = snps[names(expo_v),]
+  outcome_snps = snps[names(outcome_v),]
+  expo_covs = covs[names(expo_v),]
+  outcome_covs = covs[names(outcome_v),]
+  
+  lm_res = apply(expo_snps,2,get_lm_stats_with_covs,y=expo_v,covs=expo_covs,force_linear=force_linear)
+  bx = lm_res[1,]
+  bxse = lm_res[2,]
+  lm_res = apply(outcome_snps,2,get_lm_stats_with_covs,y=outcome_v,covs=outcome_covs,force_linear=force_linear)
+  by = lm_res[1,]
+  byse = lm_res[2,]
+  print("Two sample estimate completed")
+  
+  to_keep = abs(bx)>=min_effect_size
+  if(sum(to_keep)==0){to_keep = abs(bx)>=median(abs(bx))}
+  outcome_snps[is.na(outcome_snps)]=0
+  expo_snps[is.na(expo_snps)]=0
+  expo_snps = as.matrix(expo_snps)
+  outcome_snps = as.matrix(outcome_snps)
+  
+  weighted_causal_v = expo_snps[,to_keep] %*% bx[to_keep]
+  lm_expo_vs_g = lm(expo_v~weighted_causal_v)
+  bx_obj = summary(lm_expo_vs_g)$coefficients
+  bx_u = bx_obj[-1,1]
+  bxse_u = bx_obj[-1,2]
+  weighted_causal_v = outcome_snps[,to_keep] %*% bx[to_keep]
+  lm_outcome_vs_g = lm(outcome_v~weighted_causal_v)
+  by_obj = summary(lm_outcome_vs_g)$coefficients
+  by_u = by_obj[-1,1]
+  byse_u = by_obj[-1,2]
+  
+  res = list()
+  if(sum(to_keep)>1){
+    mr_in = mr_input(bx[to_keep],bxse[to_keep],by[to_keep],byse[to_keep])
+    if(plot_mr_in){mr_plot(mr_in)}
+    res[["multivar_input"]] = mr_in
+    res[["multivar_egger"]] = mr_egger(mr_in,F,T)
+    res[["multivar_med"]] = mr_median(mr_in)
+    res[["multivar_all"]] = mr_allmethods(mr_in)
+  }
+  mr_in = mr_input(bx_u,bxse_u,by_u,byse_u)
+  res[["univar_input"]] = mr_in
+  res[["univar_ivw"]] = mr_ivw(mr_in)
+  res[["univar_ml"]] = mr_maxlik(mr_in)
+  res[["univar_expo_lm"]] = lm_expo_vs_g
+  res[["unival_outcome_lm"]] = lm_outcome_vs_g
+  return(res)
+}
+
+# Code for conditional independence analysis:
+pairwise_cor<-function(x,y,...){
+  inds = !is.na(x)&!is.na(y)
+  return(cor(x[inds],y[inds],...))
+}
+analyze_source_vs_target_node<-function(source,target,addToS=NULL,data,ci_test=run_ci_test,depth=1,p0=1e-4,pthr=1e-4,...){
+  pairwise_p = ci_test(source,target,NULL,data,...)
+  if(pairwise_p>p0){return(list(res=F,sepset=c()))}
+  if(depth<1){return(list(res=T,sepset=c()))}
+  n = ncol(data)
+  if(is.null(n)){n = ncol(data$DATA)}
+  colinds = 1:n;colinds=colinds[-c(source,target,addToS)]
+  n = length(colinds)
+  for(setsize in 1:depth){
+    S = 1:setsize;islast=F
+    while(!islast){
+      tmp = getNextSet(n,setsize,S)
+      if(is.element(source,set=S)||is.element(target,set=S)){
+        S = tmp$nextSet
+        islast = tmp$wasLast
+        next
+      }
+      p = ci_test(source,target,union(addToS,colinds[S]),data,...)
+      if(p>pthr){return(list(res=F,sepset=union(addToS,colinds[S])))}
+      S = tmp$nextSet
+      islast = tmp$wasLast
+    }
+  }
+  return(list(res=T,sepset=c()))
+}
+library(bnlearn)
+# install.packages('pcalg')
+library(pcalg);library(bnlearn)
+disc_data_using_cut<-function(x,cuts=5,min_bin_size=100){
+  y = NULL
+  if(!is.numeric(x)){y = factor(x)}
+  if(length(unique(x))<=cuts){y = factor(x)}
+  if(is.null(y)){y=factor(cut(x,breaks=cuts, ordered_result=T))}
+  table_y = table(y)
+  while(any(table_y<min_bin_size) && !all(y==y[1],na.rm=T)){
+    curr_levels = levels(y)
+    j = which(table_y==min(table_y))[1]
+    ll = names(j)
+    j2 = j-1
+    if(j==1){j2=2}
+    ll2 = names(table_y)[j2]
+    new_levels=curr_levels
+    new_levels[j]=paste(ll2,ll,sep=",")
+    new_levels[j2]=paste(ll2,ll,sep=",")
+    levels(y) = new_levels
+    table_y = table(y)
+  }
+  return(y)
+}
+run_discrete_ci_test<-function(x,y,z,data,test="mi-adf",...){
+  if(is.numeric(x)){x = names(data)[x]}
+  if(is.numeric(y)){y = names(data)[y]}
+  if(is.numeric(z) && length(z)>0){
+    zz = c()
+    for(ii in z){zz = c(zz,names(data)[ii])}
+    z = zz
+  }
+  if(length(z)==0){
+    inds = !apply(is.na(data[,c(x,y)]),1,any)
+    return(ci.test(x,y,data=data[inds,c(x,y)],test=test,...)$p.value)
+  }
+  inds = !apply(is.na(data[,c(x,y,z)]),1,any)
+  return(ci.test(x,y,z,data[inds,c(x,y,z)],test=test,...)$p.value)
+}
+run_ci_test_one_is_numeric<-function(x,y,z,data){
+  if(is.numeric(x)){x = names(data)[x]}
+  if(is.numeric(y)){y = names(data)[y]}
+  if(is.numeric(z) && length(z)>0){
+    zz = c()
+    for(ii in z){zz = c(zz,names(data)[ii])}
+    z = zz
+  }
+  yv = data[,y];xv = data[,x];zzv = NULL
+  if(length(z)>0){zzv = data[,z]}
+  if(is.numeric(yv)&&is.numeric(xv)){
+    if(length(z)==0){
+      return(ci.test(x,y,data=data,test="cor")$p.value)
+    }
+    else{
+      d1 = data.frame(x=xv,zzv);d2=data.frame(y=yv,zzv)
+      lm1  = lm(x~.,data=d1)$residuals
+      lm2  = lm(y~.,data=d2)$residuals
+      return(cor.test(lm1,lm2)$p.value)
+    }
+  }
+  if(is.numeric(yv)&&length(z)>0){
+    summ = summary(lm(y~.,data=data.frame(y=yv,x=xv,zzv)))
+    return(summ$coefficients[2,4])
+  }
+  if(is.numeric(xv)&&length(z)>0){
+    summ = summary(lm(x~.,data=data.frame(x=xv,y=yv,zzv)))
+    return(summ$coefficients[2,4])
+  }
+  if(is.numeric(yv)&&length(z)==0){
+    summ = summary(lm(y~.,data=data.frame(y=yv,x=xv)))
+    return(summ$coefficients[2,4])
+  }
+  if(is.numeric(xv)&&length(z)==0){
+    summ = summary(lm(x~.,data=data.frame(x=xv,y=yv)))
+    return(summ$coefficients[2,4])
+  }
+}
+# data is a list with DATA and discDATA
+run_ci_test<-function(x,y,z,data,test="mi-adf",...){
+  yv = data$DATA[,y];xv = data$DATA[,x]
+  if(is.numeric(yv)||is.numeric(xv)){
+    return(run_ci_test_one_is_numeric(x,y,z,data$DATA))
+  }
+  return(run_discrete_ci_test(x,y,z,data$discDATA,test=test))
+}
+
+
+
+
+

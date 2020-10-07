@@ -1,12 +1,21 @@
-# The following script loads the phenotypic data
-# We start by running some QA tests in order to characterize the experiment that was
-# taken for each individual
-# On sherlock use: module load R
+# The following code loads the raw phenotypic data
+library(data.table)
+library(htmltab,lib.loc="~/R/packages3.5")
+library(XML,lib.loc="~/R/packages3.5")
+tab_file = "/oak/stanford/groups/mrivas/ukbb24983/phenotypedata/2005693/41413/download/ukb41413.tab"
+html_file = "/oak/stanford/groups/mrivas/ukbb24983/phenotypedata/2005693/41413/download/ukb41413.html"
+#html_info = htmltab(doc = html_file, which = 2)
+showcase_file = "~/repos/ukbb-tools/02_phenotyping/tables/Data_Dictionary_Showcase.csv"
+showcase_info = fread(showcase_file,data.table=F,stringsAsFactors=F)
+#tab_data = fread(tab_file,data.table=F,stringsAsFactors=F)
 
-try({setwd("/Users/davidhsu/Documents/ukbb")})
-try({setwd("/Users/david/Desktop/ukbb/")})
-try({setwd('/scratch/PI/euan/projects/ukbb/da_dh/')})
-source("auxiliary_functions.R")
+# get the columns we need and cut the data
+tab_header = readLines(tab_file,n=1)
+tab_header = strsplit(tab_header,split="\t")[[1]]
+showcase_info[grepl("category",showcase_info$Field,ignore.case=T),"Field"]
+showcase_info[grepl("ECG",showcase_info$Field,ignore.case=F),"Field"]
+
+source("~/repos/fitness_genetics/ukbb/auxiliary_functions.R")
 
 ### Constants for the analysis below ###
 ########################################

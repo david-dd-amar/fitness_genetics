@@ -1,20 +1,45 @@
 # The following code loads the raw phenotypic data
-library(data.table)
-library(htmltab,lib.loc="~/R/packages3.5")
-library(XML,lib.loc="~/R/packages3.5")
-tab_file = "/oak/stanford/groups/mrivas/ukbb24983/phenotypedata/2005693/41413/download/ukb41413.tab"
-html_file = "/oak/stanford/groups/mrivas/ukbb24983/phenotypedata/2005693/41413/download/ukb41413.html"
+# required ukbb field:
+# 5984:	ECG, load
+# 5983:	ECG, heart rate
+# 6024	Program category
+# 6020	Completion status of test
+
+# from the rivaslab tools:
+# ml load ukbb-query
+# ukbb-query_find_table_by_field_id.sh 5984
+# ukbb-query_find_table_by_field_id.sh 6024
+
+#library(htmltab,lib.loc="~/R/packages3.5")
+#library(XML,lib.loc="~/R/packages3.5")
+#html_file = "/oak/stanford/groups/mrivas/ukbb24983/phenotypedata/2005693/41413/download/ukb41413.html"
 #html_info = htmltab(doc = html_file, which = 2)
+
+setwd("/oak/stanford/groups/euan/projects/fitness_genetics/ukbb/")
+
+library(data.table)
+tab_file = "/oak/stanford/groups/mrivas/ukbb24983/phenotypedata/10136/25826/download/ukb25826.tab"
 showcase_file = "~/repos/ukbb-tools/02_phenotyping/tables/Data_Dictionary_Showcase.csv"
 showcase_info = fread(showcase_file,data.table=F,stringsAsFactors=F)
-#tab_data = fread(tab_file,data.table=F,stringsAsFactors=F)
+exercise_field_ids = showcase_info[showcase_info$Category == "100012","FieldID"]
 
 # get the columns we need and cut the data
 tab_header = readLines(tab_file,n=1)
 tab_header = strsplit(tab_header,split="\t")[[1]]
-showcase_info[grepl("category",showcase_info$Field,ignore.case=T),"Field"]
-showcase_info[grepl("ECG",showcase_info$Field,ignore.case=F),"Field"]
+tab_field_ids = sapply(tab_header,function(x)strsplit(x,split="\\.")[[1]][2])
+exercise_fields_in_tab = which(tab_field_ids %in% exercise_field_ids)
+exercise_fields_in_tab = c(1,exercise_fields_in_tab)
+unique(tab_field_ids[exercise_fields_in_tab])
 
+# Generate this once and use below
+# run the command to put it into a subset file
+#cmd = paste0(
+#  "cut -f ", paste(exercise_fields_in_tab,collapse=","), " " ,tab_file,
+#  " > ukbb_ecg_rawdata.txt"
+#)
+#system(cmd)
+
+rawdata = fread("ukbb_ecg_rawdata.txt",data.table=F,stringsAsFactors=F)                     
 source("~/repos/fitness_genetics/ukbb/auxiliary_functions.R")
 
 ### Constants for the analysis below ###
@@ -24,16 +49,25 @@ MIN_REGR_SIZE = 3
 SMALL_WINDOW_SIZE_THRESHOLD = 10
 # Paramaters by which we slice the data
 REPEATS = c("0","1")
-CATEGORIES = c("Category 1","Category 2")
+CATEGORIES = c("1","2")
 # Thresholds for the quality analyses of the time series
 RHO_Q_THRESHOLD = 0.5
 R2_Q_THRESHOLD = 0.5
-
-# INPUT for the entire script:
-# This code gets an object called subject_cleaned_pheno_data: a matrix of subjects (rows)
-# vs the metadata features (columns)
-# Load the preprocessed pheno data
-load("rdata_archive/biobank_collated_filtered_pheno_data.RData")
+########################################
+ 
+# make the rawdata fit the expected input below
+rownames(showcase_info) = as.character(showcase_info$FieldID)
+subject_cleaned_pheno_data = rawdata
+rawdata_cnames = colnames(rawdata)
+rawdata_cnames_arrs = strsplit(rawdata_cnames,split="\\.")
+new_cnames = c(colnames(rawdata)[1])
+for(j in 2:length(rawdata_cnames_arrs)){
+  currfield = showcase_info[as.character(rawdata_cnames_arrs[[j]][2]),"Field"]
+  currname = paste(c(currfield,rawdata_cnames_arrs[[j]][3:4]),collapse= '.')
+  new_cnames = c(new_cnames,currname)
+}
+colnames(subject_cleaned_pheno_data) = new_cnames
+rownames(subject_cleaned_pheno_data) = as.character(subject_cleaned_pheno_data[,1])
 ###################################
 
 # Inspect the subject categories, are there discrepancies?
@@ -51,9 +85,6 @@ category_discs_rows = category_matrix[!category_discs,]
 # Split by the experiment (time point to repeat number)
 tp_to_repeat = sapply(colnames(subject_cleaned_pheno_data),function(x)strsplit(x,split = "\\.")[[1]][2])
 table(tp_to_repeat)
-
-write.table(t(t(rownames(subject_cleaned_pheno_data))),file="all_exercise_subject_ids.txt",
-            quote=F,row.names = F,col.names = F)
 
 ###############################################
 ###############################################
@@ -86,6 +117,7 @@ for (REPEAT in REPEATS){
     # The matrices created are: time, workload, phase, and heart rate.
     regex_matrices = extract_regex_matrices(pheno_data)  
     print(sapply(regex_matrices,dim))
+    print(sapply(regex_matrices,colnames))
     gc()
     
     # Process the data to get the HR, WD, and TP for each subject
@@ -230,7 +262,7 @@ for (slice_name in names(preprocessed_data_slices)){
   sd_HRs = sapply(lm_inputs,function(x)sd(x$HR))
   mean_WDs = sapply(lm_inputs,function(x)mean(x$WD))
   max_WDs = sapply(lm_inputs,function(x)max(x$WD))
-  has_completed = subject2test_status == "Fully completed"
+  has_completed = subject2test_status == 1
   has_completed = has_completed[names(sizes)]
   has_completed_and_has_small_window = has_completed & sizes < SMALL_WINDOW_SIZE_THRESHOLD
   subject_technical_class = rep("C:Large",length(sizes))
@@ -494,38 +526,20 @@ save(data_slice2fitness_score_objects,file="fitness_analysis_data_slice2fitness_
 ###############################################
 ###############################################
 
-curr_slice_name = "0;Category 1";slice_name = "0;Category 1"
-lm_inputs = preprocessed_data_slices[[slice_name]]$regr_inputs
-subject2test_status = preprocessed_data_slices[[slice_name]]$subject2test_status[names(lm_inputs)]
-subject2sex = preprocessed_data_slices[[slice_name]]$subject2sex[names(lm_inputs)]
-pheno_data = preprocessed_data_slices[[slice_name]]$pheno_data
-regex_matrices = preprocessed_data_slices[[slice_name]]$regex_matrices
-rho_exercise = data_slice2_quality_scores[[slice_name]][["rho_exercise"]] 
-wsize_exercise = data_slice2_quality_scores[[slice_name]][["wsize_exercise"]]
-rho_rest = data_slice2_quality_scores[[slice_name]][["rho_rest"]]
-wsize_rest = data_slice2_quality_scores[[slice_name]][["wsize_rest"]]
-subject_technical_class = data_slice2_quality_scores[[slice_name]][["subject_technical_class"]]
-max_WD_pheno_data = data_slice2_quality_scores[[slice_name]][["max_WD_pheno_data"]]
-max_WDs = data_slice2_quality_scores[[slice_name]][["max_WDs"]]
+# curr_slice_name = "0;Category 1";slice_name = "0;Category 1"
+# lm_inputs = preprocessed_data_slices[[slice_name]]$regr_inputs
+# subject2test_status = preprocessed_data_slices[[slice_name]]$subject2test_status[names(lm_inputs)]
+# subject2sex = preprocessed_data_slices[[slice_name]]$subject2sex[names(lm_inputs)]
+# pheno_data = preprocessed_data_slices[[slice_name]]$pheno_data
+# regex_matrices = preprocessed_data_slices[[slice_name]]$regex_matrices
+# rho_exercise = data_slice2_quality_scores[[slice_name]][["rho_exercise"]] 
+# wsize_exercise = data_slice2_quality_scores[[slice_name]][["wsize_exercise"]]
+# rho_rest = data_slice2_quality_scores[[slice_name]][["rho_rest"]]
+# wsize_rest = data_slice2_quality_scores[[slice_name]][["wsize_rest"]]
+# subject_technical_class = data_slice2_quality_scores[[slice_name]][["subject_technical_class"]]
+# max_WD_pheno_data = data_slice2_quality_scores[[slice_name]][["max_WD_pheno_data"]]
+# max_WDs = data_slice2_quality_scores[[slice_name]][["max_WDs"]]
 
-# Sanity check 1: compare the scores to the previous version 
-load('UKBB_phenotypic_data_for_GWAS.RData')
-x1 = subject_ols_preds_100
-x2 = fitness_scores[,"HR_pred_100"]
-all(x1==x2,na.rm=T)
-all(is.na(x1)==is.na(x2))
-
-x1 = HR_diffs[,2]
-x2= fitness_scores[,"HR_rest_diff 60"]
-all(x1==x2,na.rm=T)
-all(is.na(x1)==is.na(x2))
-
-# # Look at some high negative correlations
-# table(sapply(lm_objs,function(x)x$coefficients[2])<0)
-# neg_corrs = names(which(sapply(lm_objs,function(x)unname(x$coefficients[2]))<0))
-# i=neg_corrs[1]
-# WD = lm_inputs[[i]]$WD; HR = lm_inputs[[i]]$HR;TP = lm_inputs[[i]]$TP
-# plot(WD,HR)
 #############################################################
 
 ###############################################
@@ -574,60 +588,53 @@ table(HR_pred_WDs_classes,HR_ratios_classes)
 table(max_WDs_classes,HR_ratios_classes)
 table(is.na(max_WDs_classes),is.na(HR_ratios_classes))
 # Get the classes, print into a text file for usage in plink
-is_category_2 = 1-t(t(as.numeric(grepl(max_WDs_classes,pattern="Category 1"))))
-is_category_2 = cbind(names(max_WDs_classes),names(max_WDs_classes),is_category_2)
-table(is_category_2[,3])
-colnames(is_category_2) = c("FID","IID","IsCategory2")
-write.table(is_category_2,row.names = F,file="is_category_2_fitness_subjects.txt",sep="\t",quote = F, col.names = T)
+is_category_1 = as.numeric(grepl(max_WDs_classes,pattern=";1"))
+                 
+#status_col = get_regex_cols(colnames(subject_cleaned_pheno_data),"status of test")
+#subject2test_status = as.character(subject_cleaned_pheno_data[,status_col])
+#names(subject2test_status) = rownames(subject_cleaned_pheno_data)              
 
-fitness_scores_matrix = cbind(HR_ratios_merged$scores,
+fitness_scores_matrix = cbind(
+                              names(max_WDs_classes),
+                              names(max_WDs_classes),
+                              HR_ratios_merged$scores,
                               HR_pred_WDs_merged$scores,
                               HR_WD_slopes_merged$scores,
-                              max_WDs_merged$scores)
+                              max_WDs_merged$scores,
+                              is_category_1
+)
 colnames(fitness_scores_matrix) = c(
-  "Rest HR ratios after 60sec",
-  "Predicted HR at WD=100",
-  "Regression slopes",
-  "Max achieved WD"
+  "FID","IID",
+  "Rest_HR_ratios_after_60sec",
+  "Predicted_HR_at_100WD",
+  "Regression_slopes",
+  "Max_achieved_WD",
+  "Patient_category1"
 )
 rownames(fitness_scores_matrix) = rownames(HR_ratios_merged)
 save(HR_ratios_merged,HR_pred_WDs_merged,
      HR_WD_slopes_merged,max_WDs_merged,
      fitness_scores_matrix,file="fitness_analysis_final_fitness_scores.RData")
-
+                 
 # Add binary covariate of completion status
-load("biobank_collated_pheno_data.RData")
-feature_code2name = sapply(colnames(pheno_data),function(x)strsplit(x,split='\\.')[[1]][1])
-status_cols = get_regex_cols(colnames(pheno_data),"status of test")
-exercise_test_status = pheno_data[,status_cols]
+feature_code2name = sapply(colnames(subject_cleaned_pheno_data),function(x)strsplit(x,split='\\.')[[1]][1])
+status_cols = get_regex_cols(colnames(subject_cleaned_pheno_data),"status of test")
+exercise_test_status = subject_cleaned_pheno_data[,status_cols]
 all_nas = apply(is.na(exercise_test_status),1,all)
 exercise_test_status = exercise_test_status[!all_nas,]
 exercise_test_status = merge_columns_by_their_features(exercise_test_status,feature_code2name[colnames(exercise_test_status)])
-v = rep(NA,length(exercise_test_status))
-v[names(exercise_test_status)[exercise_test_status=="Fully completed"]] = "1"
-v[names(exercise_test_status)[exercise_test_status!="Fully completed"]] = "0"
-v = as.numeric(v)
-names(v) = names(exercise_test_status)
+v = exercise_test_status
+v[names(exercise_test_status)[exercise_test_status=="1"]] = "Completed"
+v[names(exercise_test_status)[exercise_test_status=="31"]] = "Participant_stopped"
+v[names(exercise_test_status)[exercise_test_status=="32"]] = "Chest_paint"
+v[names(exercise_test_status)[exercise_test_status=="33"]] = "HR_too_high"
+v[names(exercise_test_status)[exercise_test_status=="34"]] = "other"
+v[setdiff(rownames(fitness_scores_matrix),names(v))] = "Other"
 table(v)
-load("fitness_analysis_final_fitness_scores.RData")
-added_subject = setdiff(names(v),rownames(fitness_scores_matrix))
-added_NA_mat = matrix(NA,nrow=length(added_subject),ncol=ncol(fitness_scores_matrix))
-colnames(added_NA_mat) = colnames(fitness_scores_matrix)
-rownames(added_NA_mat) = added_subject
-fitness_scores_matrix = rbind(fitness_scores_matrix,added_NA_mat)
-fitness_scores_matrix = cbind(fitness_scores_matrix,v[rownames(fitness_scores_matrix)])
-colnames(fitness_scores_matrix)[ncol(fitness_scores_matrix)] = "Completed_or_not"
-save(HR_ratios_merged,HR_pred_WDs_merged,
-     HR_WD_slopes_merged,max_WDs_merged,
-     fitness_scores_matrix,file="fitness_analysis_final_fitness_scores.RData")
 
-# Sanity check 1: compare the scores to the previous version 
-load('rdata_archive/UKBB_phenotypic_data_for_GWAS.RData')
-x1 = fitness_scores_matrix[,"Predicted HR at WD=100"]
-x2 = fitness_scores[,"HR_pred_100"]
-inter = intersect(names(x1),names(x2))
-plot(x1[inter],x2[inter]);abline(0,1)
-get_pairwise_corrs(cbind(x1[inter],x2[inter]),method="spearman")
+fitness_scores_matrix = cbind(fitness_scores_matrix,v[rownames(fitness_scores_matrix)])
+colnames(fitness_scores_matrix)[ncol(fitness_scores_matrix)] = "Completion_status"
+write.table(fitness_scores_matrix,row.names = F,file="ukbb_exercise_scores.phe",sep="\t",quote = F, col.names = T)
 
 ###############################################
 ###############################################
@@ -635,6 +642,29 @@ get_pairwise_corrs(cbind(x1[inter],x2[inter]),method="spearman")
 ###############################################
 ###############################################
 
+
+q("no")                        
+                           
+                           
+                           
+                           
+                           
+                           
+                           
+                           
+                           
+                           
+                           
+                           
+                           
+                           
+                           
+                           
+                           
+                           
+                           
+                           
+                           
 ###############################################
 ###############################################
 ########## Main Figures and stats #############

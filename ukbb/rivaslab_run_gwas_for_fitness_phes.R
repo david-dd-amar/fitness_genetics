@@ -1,14 +1,23 @@
 library(data.table)
 
 out_path = "/oak/stanford/groups/euan/projects/fitness_genetics/ukbb/gwas/"
+computed_fitness_scores = "/oak/stanford/groups/euan/projects/fitness_genetics/ukbb/ukbb_exercise_scores.phe"
 
 rivaslab_pheno_codes_file = "/home/users/davidama/repos/ukbb-tools/05_gbe/phenotype_info.tsv"
 rivaslab_codes = read.delim(rivaslab_pheno_codes_file,stringsAsFactors = F,header=T)
 rownames(rivaslab_codes) = rivaslab_codes[,1]
 
+comp_exercise_data = fread(computed_fitness_scores,stringsAsFactors = F,header=T,data.table=F)
+
 # define the self-reported activity phenotype
-activity_phenotypes = c("INI884","INI894","INI904","INI914")
+activity_phenotypes = c("NdaysModerate" = "INI884","DurModerate"="INI894","NdaysVig" = "INI904", "DurVig" = "INI914")
 exercise_phenotypes = c("RestingHR" = "INI102")
+background_variables = c("Height" = "INI50", "Weight" = "INI21002","WaistCirc"="INI48","BMI" = "INI21001","age"="age","sex"="sex")
+for(j in 1:20){
+  currpc = paste0("PC",j)
+  background_variables[currpc]=currpc
+}
+computed_exercise_scores = colnames(comp_exercise_data)[-c(1,2)]
 
 ethnicity_path = "/oak/stanford/groups/mrivas/private_data/ukbb/24983/sqc/population_stratification/"
 ethnicity = "white_british.phe"
@@ -31,6 +40,20 @@ print(dim(phe))
 activity_phenotypes = activity_phenotypes[activity_phenotypes %in% colnames(phe)]
 exercise_phenotypes = exercise_phenotypes[exercise_phenotypes %in% colnames(phe)]
 
+# merge all datasets
+phe_subset = phe[,c("#FID","IID",background_variables,activity_phenotypes,exercise_phenotypes)]
+colnames(phe_subset) = c("#FID","IID",names(background_variables),names(activity_phenotypes),names(exercise_phenotypes))
+comp_exercise_data_eu = comp_exercise_data[comp_exercise_data[,1] %in% phe_subset[,1],]
+merged_phe = merge(phe_subset,comp_exercise_data_eu,by="IID",all=T)
+all(merged_phe[,2] == merged_phe$FID,na.rm=T)
+merged_phe = merged_phe[,colnames(merged_phe)!="FID"]
+merged_phe = merged_phe[,c(2:1,3:ncol(merged_phe))]
+
+write.table(merged_phe,file=paste(out_path,"all_variables_for_analysis.phe",sep=""),
+                sep=" ",row.names = F,col.names = T,quote = F)
+
+
+# Older analysis: attempt to look at activity and rhr only
 # PCA of the physical activity scores
 act_phe = phe[,activity_phenotypes]
 act_phe = act_phe[apply(act_phe>0,1,all),]

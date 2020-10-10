@@ -49,8 +49,69 @@ all(merged_phe[,2] == merged_phe$FID,na.rm=T)
 merged_phe = merged_phe[,colnames(merged_phe)!="FID"]
 merged_phe = merged_phe[,c(2:1,3:ncol(merged_phe))]
 
+# add age orthogonal polynomials
+age_poly = poly(merged_phe$age,2)
+merged_phe$age_sq = age_poly[,2]
+
 write.table(merged_phe,file=paste(out_path,"all_variables_for_analysis.phe",sep=""),
                 sep=" ",row.names = F,col.names = T,quote = F)
+
+## analyze the merged dataset
+#colSums(!is.na(merged_phe) & merged_phe!=-9)
+#non_nas = (!apply(is.na(merged_phe),1,any)) & (!apply(merged_phe==-9,1,any))
+#table(non_nas)
+## exclude IID, FID, and Completion_status (last column)
+#rownames(merged_phe) = as.character(merged_phe$IID)
+#merged_phe_pca = prcomp(merged_phe[non_nas,-c(1:2,ncol(merged_phe))],retx = T)
+#merged_phe_pcax = merged_phe_pca$x
+#for(j in 1:10){
+#  rhos = c()
+#  for(feature in colnames(merged_phe)[-c(1:2,ncol(merged_phe))]){
+#     x1 = merged_phe_pcax[,j]
+#     x2 = merged_phe[rownames(merged_phe_pcax),feature]
+#     rhos[feature] = round(cor(x1,x2,method="spearman"),3)
+#  }
+#  print(paste0("Analyzing merged dataset PCs, PC:",j))
+#  print("Top correlations:")
+#  print(rhos[order(abs(rhos),decreasing=T)][1:3])
+#}
+
+# Regression models for exercise
+e_cols = c("Rest_HR_ratios_after_60sec","Predicted_HR_at_100WD","Regression_slopes","Max_achieved_WD","RestingHR")
+covars = c("sex","age","age_sq","Height","NdaysModerate","DurModerate","DurVig")
+library(MASS)
+lm_objects = list()
+rownames(merged_phe) = merged_phe$IID
+for (exercise_col in e_cols){
+  form = paste0(exercise_col," ~1+",paste0(covars,collapse="+"),"+",paste0("PC",1:20,collapse="+"))
+  # exclude outliers
+  curr_inds = !apply(is.na(merged_phe[,c(exercise_col,covars)]),1,any)
+  curr_x = merged_phe[[exercise_col]]
+  curr_x_mean = mean(curr_x,na.rm=T)
+  curr_x_sd = sd(curr_x,na.rm=T)
+  # remove outliers
+  curr_x_outliers = which(abs(curr_x-curr_x_mean)/curr_x_sd  > 8)
+  curr_inds[curr_x_outliers] = F
+  # remove category 2 patiens (probably not healthy)
+  curr_inds[which(merged_phe[["Patient_category1"]]==0)] = F
+  exercise_lm = lm(as.formula(form),data=merged_phe[curr_inds,])
+  lm_objects[[exercise_col]] = exercise_lm
+  print("####################################")
+  print(exercise_col)
+  print(summary(exercise_lm))
+  exercise_resids = studres(exercise_lm)
+  table(abs(exercise_resids) > 4)
+  v = rep(NA,nrow(merged_phe))
+  names(v) = rownames(merged_phe)
+  v[as.character(names(exercise_resids))] = exercise_resids
+  merged_phe[[paste0("residuals_",exercise_col)]] = v
+  
+}
+
+write.table(merged_phe,file=paste(out_path,"all_variables_for_analysis.phe",sep=""),
+                sep=" ",row.names = F,col.names = T,quote = F)
+
+q("no")
 
 
 # Older analysis: attempt to look at activity and rhr only

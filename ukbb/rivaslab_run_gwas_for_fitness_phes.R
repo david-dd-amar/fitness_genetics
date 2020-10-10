@@ -12,7 +12,7 @@ comp_exercise_data = fread(computed_fitness_scores,stringsAsFactors = F,header=T
 # define the self-reported activity phenotype
 activity_phenotypes = c("NdaysModerate" = "INI884","DurModerate"="INI894","NdaysVig" = "INI904", "DurVig" = "INI914")
 exercise_phenotypes = c("RestingHR" = "INI102")
-background_variables = c("Height" = "INI50", "Weight" = "INI21002","WaistCirc"="INI48","BMI" = "INI21001","age"="age","sex"="sex")
+background_variables = c("Height" = "INI50", "Weight" = "INI21002","WaistCirc"="INI48","BMI" = "INI21001","age"="age","sex"="sex","Array"="Array")
 for(j in 1:20){
   currpc = paste0("PC",j)
   background_variables[currpc]=currpc
